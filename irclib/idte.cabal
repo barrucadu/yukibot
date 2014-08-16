@@ -52,12 +52,14 @@ cabal-version:       >=1.10
 library
   -- Modules exported by the library.
   exposed-modules:     Network.IRC.IDTE
+                     , Network.IRC.IDTE.Types
   
   -- Modules included in this library but not exported.
-  other-modules:       Network.IRC.IDTE.Types
+  -- other-modules:       
   
   -- Compile with -Wall by default
   ghc-options:         -Wall
+                       -fno-warn-unused-do-bind
   
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:    
@@ -70,8 +72,10 @@ library
                      , irc          >=0.6
                      , network      >=2.5
                      , text         >=1.1
+                     , time         >=1.4
                      , tls          >=1.2
                      , transformers >=0.4
+                     , old-locale   >=1.0
   
   -- Directories containing source files.
   -- hs-source-dirs:      
