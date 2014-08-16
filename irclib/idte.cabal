@@ -51,16 +51,27 @@ cabal-version:       >=1.10
 
 library
   -- Modules exported by the library.
-  -- exposed-modules:     
+  exposed-modules:     Network.IRC.IDTE
   
   -- Modules included in this library but not exported.
-  -- other-modules:       
+  other-modules:       Network.IRC.IDTE.Types
+  
+  -- Compile with -Wall by default
+  ghc-options:         -Wall
   
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:    
   
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.7 && <4.8
+  build-depends:       base         >=4.7
+                     , bytestring   >=0.10
+                     , cprng-aes    >=0.5
+                     , data-default >=0.5
+                     , irc          >=0.6
+                     , network      >=2.5
+                     , text         >=1.1
+                     , tls          >=1.2
+                     , transformers >=0.4
   
   -- Directories containing source files.
   -- hs-source-dirs:      
