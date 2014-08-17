@@ -12,7 +12,8 @@ module Network.IRC.IDTE
 import Control.Applicative    ((<$>))
 import Control.Monad          (forever, void)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Trans.RWS (ask, get, runRWST, tell)
+import Control.Monad.Trans.Reader (runReaderT)
+import Control.Monad.Trans.State  (runStateT)
 import Crypto.Random.AESCtr   (makeSystem)
 import Data.ByteString        (ByteString)
 import Data.ByteString.Char8  (pack, unpack)
@@ -72,14 +73,14 @@ connectWithTLS' host port ciphers = do
 -- 
 -- TODO: Any of that.
 run :: MonadIO m => ConnectionConfig -> InstanceConfig -> m ()
-run cconf iconf = liftIO . void $ runRWST runner cconf iconf
+run cconf iconf = liftIO . void . flip runStateT iconf $ runReaderT runner cconf
 
 -- |The event loop.
 runner :: IRC ()
 runner = do
   -- Set the nick
   -- TODO: Mangle the nick until we get a unique one
-  send . I.nick . encodeUtf8 . _nick <$> get
+  send . I.nick . encodeUtf8 . _nick <$> instanceConfig
 
   -- Event loop
   forever $ do
@@ -97,8 +98,8 @@ runner = do
 -- (if there is one).
 disconnect :: IRC ()
 disconnect = do
-  tls <- _tls    <$> ask
-  h   <- _handle <$> ask
+  tls <- _tls    <$> connectionConfig
+  h   <- _handle <$> connectionConfig
 
   case tls of
     Just ctx -> bye ctx
@@ -109,9 +110,7 @@ disconnect = do
 -- |Log a message to stdout and the internal log
 logmsg :: Message -> IRC ()
 logmsg msg = do
-  now <- liftIO $ getCurrentTime
-
-  tell [(now, encode msg)]
+  now <- liftIO getCurrentTime
 
   liftIO . putStrLn $ formatTime defaultTimeLocale "%c" now ++ unpack (encode msg)
 
@@ -138,8 +137,8 @@ addTLS host bytes h ciphers = do
 -- TODO: Flood control
 send :: Message -> IRC ()
 send msg = do
-  tls <- _tls    <$> ask
-  h   <- _handle <$> ask
+  tls <- _tls    <$> connectionConfig
+  h   <- _handle <$> connectionConfig
 
   let msg' = encode msg
 
@@ -150,8 +149,8 @@ send msg = do
 -- |Receive a plain message. This blocks.
 recv :: IRC (Maybe Message)
 recv = do
-  tls <- _tls    <$> ask
-  h   <- _handle <$> ask
+  tls <- _tls    <$> connectionConfig
+  h   <- _handle <$> connectionConfig
 
   decode <$>
     case tls of

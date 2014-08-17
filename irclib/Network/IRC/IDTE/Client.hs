@@ -1,19 +1,31 @@
 -- |IRC client types.
 module Network.IRC.IDTE.Client where
 
-import Control.Monad.Trans.RWS (RWST)
-import Data.ByteString (ByteString)
+import Control.Monad.Trans.Class  (lift)
+import Control.Monad.Trans.Reader (ReaderT, ask)
+import Control.Monad.Trans.State  (StateT, get, put)
 import Data.Text       (Text, pack)
-import Data.Time.Clock (UTCTime)
 import Network         (HostName, PortID)
 import Network.TLS     (Context)
 import System.IO       (Handle)
 
 -- *State
 
--- |The IRC monad: read-only connection configuration, mutable
--- instance configuration, and a log of messages received.
-type IRC a = RWST ConnectionConfig [(UTCTime, ByteString)] InstanceConfig IO a
+-- |The IRC monad: read-only connection configuration and mutable
+-- instance configuration.
+type IRC a = ReaderT ConnectionConfig (StateT InstanceConfig IO) a
+
+-- |Access the connection config
+connectionConfig :: IRC ConnectionConfig
+connectionConfig = ask
+
+-- |Access the instance config.
+instanceConfig :: IRC InstanceConfig
+instanceConfig = lift get
+
+-- |Update the instance config.
+putInstanceConfig :: InstanceConfig -> IRC ()
+putInstanceConfig = lift . put
 
 -- |The state of an IRC server connection
 data ConnectionConfig = ConnectionConfig
