@@ -6,7 +6,6 @@ module Network.IRC.IDTE
     , connectWithTLS'
     , run
     , disconnect
-    , defaultCiphers
     ) where
 
 import Control.Applicative    ((<$>))
@@ -14,19 +13,15 @@ import Control.Monad          (forever, void)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.State  (runStateT)
-import Crypto.Random.AESCtr   (makeSystem)
-import Data.ByteString        (ByteString)
 import Data.ByteString.Char8  (pack, unpack)
-import Data.ByteString.Lazy   (fromChunks)
-import Data.Default           (def)
 import Data.Text.Encoding     (encodeUtf8)
 import Data.Time.Clock        (getCurrentTime)
 import Data.Time.Format       (formatTime)
 import Network                (HostName, PortID, connectTo)
 import Network.IRC            (Message, encode, decode)
 import Network.IRC.IDTE.Client
-import Network.TLS
-import Network.TLS.Extra      (ciphersuite_all)
+import Network.IRC.IDTE.TLS
+import Network.TLS            (Cipher)
 import System.Locale          (defaultTimeLocale)
 import System.IO
 
@@ -68,6 +63,8 @@ connectWithTLS' host port ciphers = do
 
   return $ irc { _tls = Just tls }
 
+-- *Event loop
+
 -- |Run the event loop for a server, receiving messages and handing
 -- them off to handlers as appropriate.
 -- 
@@ -92,16 +89,6 @@ runner = do
       -- Ignore malformed messages
       Nothing   -> return ()
 
--- *Disconnecting
-
--- |Disconnect from a server, properly tearing down the TLS session
--- (if there is one).
-disconnect :: IRC ()
-disconnect = do
-  h <- _handle <$> connectionConfig
-  whenTLS bye
-  liftIO $ hClose h
-
 -- |Log a message to stdout and the internal log
 logmsg :: Message -> IRC ()
 logmsg msg = do
@@ -109,47 +96,24 @@ logmsg msg = do
 
   liftIO . putStrLn $ formatTime defaultTimeLocale "%c" now ++ unpack (encode msg)
 
--- *TLS
-
--- |Default allowable ciphers, ordered from strong to weak.
-defaultCiphers :: [Cipher]
-defaultCiphers = ciphersuite_all
-
--- |Enable a TLS context on the given socket
-addTLS :: MonadIO m => HostName -> ByteString -> Handle -> [Cipher] -> m Context
-addTLS host bytes h ciphers = do
-  let supported = def { supportedCiphers = ciphers }
-  let clientctx = (defaultParamsClient host bytes) { clientSupported = supported }
-
-  rng <- liftIO makeSystem
-  ctx <- contextNew h clientctx rng
-  handshake ctx
-  return ctx
-
--- |Run one of two functions depending on whether the connection is
--- encrypted or not.
-withTLS :: (Context -> IRC a) -> (Handle -> IRC a) -> IRC a
-withTLS tlsf plainf = do
-  tls <- _tls <$> connectionConfig
-  h   <- _handle <$> connectionConfig
-
-  case tls of
-    Just ctx -> tlsf ctx
-    Nothing  -> plainf h
-
--- |Run the provided function when there is a TLS context.
-whenTLS :: (Context -> IRC ()) -> IRC ()
-whenTLS tlsf = withTLS tlsf (const $ return ())
-
 -- *Messaging
 
--- |Send a plain message
+-- |Send a message, using TLS if enabled.
 -- TODO: Flood control
 send :: Message -> IRC ()
-send msg = let msg' = encode msg
-           in withTLS (\ctx -> sendData ctx $ fromChunks [msg'])
-                      (\h -> liftIO $ hPrint h msg' >> hPrint h "\r\n")
+send msg = withTLS (sendTLS msg)
+                   (\h -> liftIO $ hPrint h (encode msg) >> hPrint h "\r\n")
 
--- |Receive a plain message. This blocks.
+-- |Receive a message, using TLS if enabled. This blocks.
 recv :: IRC (Maybe Message)
-recv = decode <$> withTLS recvData (fmap pack . liftIO . hGetLine)
+recv = withTLS recvTLS (fmap (decode . pack) . liftIO . hGetLine)
+
+-- *Disconnecting
+
+-- |Disconnect from a server, properly tearing down the TLS session
+-- (if there is one).
+disconnect :: IRC ()
+disconnect = do
+  h <- _handle <$> connectionConfig
+  endTLS
+  liftIO $ hClose h
