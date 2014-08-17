@@ -1,5 +1,5 @@
--- |IDTE-specific types.
-module Network.IRC.IDTE.Types where
+-- |IRC client types.
+module Network.IRC.IDTE.Client where
 
 import Control.Monad.Trans.RWS (RWST)
 import Data.ByteString (ByteString)
@@ -9,7 +9,7 @@ import Network         (HostName, PortID)
 import Network.TLS     (Context)
 import System.IO       (Handle)
 
--- *Client state
+-- *State
 
 -- |The IRC monad: read-only connection configuration, mutable
 -- instance configuration, and a log of messages received.

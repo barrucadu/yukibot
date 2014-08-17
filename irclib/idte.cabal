@@ -52,7 +52,7 @@ cabal-version:       >=1.10
 library
   -- Modules exported by the library.
   exposed-modules:     Network.IRC.IDTE
-                     , Network.IRC.IDTE.Types
+                     , Network.IRC.IDTE.Client
   
   -- Modules included in this library but not exported.
   -- other-modules:       

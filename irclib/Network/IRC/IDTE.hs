@@ -1,6 +1,6 @@
 -- |Entry point to the Integrated Data Thought Entity.
 module Network.IRC.IDTE
-    ( module Network.IRC.IDTE.Types
+    ( module Network.IRC.IDTE.Client
     , connect
     , connectWithTLS
     , connectWithTLS'
@@ -23,7 +23,7 @@ import Data.Time.Clock        (getCurrentTime)
 import Data.Time.Format       (formatTime)
 import Network                (HostName, PortID, connectTo)
 import Network.IRC            (Message, encode, decode)
-import Network.IRC.IDTE.Types
+import Network.IRC.IDTE.Client
 import Network.TLS
 import Network.TLS.Extra      (ciphersuite_all)
 import System.Locale          (defaultTimeLocale)
