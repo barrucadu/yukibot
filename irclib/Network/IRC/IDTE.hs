@@ -98,13 +98,8 @@ runner = do
 -- (if there is one).
 disconnect :: IRC ()
 disconnect = do
-  tls <- _tls    <$> connectionConfig
-  h   <- _handle <$> connectionConfig
-
-  case tls of
-    Just ctx -> bye ctx
-    Nothing  -> return ()
-
+  h <- _handle <$> connectionConfig
+  whenTLS bye
   liftIO $ hClose h
 
 -- |Log a message to stdout and the internal log
@@ -131,28 +126,30 @@ addTLS host bytes h ciphers = do
   handshake ctx
   return ctx
 
+-- |Run one of two functions depending on whether the connection is
+-- encrypted or not.
+withTLS :: (Context -> IRC a) -> (Handle -> IRC a) -> IRC a
+withTLS tlsf plainf = do
+  tls <- _tls <$> connectionConfig
+  h   <- _handle <$> connectionConfig
+
+  case tls of
+    Just ctx -> tlsf ctx
+    Nothing  -> plainf h
+
+-- |Run the provided function when there is a TLS context.
+whenTLS :: (Context -> IRC ()) -> IRC ()
+whenTLS tlsf = withTLS tlsf (const $ return ())
+
 -- *Messaging
 
 -- |Send a plain message
 -- TODO: Flood control
 send :: Message -> IRC ()
-send msg = do
-  tls <- _tls    <$> connectionConfig
-  h   <- _handle <$> connectionConfig
-
-  let msg' = encode msg
-
-  case tls of
-    Just ctx -> sendData ctx $ fromChunks [msg']
-    Nothing  -> liftIO $ hPrint h msg' >> hPrint h "\r\n"
+send msg = let msg' = encode msg
+           in withTLS (\ctx -> sendData ctx $ fromChunks [msg'])
+                      (\h -> liftIO $ hPrint h msg' >> hPrint h "\r\n")
 
 -- |Receive a plain message. This blocks.
 recv :: IRC (Maybe Message)
-recv = do
-  tls <- _tls    <$> connectionConfig
-  h   <- _handle <$> connectionConfig
-
-  decode <$>
-    case tls of
-      Just ctx -> recvData ctx
-      Nothing  -> pack <$> liftIO (hGetLine h)
+recv = decode <$> withTLS recvData (fmap pack . liftIO . hGetLine)
