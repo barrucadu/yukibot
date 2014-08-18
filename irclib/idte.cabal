@@ -56,7 +56,7 @@ library
                      , Network.IRC.IDTE.TLS
   
   -- Modules included in this library but not exported.
-  -- other-modules:       
+  other-modules:       Network.IRC.IDTE.Utils
   
   -- Compile with -Wall by default
   ghc-options:         -Wall

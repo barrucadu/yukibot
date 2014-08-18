@@ -22,6 +22,7 @@ import Data.Text           (Text, unpack, pack, singleton)
 import Data.Text.Encoding  (decodeUtf8, encodeUtf8)
 import Network.IRC         (Message(..), Prefix(..))
 import Network.IRC.IDTE.Client
+import Network.IRC.IDTE.Utils
 
 import qualified Data.ByteString as BS
 import qualified Data.Text       as T
@@ -302,32 +303,3 @@ encodeCTCP cmd args = BS.concat [BS.singleton 0o001
           escape' 0o015 = BS.pack [0o020, 0o162]
           escape' 0o020 = BS.pack [0o020, 0o020]
           escape' x     = BS.singleton x
-
--- *Helpers
-
--- |Apply a function after first interpreting its argument as UTF-8.
-(<$) :: (Text -> a) -> ByteString -> a
-f <$ x = f $ decodeUtf8 x
-
-infixl 8 <$
-
--- |Apply a functorial function after first interpreting its argument
--- as containing UTF-8.
-(<$:) :: Functor f => (f Text -> a) -> f ByteString -> a
-f <$: x = f $ fmap decodeUtf8 x
-
-infixl 8 <$:
-
--- |Apply a function after first rendering its argument to UTF-8 bytes.
-(>$) :: (ByteString -> a) -> Text -> a
-f >$ x = f $ encodeUtf8 x
-
-infixl 8 >$
-
--- |Apply a functorial function after first rendering its contents to
--- UTF-8 bytes.
-(>$:) :: Functor f => (f ByteString -> a) -> f Text -> a
-f >$: x = f $ fmap encodeUtf8 x
-
-infixl 8 >$:
-
