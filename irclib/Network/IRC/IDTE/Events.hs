@@ -2,11 +2,7 @@
 
 -- |Types for messages and their handlers.
 module Network.IRC.IDTE.Events
-    ( Event(..)
-    , Source(..)
-    , IrcMessage(..)
-    , ModeChange(..)
-    , toEvent
+    ( toEvent
     , decode
     , encode
     ) where
@@ -14,7 +10,7 @@ module Network.IRC.IDTE.Events
 import Control.Applicative ((<$>))
 import Data.ByteString     (ByteString)
 import Data.Char           (isDigit)
-import Data.Text           (Text, unpack, pack, singleton)
+import Data.Text           (Text, unpack, singleton)
 import Data.Text.Encoding  (decodeUtf8, encodeUtf8)
 import Network.IRC         (Message(..), Prefix(..))
 import Network.IRC.IDTE.CTCP
@@ -75,8 +71,8 @@ decode nick msg = case msg of
                     Message (Just (NickName n _ _)) "INVITE" [_, c]    -> (user n,   Invite <$ n <$ c)
                     Message (Just (NickName n _ _)) "TOPIC"  [c, t]    -> (chan n c, Topic  <$ t)
 
-                    Message (Just (NickName n _ _)) "MODE" (t:ms) | n == t     -> (user n,   Mode $ toModeChanges ms)
-                                                                  | otherwise -> (chan n t, Mode $ toModeChanges ms)
+                    Message (Just (NickName n _ _)) "MODE" (t:fs:as) | n == t     -> (user n,   toModeChanges fs as)
+                                                                     | otherwise -> (chan n t, toModeChanges fs as)
 
                     Message (Just (I.Server _))     "PING" [s1]    -> (server, Ping <$ s1)
                     Message (Just (I.Server _))     "PING" [_, s2] -> (server, Ping <$ s2)
@@ -102,36 +98,28 @@ decode nick msg = case msg of
 
           isNumeric =  T.all isDigit . decodeUtf8
 
--- |Convert a list of textual mode changes to ModeChanges.
-toModeChanges :: [ByteString] -> [ModeChange]
-toModeChanges ms = modeChange $ map (unpack . decodeUtf8) ms
-    where modeChange ((p : f : []) : ms) = let (args, rest) = collectArgs ms
-                                           in mchange p f (Just args) : modeChange rest
-
-          modeChange ((p : f : fs) : ms) = mchange p f Nothing : modeChange ((p : fs) : ms)
-
-          modeChange (_ : ms) = modeChange ms
-          modeChange [] = []
-
-          mchange p f args = ModeChange (p == '+') (singleton f) $ fmap (map pack) args
-
-          collectArgs = break (\(p:_) -> p == '+' || p == '-')
+-- |Convert a list of textual mode changes to a mode change object.
+toModeChanges :: ByteString -> [ByteString] -> IrcMessage
+toModeChanges fs as = case unpack $ decodeUtf8 fs of
+                        ('+':fs') -> Mode True  (map singleton fs') $ map decodeUtf8 as
+                        ('-':fs') -> Mode False (map singleton fs') $ map decodeUtf8 as
+                        _         -> UnknownMessage
 
 -- |Get the type of a message
 toEventType :: IrcMessage -> EventType
-toEventType (Privmsg _)   = EPrivmsg
-toEventType (Notice _)    = ENotice
-toEventType (CTCP _ _)    = ECTCP
-toEventType (Nick _)      = ENick
-toEventType (Join _)      = EJoin
-toEventType (Part _ _)    = EPart
-toEventType (Quit _ _)    = EQuit
-toEventType (Kick _ _)    = EKick
-toEventType (Invite _ _)  = EInvite
-toEventType (Topic _)     = ETopic
-toEventType (Mode _)      = EMode
-toEventType (Ping _)      = EPing
-toEventType (Numeric _ _) = ENumeric
+toEventType Privmsg {} = EPrivmsg
+toEventType Notice  {} = ENotice
+toEventType CTCP    {} = ECTCP
+toEventType Nick    {} = ENick
+toEventType Join    {} = EJoin
+toEventType Part    {} = EPart
+toEventType Quit    {} = EQuit
+toEventType Kick    {} = EKick
+toEventType Invite  {} = EInvite
+toEventType Topic   {} = ETopic
+toEventType Mode    {} = EMode
+toEventType Ping    {} = EPing
+toEventType Numeric {} = ENumeric
 toEventType _ = EEverything
 
 -- *Encoding messages
@@ -155,8 +143,8 @@ encode _ (Part c (Just r))       = Just $ part c $ Just r
 encode _ (Part c Nothing)        = Just $ part c Nothing
 encode _ (Quit _ (Just r))       = Just $ quit $ Just r
 encode _ (Quit _ Nothing)        = Just $ quit Nothing
-encode (User n) (Mode ms)        = Just $ mode n ms
-encode (Channel _ c) (Mode ms)   = Just $ mode c ms
+encode (User n) (Mode s fs as)      = Just $ mode n s fs as
+encode (Channel _ c) (Mode s fs as) = Just $ mode c s fs as
 encode (Channel _ c) (Topic t)   = Just $ topic c t
 encode _ (Invite n c)            = Just $ invite n c
 encode (Channel _ c) (Kick n (Just r)) = Just $ kick c n $ Just r

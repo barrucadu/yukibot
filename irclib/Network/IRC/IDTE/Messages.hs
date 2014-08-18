@@ -3,14 +3,15 @@
 -- |Constructors for common messages
 module Network.IRC.IDTE.Messages where
 
+import Prelude hiding (concat)
+
 import Data.ByteString    (ByteString)
 import Data.Monoid        ((<>))
 import Data.String        (fromString)
-import Data.Text          (Text)
+import Data.Text          (Text, concat)
 import Data.Text.Encoding (encodeUtf8)
 import Network.IRC        (Message(..))
 import Network.IRC.IDTE.CTCP
-import Network.IRC.IDTE.Types
 import Network.IRC.IDTE.Utils
 
 -- *Messages
@@ -45,6 +46,10 @@ ctcp t cmd args = mkMessage "PRIVMSG" [encodeUtf8 t, toByteString $ toCTCP cmd a
 nick :: Text -> Message
 nick n = mkMessage "NICK" >$: [n]
 
+-- |Set your username and realname
+user :: Text -> Text -> Message
+user u r = mkMessage "USER" >$: [u, "-", "-", r]
+
 -- |Join a channel
 join :: Text -> Message
 join c = mkMessage "JOIN" >$: [c]
@@ -71,12 +76,17 @@ kick c n (Just r) = mkMessage "KICK" >$: [c, n, r]
 kick c n Nothing  = mkMessage "KICK" >$: [c, n]
 
 -- |Set modes on a user or channel
-mode :: Text -> [ModeChange] -> Message
-mode n ms = mkMessage "MODE" >$: (n : concatMap modeChange ms)
-    where modeChange (ModeChange True  f (Just args)) = ("+" <> f) : args
-          modeChange (ModeChange True  f Nothing)     = ["+" <> f]
-          modeChange (ModeChange False f (Just args)) = ("-" <> f) : args
-          modeChange (ModeChange False f Nothing)     = ["-" <> f]
+mode :: Text
+     -- ^Target
+     -> Bool
+    -- ^Enable/disable
+     -> [Text]
+    -- ^List of flags
+     -> [Text]
+    -- ^Any params
+     -> Message
+mode n True  fs ps = mkMessage "MODE" >$: (n : ("+" <> concat fs) : ps)
+mode n False fs ps = mkMessage "MODE" >$: (n : ("-" <> concat fs) : ps)
 
 -- |Set the topic of a channel
 topic :: Text -> Text -> Message

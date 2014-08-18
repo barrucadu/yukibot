@@ -19,7 +19,6 @@ import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.State  (runStateT)
 import Data.ByteString.Char8  (pack, unpack)
 import Data.Text              (Text, toUpper)
-import Data.Text.Encoding     (encodeUtf8)
 import Data.Time.Clock        (getCurrentTime)
 import Data.Time.Format       (formatTime)
 import Network                (HostName, PortID, connectTo)
@@ -32,8 +31,7 @@ import Network.TLS            (Cipher)
 import System.Locale          (defaultTimeLocale)
 import System.IO
 
-import qualified Data.Text   as T
-import qualified Network.IRC as I
+import qualified Data.Text as T
 
 -- *Connecting to an IRC network
 
@@ -81,9 +79,14 @@ run cconf iconf = liftIO . void . flip runStateT iconf $ runReaderT runner cconf
 -- |The event loop.
 runner :: IRC ()
 runner = do
-  -- Set the nick
+  -- Set the nick and username
+  theNick <- _nick     <$> instanceConfig
+  theUser <- _username <$> instanceConfig
+  theReal <- _realname <$> instanceConfig
+
+  send $ user theUser theReal
   -- TODO: Mangle the nick until we get a unique one
-  send . I.nick . encodeUtf8 . _nick <$> instanceConfig
+  send $ nick theNick
 
   -- Event loop
   forever $ do

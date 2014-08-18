@@ -134,7 +134,7 @@ data IrcMessage = Privmsg Text
                 | Quit Text (Maybe Text)
                 -- ^Someone has quit a channel the client is in.
 
-                | Mode [ModeChange]
+                | Mode Bool [Text] [Text]
                 -- ^Some mode changes have been applied to a channel
                 -- the client is in, or a user in a channel the client
                 -- is in.
@@ -163,13 +163,3 @@ data IrcMessage = Privmsg Text
                 | UnknownMessage
                 -- ^The message could not be decoded, see the raw
                 -- message.
-
--- |A single mode change to a channel or user.
-data ModeChange = ModeChange
-    { _set      :: Bool
-    -- ^Whether the mode has been enabled or disabled
-    , _flag     :: Text
-    -- ^The mode name
-    , _modeargs :: Maybe [Text]
-    -- ^Any arguments to the mode change
-    }
