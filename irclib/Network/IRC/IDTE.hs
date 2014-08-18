@@ -1,7 +1,6 @@
 -- |Entry point to the Integrated Data Thought Entity.
 module Network.IRC.IDTE
-    ( module Network.IRC.IDTE.Client
-    , connect
+    ( connect
     , connectWithTLS
     , connectWithTLS'
     , run
@@ -19,9 +18,9 @@ import Data.Time.Clock        (getCurrentTime)
 import Data.Time.Format       (formatTime)
 import Network                (HostName, PortID, connectTo)
 import Network.IRC            (Message, encode, decode)
-import Network.IRC.IDTE.Client
 import Network.IRC.IDTE.Events (toEvent)
 import Network.IRC.IDTE.TLS
+import Network.IRC.IDTE.Types
 import Network.TLS            (Cipher)
 import System.Locale          (defaultTimeLocale)
 import System.IO
@@ -87,13 +86,19 @@ runner = do
 
         event <- toEvent msg' send
 
-        --handlers <- getHandlersFor event . _eventHandlers <$> instanceConfig
+        handlers <- getHandlersFor event . _eventHandlers <$> instanceConfig
         -- TODO: Parallelise this (requires bunging state behind an MVar)
-        --mapM_ ($ event) handlers
-        return ()
+        mapM_ ($ event) handlers
 
       -- Ignore malformed messages
       Nothing   -> return ()
+
+-- |Get the event handlers for an event.
+getHandlersFor :: Event -> [(EventType, Event -> IRC ())] -> [Event -> IRC ()]
+getHandlersFor e = map snd . if ety == EEverything
+                             then id
+                             else filter $ (== ety) . fst
+    where ety = _eventType e
 
 -- |Log a message to stdout and the internal log
 logmsg :: Message -> IRC ()

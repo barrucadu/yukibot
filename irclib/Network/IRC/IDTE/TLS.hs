@@ -9,7 +9,7 @@ import Data.ByteString.Lazy   (fromChunks)
 import Data.Default           (def)
 import Network                (HostName)
 import Network.IRC            (Message, encode, decode)
-import Network.IRC.IDTE.Client
+import Network.IRC.IDTE.Types
 import Network.TLS
 import Network.TLS.Extra      (ciphersuite_all)
 import System.IO              (Handle)

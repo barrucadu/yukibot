@@ -19,111 +19,12 @@ import Data.String         (fromString)
 import Data.Text           (Text, unpack, pack, singleton)
 import Data.Text.Encoding  (decodeUtf8, encodeUtf8)
 import Network.IRC         (Message(..), Prefix(..))
-import Network.IRC.IDTE.Client
 import Network.IRC.IDTE.CTCP
+import Network.IRC.IDTE.Types
 import Network.IRC.IDTE.Utils
 
 import qualified Data.Text   as T
 import qualified Network.IRC as I
-
--- *Types
-
--- |An event has a message, some information on the source, and a
--- reply function.
-data Event = Event
-    { _rawMessage :: Message
-    -- ^The original message, split into parts and nothing more.
-    , _source     :: Source
-    -- ^The source of the message.
-    , _message    :: IrcMessage
-    -- ^The message data, split into a sum type.
-    , _reply      :: IrcMessage -> IRC ()
-    -- ^Sends a message to the source of this event.
-    , _send       :: Source -> IrcMessage -> IRC ()
-    -- ^Send a message
-    , _sendRaw    :: Message -> IRC ()
-    -- ^Send a raw message
-    }
-
--- |The source of a message.
-data Source = Server
-            -- ^The message comes from the server.
-            | Channel Text Text
-            -- ^A channel the client is in. The first Text is the
-            -- nick, the second, the channel name.
-            | User Text
-            -- ^A query from a user.
-            | UnknownSource
-            -- ^The source could not be determined, see the raw
-            -- message
-
--- |A decoded message
-data IrcMessage = Privmsg Text
-                -- ^The client has received a message, which may be to
-                -- a channel it's in.
-                --
-                -- CTCPs will, however, not raise this event (despite
-                -- being sent as a PRIVMSG).
-
-                | Notice Text
-                -- ^Like a PRIVMSG, except an automatic reply must
-                -- *not* be generated.
-
-                | CTCP Text [Text]
-                -- ^A CTCP has been received.
-
-                | Nick Text
-                -- ^Someone has updated their nick. The given nickname
-                -- is the new one.
-
-                | Join Text
-                -- ^Someone has joined a channel the client is in.
-
-                | Part Text (Maybe Text)
-                -- ^Someone has left a channel the client is in.
-
-                | Quit Text (Maybe Text)
-                -- ^Someone has quit a channel the client is in.
-
-                | Mode [ModeChange]
-                -- ^Some mode changes have been applied to a channel
-                -- the client is in, or a user in a channel the client
-                -- is in.
-
-                | Topic Text
-                -- ^The topic of a channel the client is in has been
-                -- updated.
-
-                | Invite Text Text
-                -- ^The client has been invited to a channel. The
-                -- first text is the nick of the inviter.
-
-                | Kick Text (Maybe Text)
-                -- ^Someone has been kicked from a channel the client
-                -- is in.
-
-                | Ping Text
-                -- ^A ping has been received (probably from the
-                -- server, due to a period of inactivity). The Text is
-                -- where the PONG should be sent.
-
-                | Numeric Int [Text]
-                -- ^One of the many numeric codes has been received in
-                -- response to something the client did.
-
-                | UnknownMessage
-                -- ^The message could not be decoded, see the raw
-                -- message.
-
--- |A single mode change to a channel or user.
-data ModeChange = ModeChange
-    { _set      :: Bool
-    -- ^Whether the mode has been enabled or disabled
-    , _flag     :: Text
-    -- ^The mode name
-    , _modeargs :: Maybe [Text]
-    -- ^Any arguments to the mode change
-    }
 
 -- *Decoding messages
 
@@ -139,6 +40,7 @@ toEvent msg send = do
   let (source, message) = decode nick msg
 
   return Event { _rawMessage = msg
+               , _eventType  = toEventType message
                , _source     = source
                , _message    = message
                , _reply      = \m -> case encode source m of
@@ -192,7 +94,7 @@ decode nick msg = case msg of
 
     where nick' = encodeUtf8 nick
 
-          server   = Network.IRC.IDTE.Events.Server
+          server   = Network.IRC.IDTE.Types.Server
           user n   = User <$ n
           chan n c = Channel <$ n <$ c
 
@@ -216,6 +118,23 @@ toModeChanges ms = modeChange $ map (unpack . decodeUtf8) ms
           mchange p f args = ModeChange (p == '+') (singleton f) $ fmap (map pack) args
 
           collectArgs = break (\(p:_) -> p == '+' || p == '-')
+
+-- |Get the type of a message
+toEventType :: IrcMessage -> EventType
+toEventType (Privmsg _)   = EPrivmsg
+toEventType (Notice _)    = ENotice
+toEventType (CTCP _ _)    = ECTCP
+toEventType (Nick _)      = ENick
+toEventType (Join _)      = EJoin
+toEventType (Part _ _)    = EPart
+toEventType (Quit _ _)    = EQuit
+toEventType (Kick _ _)    = EKick
+toEventType (Invite _ _)  = EInvite
+toEventType (Topic _)     = ETopic
+toEventType (Mode _)      = EMode
+toEventType (Ping _)      = EPing
+toEventType (Numeric _ _) = ENumeric
+toEventType _ = EEverything
 
 -- *Encoding messages
 
