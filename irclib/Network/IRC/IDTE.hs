@@ -102,10 +102,10 @@ runner = do
       Nothing   -> return ()
 
 -- |Get the event handlers for an event.
-getHandlersFor :: Event -> [(EventType, Event -> IRC ())] -> [Event -> IRC ()]
-getHandlersFor e = map snd . if ety == EEverything
-                             then id
-                             else filter $ (== ety) . fst
+getHandlersFor :: Event -> [EventHandler] -> [Event -> IRC ()]
+getHandlersFor e = map _eventFunc . if ety == EEverything
+                                    then id
+                                    else filter $ (== ety) . _matchType
     where ety = _eventType e
 
 -- |Log a message to stdout and the internal log
@@ -147,10 +147,10 @@ defaultIRCConf nick = InstanceConfig
                       , _realname      = nick
                       , _channels      = []
                       , _ctcpVer       = "idte-0.0.0.1"
-                      , _eventHandlers = [ (EPing, pingHandler)
-                                         , (ECTCP, ctcpPingHandler)
-                                         , (ECTCP, ctcpVersionHandler)
-                                         , (ECTCP, ctcpTimeHandler)
+                      , _eventHandlers = [ EventHandler "Respond to server PING requests"  EPing pingHandler
+                                         , EventHandler "Respond to CTCP PING requests"    ECTCP ctcpPingHandler
+                                         , EventHandler "Respond to CTCP VERSION requests" ECTCP ctcpVersionHandler
+                                         , EventHandler "Respond to CTCP TIME requests"    ECTCP ctcpTimeHandler
                                          ]
                       }
 
