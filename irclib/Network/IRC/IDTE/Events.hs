@@ -14,19 +14,17 @@ module Network.IRC.IDTE.Events
 import Control.Applicative ((<$>))
 import Data.ByteString     (ByteString)
 import Data.Char           (isDigit)
-import Data.List           (mapAccumL)
-import Data.Maybe          (catMaybes)
 import Data.Monoid         ((<>))
 import Data.String         (fromString)
 import Data.Text           (Text, unpack, pack, singleton)
 import Data.Text.Encoding  (decodeUtf8, encodeUtf8)
 import Network.IRC         (Message(..), Prefix(..))
 import Network.IRC.IDTE.Client
+import Network.IRC.IDTE.CTCP
 import Network.IRC.IDTE.Utils
 
-import qualified Data.ByteString as BS
-import qualified Data.Text       as T
-import qualified Network.IRC     as I
+import qualified Data.Text   as T
+import qualified Network.IRC as I
 
 -- *Types
 
@@ -161,10 +159,10 @@ decode :: Text
        -- channels/nicks)
        -> Message -> (Source, IrcMessage)
 decode nick msg = case msg of
-                    Message (Just (NickName n _ _)) "PRIVMSG" [t, m] | t == nick' -> (user n,   Privmsg `orCTCP` m)
-                                                                     | otherwise -> (chan n t, Privmsg `orCTCP` m)
-                    Message (Just (NickName n _ _)) "NOTICE"  [t, m] | t == nick' -> (user n,   Notice  `orCTCP` m)
-                                                                     | otherwise -> (chan n t, Notice  `orCTCP` m)
+                    Message (Just (NickName n _ _)) "PRIVMSG" [t, m] | t == nick' -> (user n,   privmsg `orCTCP` ctcp $ m)
+                                                                     | otherwise -> (chan n t, privmsg `orCTCP` ctcp $ m)
+                    Message (Just (NickName n _ _)) "NOTICE"  [t, m] | t == nick' -> (user n,   notice  `orCTCP` ctcp $ m)
+                                                                     | otherwise -> (chan n t, notice  `orCTCP` ctcp $ m)
 
                     Message (Just (NickName n _ _)) "NICK"   [n']      -> (user n,   Nick   <$ n')
                     Message (Just (NickName n _ _)) "JOIN"   [c]       -> (chan n c, Join   <$ c)
@@ -198,37 +196,11 @@ decode nick msg = case msg of
           user n   = User <$ n
           chan n c = Channel <$ n <$ c
 
+          privmsg bs = Privmsg <$ bs
+          notice bs  = Notice  <$ bs
+          ctcp bs    = uncurry CTCP $ fromCTCP bs
+
           isNumeric =  T.all isDigit . decodeUtf8
-
--- |Figure out if a message is a PRIVMSG/NOTICE or CTCP, and handle it accordingly
---
--- A CTCP starts and ends with a \SOH (ASCII 1), and has the following
--- escaped chaarcters:
--- - \020 '0'  -> \0
--- - \020 'n'  -> \n
--- - \020 'r'  -> \r
--- - \020 \020 -> \020
--- Any other occurrence of a \020 is an error and is dropped
---
--- See http://www.irchelp.org/irchelp/rfc/ctcpspec.html
-orCTCP :: (Text -> IrcMessage) -> ByteString -> IrcMessage
-orCTCP f m = if BS.head m == 0o001 && BS.last m == 0o001
-             then CTCP <$ action <$: args
-             else f <$ m
-
-    where unescaped = unescape $ BS.tail $ BS.init m
-
-          action = fst $ BS.break (==0o40) unescaped
-          args   = BS.split 0o040 $ snd $ BS.break (==0o040) unescaped
-
-          unescape = BS.pack . catMaybes . snd . mapAccumL step False . BS.unpack
-
-          step True  0o060 = (False, Just 0o000) -- NUL
-          step True  0o156 = (False, Just 0o012) -- NL
-          step True  0o162 = (False, Just 0o015) -- CR
-          step True  0o020 = (False, Just 0o020) -- DLE
-          step False 0o020 = (True,  Nothing)
-          step _ x         = (False, Just x)
 
 -- |Convert a list of textual mode changes to ModeChanges.
 toModeChanges :: [ByteString] -> [ModeChange]
@@ -258,8 +230,8 @@ encode (Channel _ c) (Privmsg m) = Just $ mkMessage "PRIVMSG" >$: [c, m]
 encode (User n)      (Privmsg m) = Just $ mkMessage "PRIVMSG" >$: [n, m]
 encode (Channel _ c) (Notice m)  = Just $ mkMessage "NOTICE"  >$: [c, m]
 encode (User n)      (Notice m)  = Just $ mkMessage "NOTICE"  >$: [n, m]
-encode (Channel _ c) (CTCP v xs) = Just $ mkMessage "PRIVMSG" [encodeUtf8 c, encodeCTCP v xs]
-encode (User n)      (CTCP v xs) = Just $ mkMessage "PRIVMSG" [encodeUtf8 n, encodeCTCP v xs]
+encode (Channel _ c) (CTCP v xs) = Just $ mkMessage "PRIVMSG" [encodeUtf8 c, toByteString $ toCTCP v xs]
+encode (User n)      (CTCP v xs) = Just $ mkMessage "PRIVMSG" [encodeUtf8 n, toByteString $ toCTCP v xs]
 encode _ (Nick n)                = Just $ mkMessage "NICK" >$: [n]
 encode _ (Join c)                = Just $ mkMessage "JOIN" >$: [c]
 encode _ (Part c (Just r))       = Just $ mkMessage "PART" >$: [c, r]
@@ -287,19 +259,3 @@ toModeStrs = concatMap modeChange
           modeChange (ModeChange True  f Nothing)     = ["+" <> f]
           modeChange (ModeChange False f (Just args)) = ("-" <> f) : args
           modeChange (ModeChange False f Nothing)     = ["-" <> f]
-
--- |Encode a CTCP. See `orCTCP` for details of the coding.
-encodeCTCP :: Text -> [Text] -> ByteString
-encodeCTCP cmd args = BS.concat [BS.singleton 0o001
-                                , escape cmd
-                                , BS.singleton 0o040
-                                , BS.intercalate (BS.singleton 0o040) $ map escape args
-                                , BS.singleton 0o001
-                                ]
-
-    where escape = BS.concatMap escape' . encodeUtf8
-          escape' 0o000 = BS.pack [0o020, 0o060]
-          escape' 0o012 = BS.pack [0o020, 0o156]
-          escape' 0o015 = BS.pack [0o020, 0o162]
-          escape' 0o020 = BS.pack [0o020, 0o020]
-          escape' x     = BS.singleton x
