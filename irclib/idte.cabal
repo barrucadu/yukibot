@@ -53,6 +53,7 @@ library
   -- Modules exported by the library.
   exposed-modules:     Network.IRC.IDTE
                      , Network.IRC.IDTE.Events
+                     , Network.IRC.IDTE.Messages
                      , Network.IRC.IDTE.TLS
                      , Network.IRC.IDTE.Types
   

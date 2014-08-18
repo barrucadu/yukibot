@@ -14,12 +14,11 @@ module Network.IRC.IDTE.Events
 import Control.Applicative ((<$>))
 import Data.ByteString     (ByteString)
 import Data.Char           (isDigit)
-import Data.Monoid         ((<>))
-import Data.String         (fromString)
 import Data.Text           (Text, unpack, pack, singleton)
 import Data.Text.Encoding  (decodeUtf8, encodeUtf8)
 import Network.IRC         (Message(..), Prefix(..))
 import Network.IRC.IDTE.CTCP
+import Network.IRC.IDTE.Messages
 import Network.IRC.IDTE.Types
 import Network.IRC.IDTE.Utils
 
@@ -49,7 +48,6 @@ toEvent msg send = do
                , _send       = \s m -> case encode s m of
                                         Just m' -> send m'
                                         Nothing -> return ()
-               , _sendRaw    = send
                }
 
 -- |Decode a message into a source and (nice) message, or die (return
@@ -145,36 +143,24 @@ toEventType _ = EEverything
 -- weird things with your messages this may well result in a Nothing,
 -- in which case you can construct it yourself.
 encode :: Source -> IrcMessage -> Maybe Message
-encode (Channel _ c) (Privmsg m) = Just $ mkMessage "PRIVMSG" >$: [c, m]
-encode (User n)      (Privmsg m) = Just $ mkMessage "PRIVMSG" >$: [n, m]
-encode (Channel _ c) (Notice m)  = Just $ mkMessage "NOTICE"  >$: [c, m]
-encode (User n)      (Notice m)  = Just $ mkMessage "NOTICE"  >$: [n, m]
-encode (Channel _ c) (CTCP v xs) = Just $ mkMessage "PRIVMSG" [encodeUtf8 c, toByteString $ toCTCP v xs]
-encode (User n)      (CTCP v xs) = Just $ mkMessage "PRIVMSG" [encodeUtf8 n, toByteString $ toCTCP v xs]
-encode _ (Nick n)                = Just $ mkMessage "NICK" >$: [n]
-encode _ (Join c)                = Just $ mkMessage "JOIN" >$: [c]
-encode _ (Part c (Just r))       = Just $ mkMessage "PART" >$: [c, r]
-encode _ (Part c Nothing)        = Just $ mkMessage "PART" >$: [c]
-encode _ (Quit _ (Just r))       = Just $ mkMessage "QUIT" >$: [r]
-encode _ (Quit _ Nothing)        = Just $ mkMessage "QUIT" []
-encode (User n) (Mode ms)        = Just $ mkMessage "MODE" >$: (n : toModeStrs ms)
-encode (Channel _ c) (Mode ms)   = Just $ mkMessage "MODE" >$: (c : toModeStrs ms)
-encode (Channel _ c) (Topic t)   = Just $ mkMessage "TOPIC" >$: [c, t]
-encode _ (Invite n c)            = Just $ mkMessage "INVITE" >$: [n, c]
-encode (Channel _ c) (Kick n (Just r)) = Just $ mkMessage "KICK" >$: [c, n, r]
-encode (Channel _ c) (Kick n Nothing)  = Just $ mkMessage "KICK" >$: [c, n]
-encode _ (Ping s1)               = Just $ mkMessage "PING" >$: [s1]
-encode _ (Numeric n xs)          = Just $ mkMessage (fromString $ show n) >$: xs
+encode (Channel _ c) (Privmsg m) = Just $ privmsg c m
+encode (User n)      (Privmsg m) = Just $ query n m
+encode (Channel _ c) (Notice m)  = Just $ notice c m
+encode (User n)      (Notice m)  = Just $ notice n m
+encode (Channel _ c) (CTCP v xs) = Just $ ctcp c v xs
+encode (User n)      (CTCP v xs) = Just $ ctcp n v xs
+encode _ (Nick n)                = Just $ nick n
+encode _ (Join c)                = Just $ join c
+encode _ (Part c (Just r))       = Just $ part c $ Just r
+encode _ (Part c Nothing)        = Just $ part c Nothing
+encode _ (Quit _ (Just r))       = Just $ quit $ Just r
+encode _ (Quit _ Nothing)        = Just $ quit Nothing
+encode (User n) (Mode ms)        = Just $ mode n ms
+encode (Channel _ c) (Mode ms)   = Just $ mode c ms
+encode (Channel _ c) (Topic t)   = Just $ topic c t
+encode _ (Invite n c)            = Just $ invite n c
+encode (Channel _ c) (Kick n (Just r)) = Just $ kick c n $ Just r
+encode (Channel _ c) (Kick n Nothing)  = Just $ kick c n Nothing
+encode _ (Ping s1)               = Just $ ping s1
+encode _ (Numeric n xs)          = Just $ numeric n xs
 encode _ _ = Nothing
-
--- |Build a message from parts
-mkMessage :: ByteString -> [ByteString] -> Message
-mkMessage = Message Nothing
-
--- |Decode a list of mode changes into a command
-toModeStrs :: [ModeChange] -> [Text]
-toModeStrs = concatMap modeChange
-    where modeChange (ModeChange True  f (Just args)) = ("+" <> f) : args
-          modeChange (ModeChange True  f Nothing)     = ["+" <> f]
-          modeChange (ModeChange False f (Just args)) = ("-" <> f) : args
-          modeChange (ModeChange False f Nothing)     = ["-" <> f]
