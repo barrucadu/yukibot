@@ -20,6 +20,7 @@ import Data.Time.Format       (formatTime)
 import Network                (HostName, PortID, connectTo)
 import Network.IRC            (Message, encode, decode)
 import Network.IRC.IDTE.Client
+import Network.IRC.IDTE.Events (toEvent)
 import Network.IRC.IDTE.TLS
 import Network.TLS            (Cipher)
 import System.Locale          (defaultTimeLocale)
@@ -67,8 +68,6 @@ connectWithTLS' host port ciphers = do
 
 -- |Run the event loop for a server, receiving messages and handing
 -- them off to handlers as appropriate.
--- 
--- TODO: Any of that.
 run :: MonadIO m => ConnectionConfig -> InstanceConfig -> m ()
 run cconf iconf = liftIO . void . flip runStateT iconf $ runReaderT runner cconf
 
@@ -83,8 +82,15 @@ runner = do
   forever $ do
     msg <- recv
     case msg of
-      -- TODO: Give to event handler (todo: event handlers)
-      Just msg' -> logmsg msg'
+      Just msg' -> do
+        logmsg msg'
+
+        event <- toEvent msg' send
+
+        --handlers <- getHandlersFor event . _eventHandlers <$> instanceConfig
+        -- TODO: Parallelise this (requires bunging state behind an MVar)
+        --mapM_ ($ event) handlers
+        return ()
 
       -- Ignore malformed messages
       Nothing   -> return ()
