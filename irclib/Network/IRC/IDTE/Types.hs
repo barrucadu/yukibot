@@ -5,7 +5,7 @@ module Network.IRC.IDTE.Types where
 import Control.Monad.Trans.Class  (lift)
 import Control.Monad.Trans.Reader (ReaderT, ask)
 import Control.Monad.Trans.State  (StateT, get, put)
-import Data.Text                  (Text, pack)
+import Data.Text                  (Text)
 import Network                    (HostName, PortID)
 import Network.IRC                (Message)
 import Network.TLS                (Context)
@@ -57,17 +57,6 @@ data InstanceConfig = InstanceConfig
     -- ^The registered event handlers
     }
 
--- |Construct a default IRC configuration from a nick
-defaultIRCConf :: Text -> InstanceConfig
-defaultIRCConf nick = InstanceConfig
-                      { _nick          = nick
-                      , _username      = nick
-                      , _realname      = nick
-                      , _channels      = []
-                      , _ctcpVer       = pack "idte-0.0.0.1"
-                      , _eventHandlers = []
-                      }
-
 -- *Events
 
 -- |An event has a message, some information on the source, and a
@@ -85,8 +74,6 @@ data Event = Event
     -- ^Sends a message to the source of this event.
     , _send       :: Source -> IrcMessage -> IRC ()
     -- ^Send a message
-    , _sendRaw    :: Message -> IRC ()
-    -- ^Send a raw message
     }
 
 data EventType = EEverything

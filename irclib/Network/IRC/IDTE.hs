@@ -1,10 +1,15 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 -- |Entry point to the Integrated Data Thought Entity.
 module Network.IRC.IDTE
-    ( connect
+    ( module Network.IRC.IDTE.Types
+    , module Network.IRC.IDTE.Messages
+    , connect
     , connectWithTLS
     , connectWithTLS'
     , run
     , disconnect
+    , defaultIRCConf
     ) where
 
 import Control.Applicative    ((<$>))
@@ -13,18 +18,21 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.State  (runStateT)
 import Data.ByteString.Char8  (pack, unpack)
+import Data.Text              (Text, toUpper)
 import Data.Text.Encoding     (encodeUtf8)
 import Data.Time.Clock        (getCurrentTime)
 import Data.Time.Format       (formatTime)
 import Network                (HostName, PortID, connectTo)
 import Network.IRC            (Message, encode, decode)
 import Network.IRC.IDTE.Events (toEvent)
+import Network.IRC.IDTE.Messages
 import Network.IRC.IDTE.TLS
 import Network.IRC.IDTE.Types
 import Network.TLS            (Cipher)
 import System.Locale          (defaultTimeLocale)
 import System.IO
 
+import qualified Data.Text   as T
 import qualified Network.IRC as I
 
 -- *Connecting to an IRC network
@@ -128,3 +136,50 @@ disconnect = do
   h <- _handle <$> connectionConfig
   endTLS
   liftIO $ hClose h
+
+-- *Default configuration
+
+-- |Construct a default IRC configuration from a nick
+defaultIRCConf :: Text -> InstanceConfig
+defaultIRCConf nick = InstanceConfig
+                      { _nick          = nick
+                      , _username      = nick
+                      , _realname      = nick
+                      , _channels      = []
+                      , _ctcpVer       = "idte-0.0.0.1"
+                      , _eventHandlers = [ (EPing, pingHandler)
+                                         , (ECTCP, ctcpPingHandler)
+                                         , (ECTCP, ctcpVersionHandler)
+                                         , (ECTCP, ctcpTimeHandler)
+                                         ]
+                      }
+
+-- |Respond to pings
+pingHandler :: Event -> IRC ()
+pingHandler ev =
+  case _message ev of
+    Ping target -> send $ pong target
+    _ -> return ()
+
+-- |Respond to CTCP PINGs
+ctcpPingHandler :: Event -> IRC ()
+ctcpPingHandler ev =
+  case (_source ev, _message ev) of
+    (User n, CTCP p xs) | toUpper p == "PING" -> send $ ctcp n "PONG" xs
+    _ -> return ()
+
+-- |Respond to CTCP VERSIONs
+ctcpVersionHandler :: Event -> IRC ()
+ctcpVersionHandler ev = do
+  ver <- _ctcpVer <$> instanceConfig
+  case (_source ev, _message ev) of
+    (User n, CTCP v []) | toUpper v == "VERSION" -> send $ ctcp n "PONG" [ver]
+    _ -> return ()
+
+-- |Respond to CTCP TIMEs
+ctcpTimeHandler :: Event -> IRC ()
+ctcpTimeHandler ev = do
+  now <- liftIO getCurrentTime
+  case (_source ev, _message ev) of
+    (User n, CTCP t []) | toUpper t == "TIME" -> send $ ctcp n "TIME" [T.pack $ formatTime defaultTimeLocale "%c" now]
+    _ -> return ()
