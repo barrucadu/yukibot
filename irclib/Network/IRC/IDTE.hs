@@ -8,6 +8,7 @@ module Network.IRC.IDTE
     , connectWithTLS
     , connectWithTLS'
     , run
+    , send
     , disconnect
     , defaultIRCConf
     ) where
