@@ -66,7 +66,11 @@ connectWithTLS' host port ciphers = do
   irc <- connect host port
 
   -- And add a TLS context to it
-  -- TODO: Do we want a better way to choose the bytes?
+  --
+  -- The bytes given are used to differentiate services on the same
+  -- host which may have differing certificates. As it's a reasonable
+  -- assumption that IRC servers don't have other TLS-using services
+  -- on the same host, the choice is not important.
   tls <- addTLS host (pack "deadbeef") (_handle irc) ciphers
 
   return $ irc { _tls = Just tls }
