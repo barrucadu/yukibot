@@ -28,33 +28,43 @@ toEvent :: Message
         -- ^The message to decode
         -> (Message -> IRC ())
         -- ^Message sending function
-        -> IRC Event
+        -> IRC (Maybe Event)
 toEvent msg send = do
   nick <- _nick <$> instanceConfig
 
-  let (source, message) = decode nick msg
-
-  return Event { _rawMessage = msg
-               , _eventType  = toEventType message
-               , _source     = source
-               , _message    = message
-               , _reply      = \m -> case encode source m of
-                                      Just m' -> send m'
-                                      Nothing -> return ()
-               , _send       = \s m -> case encode s m of
-                                        Just m' -> send m'
-                                        Nothing -> return ()
-               }
+  return $ do
+    (source, message) <- decode nick msg
+    return $ Event { _rawMessage = msg
+                   , _eventType  = toEventType message
+                   , _source     = source
+                   , _message    = message
+                   , _reply      = \m -> case encode source m of
+                                          Just m' -> send m'
+                                          Nothing -> return ()
+                   , _send       = \s m -> case encode s m of
+                                            Just m' -> send m'
+                                            Nothing -> return ()
+                   }
 
 -- |Decode a message into a source and (nice) message, or die (return
 -- a silly value) trying.
 --
--- See http://tools.ietf.org/html/rfc2812
+-- Messages originating from the provided nick are discarded. All
+-- other messages get decoded, but perhaps not successfully.
+--
+-- See http://tools.ietf.org/html/rfc1459
 decode :: Text
        -- ^The nick of the client (used for disambiguationg
        -- channels/nicks)
-       -> Message -> (Source, IrcMessage)
-decode nick msg = case msg of
+       -> Message -> Maybe (Source, IrcMessage)
+decode n ms = case decode' n ms of
+                r@(User n', _) | n' == n    -> Nothing
+                               | otherwise -> Just r
+                r -> Just r
+
+-- |Like `decode`, but always works.
+decode' :: Text -> Message -> (Source, IrcMessage)
+decode' nick msg = case msg of
                     Message (Just (NickName n _ _)) "PRIVMSG" [t, m] | t == nick' -> (user n,   privmsg `orCTCP` ctcp $ m)
                                                                      | otherwise -> (chan n t, privmsg `orCTCP` ctcp $ m)
                     Message (Just (NickName n _ _)) "NOTICE"  [t, m] | t == nick' -> (user n,   notice  `orCTCP` ctcp $ m)

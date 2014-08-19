@@ -117,20 +117,19 @@ runner = do
         logmsg True msg'
 
         event <- toEvent msg' send
-
-        handlers <- getHandlersFor event . _eventHandlers <$> instanceConfig
-        -- TODO: Parallelise this (requires bunging state behind an MVar)
-        mapM_ ($ event) handlers
+        case event of
+          Just event' -> do
+            handlers <- getHandlersFor event' . _eventHandlers <$> instanceConfig
+            -- TODO: Parallelise this (requires bunging state behind an MVar)
+            mapM_ ($ event') handlers
+          Nothing -> return ()
 
       -- Ignore malformed messages
       Nothing   -> return ()
 
 -- |Get the event handlers for an event.
 getHandlersFor :: Event -> [EventHandler] -> [Event -> IRC ()]
-getHandlersFor e = map _eventFunc . if ety == EEverything
-                                    then id
-                                    else filter $ (== ety) . _matchType
-    where ety = _eventType e
+getHandlersFor e ehs = [_eventFunc eh | eh <- ehs, _matchType eh `elem` [EEverything, _eventType e]]
 
 -- |Log a message to stdout and the internal log
 logmsg :: Bool -> Message -> IRC ()
