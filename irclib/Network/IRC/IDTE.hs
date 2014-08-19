@@ -114,7 +114,7 @@ runner = do
     msg <- recv
     case msg of
       Just msg' -> do
-        logmsg msg'
+        logmsg True msg'
 
         event <- toEvent msg' send
 
@@ -133,11 +133,14 @@ getHandlersFor e = map _eventFunc . if ety == EEverything
     where ety = _eventType e
 
 -- |Log a message to stdout and the internal log
-logmsg :: Message -> IRC ()
-logmsg msg = do
+logmsg :: Bool -> Message -> IRC ()
+logmsg fromsrv msg = do
   now <- liftIO getCurrentTime
 
-  liftIO . putStrLn $ formatTime defaultTimeLocale "%c" now ++ unpack (encode msg)
+  liftIO . putStrLn $ unwords [ formatTime defaultTimeLocale "%c" now
+                              , if fromsrv then "<---" else "--->"
+                              , unpack $ encode msg
+                              ]
 
 -- *Messaging
 
@@ -161,6 +164,7 @@ send msg = do
   putInstanceConfig ic { _lastMessageTime = now' }
 
   -- Send the message
+  logmsg False msg
   withTLS (sendTLS msg)
           (\s -> liftIO . SB.sendAll s $ encode msg <> "\r\n")
 
