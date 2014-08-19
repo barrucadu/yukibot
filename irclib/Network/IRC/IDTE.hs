@@ -95,6 +95,9 @@ runner = do
   send $ user theUser theReal
   send $ nick theNick
 
+  -- Connect to channels
+  mapM_ (send . join) . _channels <$> instanceConfig
+
   -- Event loop
   forever $ do
     msg <- recv
