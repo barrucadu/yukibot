@@ -18,7 +18,9 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.State  (runStateT)
 import Data.ByteString.Char8  (pack, unpack)
-import Data.Text              (Text, toUpper)
+import Data.Char              (isAlphaNum)
+import Data.Monoid            ((<>))
+import Data.Text              (Text, breakOn, takeEnd, toUpper)
 import Data.Time.Clock        (getCurrentTime)
 import Data.Time.Format       (formatTime)
 import Network                (HostName, PortID, connectTo)
@@ -85,7 +87,6 @@ runner = do
   theReal <- _realname <$> instanceConfig
 
   send $ user theUser theReal
-  -- TODO: Mangle the nick until we get a unique one
   send $ nick theNick
 
   -- Event loop
@@ -154,6 +155,7 @@ defaultIRCConf nick = InstanceConfig
                                          , EventHandler "Respond to CTCP PING requests"    ECTCP ctcpPingHandler
                                          , EventHandler "Respond to CTCP VERSION requests" ECTCP ctcpVersionHandler
                                          , EventHandler "Respond to CTCP TIME requests"    ECTCP ctcpTimeHandler
+                                         , EventHandler "Mangle the nick on collision"     ENumeric nickMangler
                                          ]
                       }
 
@@ -186,3 +188,61 @@ ctcpTimeHandler ev = do
   case (_source ev, _message ev) of
     (User n, CTCP t []) | toUpper t == "TIME" -> send $ ctcp n "TIME" [T.pack $ formatTime defaultTimeLocale "%c" now]
     _ -> return ()
+
+-- |Mangle the nick if there's a collision when we set it
+nickMangler :: Event -> IRC ()
+nickMangler ev = do
+  theNick <- _nick <$> instanceConfig
+
+  case _message ev of
+    -- ERR_ERRONEUSNICKNAME: Bad characters in nick
+    Numeric 432 _ -> send . nick $ fresh theNick
+    -- ERR_NICKNAMEINUSE: Nick in use
+    Numeric 433 _ -> send . nick $ mangle theNick
+    -- ERR_NICKCOLLISION: Nick registered
+    Numeric 436 _ -> send . nick $ mangle theNick
+    _ -> return ()
+
+  where fresh n  = takeEnd nicklen $ let n' = T.filter isAlphaNum n
+                                     in if T.length n' == 0
+                                        then "f"
+                                        else n'
+
+        mangle n = takeEnd nicklen $ case charsubst n of
+                                       Just n' -> n'
+                                       Nothing -> n <> "1"
+
+        -- Maximum length of a nick
+        nicklen = 16
+
+        -- List of substring substitutions. It's important that
+        -- these don't contain any loops!
+        charsubst = transform [ ("i", "1")
+                              , ("I", "1")
+                              , ("l", "1")
+                              , ("L", "1")
+                              , ("o", "0")
+                              , ("O", "0")
+                              , ("A", "4")
+                              , ("0", "1")
+                              , ("1", "2")
+                              , ("2", "3")
+                              , ("3", "4")
+                              , ("4", "5")
+                              , ("5", "6")
+                              , ("6", "7")
+                              , ("7", "8")
+                              , ("8", "9")
+                              , ("9", "-")
+                              ]
+
+        -- Attempt to transform some text by the substitutions.
+        transform ((from, to):trs) txt = case breakOn' from txt of
+                                           Just (before, after) -> Just $ before <> to <> after
+                                           Nothing -> transform trs txt
+        transform [] _ = Nothing
+
+        breakOn' delim txt = let (before, after) = breakOn delim txt
+                             in if T.length after >= T.length delim
+                                then Just (before, T.drop (T.length delim) after)
+                                else Nothing
