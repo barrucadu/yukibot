@@ -55,7 +55,7 @@ library
                      , Network.IRC.IDTE.CTCP
                      , Network.IRC.IDTE.Events
                      , Network.IRC.IDTE.Messages
-                     , Network.IRC.IDTE.TLS
+                     , Network.IRC.IDTE.Net
                      , Network.IRC.IDTE.Types
   
   -- Modules included in this library but not exported.
