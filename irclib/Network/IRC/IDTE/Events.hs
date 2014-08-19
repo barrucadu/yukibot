@@ -34,17 +34,14 @@ toEvent msg send = do
 
   return $ do
     (source, message) <- decode nick msg
-    return $ Event { _rawMessage = msg
-                   , _eventType  = toEventType message
-                   , _source     = source
-                   , _message    = message
-                   , _reply      = \m -> case encode source m of
-                                          Just m' -> send m'
-                                          Nothing -> return ()
-                   , _send       = \s m -> case encode s m of
-                                            Just m' -> send m'
-                                            Nothing -> return ()
-                   }
+    return Event { _rawMessage = msg
+                 , _eventType  = toEventType message
+                 , _source     = source
+                 , _message    = message
+                 , _reply      = send' source
+                 , _send       = send'
+                 }
+  where send' s = maybe (return ()) send . encode s
 
 -- |Decode a message into a source and (nice) message, or die (return
 -- a silly value) trying.

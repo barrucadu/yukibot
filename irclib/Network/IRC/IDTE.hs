@@ -19,16 +19,16 @@ import Control.Monad          (forever, when, void)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.State  (runStateT)
-import Data.ByteString        (ByteString, singleton)
-import Data.ByteString.Char8  (pack, unpack)
+import Data.ByteString.Char8  (unpack)
 import Data.Char              (isAlphaNum)
+import Data.Maybe             (fromMaybe)
 import Data.Monoid            ((<>))
 import Data.Text              (Text, breakOn, takeEnd, toUpper)
-import Data.Time.Calendar     (Day(..), fromGregorian)
+import Data.Time.Calendar     (fromGregorian)
 import Data.Time.Clock        (UTCTime(..), addUTCTime, diffUTCTime, getCurrentTime)
 import Data.Time.Format       (formatTime)
 import Network
-import Network.IRC            (Message, encode, decode)
+import Network.IRC            (Message, encode)
 import Network.IRC.IDTE.Events (toEvent)
 import Network.IRC.IDTE.Messages
 import Network.IRC.IDTE.Types
@@ -164,21 +164,21 @@ disconnect = N.disconnect
 
 -- |Construct a default IRC configuration from a nick
 defaultIRCConf :: Text -> InstanceConfig
-defaultIRCConf nick = InstanceConfig
-                      { _nick          = nick
-                      , _username      = nick
-                      , _realname      = nick
-                      , _channels      = []
-                      , _ctcpVer       = "idte-0.0.0.1"
-                      , _floodDelay    = 1
-                      , _lastMessageTime = UTCTime (fromGregorian 0 0 0) 0
-                      , _eventHandlers = [ EventHandler "Respond to server PING requests"  EPing pingHandler
-                                         , EventHandler "Respond to CTCP PING requests"    ECTCP ctcpPingHandler
-                                         , EventHandler "Respond to CTCP VERSION requests" ECTCP ctcpVersionHandler
-                                         , EventHandler "Respond to CTCP TIME requests"    ECTCP ctcpTimeHandler
-                                         , EventHandler "Mangle the nick on collision"     ENumeric nickMangler
-                                         ]
-                      }
+defaultIRCConf n = InstanceConfig
+                     { _nick          = n
+                     , _username      = n
+                     , _realname      = n
+                     , _channels      = []
+                     , _ctcpVer       = "idte-0.0.0.1"
+                     , _floodDelay    = 1
+                     , _lastMessageTime = UTCTime (fromGregorian 0 0 0) 0
+                     , _eventHandlers = [ EventHandler "Respond to server PING requests"  EPing pingHandler
+                                        , EventHandler "Respond to CTCP PING requests"    ECTCP ctcpPingHandler
+                                        , EventHandler "Respond to CTCP VERSION requests" ECTCP ctcpVersionHandler
+                                        , EventHandler "Respond to CTCP TIME requests"    ECTCP ctcpTimeHandler
+                                        , EventHandler "Mangle the nick on collision"     ENumeric nickMangler
+                                        ]
+                     }
 
 -- |Respond to pings
 pingHandler :: Event -> IRC ()
@@ -229,9 +229,7 @@ nickMangler ev = do
                                         then "f"
                                         else n'
 
-        mangle n = takeEnd nicklen $ case charsubst n of
-                                       Just n' -> n'
-                                       Nothing -> n <> "1"
+        mangle n = takeEnd nicklen $ (n <> "1") `fromMaybe` charsubst n
 
         -- Maximum length of a nick
         nicklen = 16
