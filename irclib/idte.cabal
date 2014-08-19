@@ -52,6 +52,7 @@ cabal-version:       >=1.10
 library
   -- Modules exported by the library.
   exposed-modules:     Network.IRC.IDTE
+                     , Network.IRC.IDTE.CTCP
                      , Network.IRC.IDTE.Events
                      , Network.IRC.IDTE.Messages
                      , Network.IRC.IDTE.TLS
