@@ -7,10 +7,10 @@ import Control.Monad.Trans.Reader (ReaderT, ask)
 import Control.Monad.Trans.State  (StateT, get, put)
 import Data.Text                  (Text)
 import Data.Time.Clock            (UTCTime)
-import Network                    (HostName, PortID)
+import Network                    (HostName)
+import Network.Socket             (Socket)
 import Network.IRC                (Message)
 import Network.TLS                (Context)
-import System.IO                  (Handle)
 
 -- *State
 
@@ -32,13 +32,13 @@ putInstanceConfig = lift . put
 
 -- |The state of an IRC server connection
 data ConnectionConfig = ConnectionConfig
-    { _handle :: Handle
-    -- ^Server connection handle
+    { _socket :: Socket
+    -- ^Server connection socket
     , _tls    :: Maybe Context
     -- ^TLS context, if TLS was used.
     , _server :: HostName
     -- ^The server host
-    , _port   :: PortID
+    , _port   :: Int
     -- ^The server port
     }
 

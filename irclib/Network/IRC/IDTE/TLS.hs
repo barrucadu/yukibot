@@ -10,9 +10,9 @@ import Data.Default           (def)
 import Network                (HostName)
 import Network.IRC            (Message, encode, decode)
 import Network.IRC.IDTE.Types
+import Network.Socket         (Socket)
 import Network.TLS
 import Network.TLS.Extra      (ciphersuite_all)
-import System.IO              (Handle)
 
 -- *Initialisation
 
@@ -20,14 +20,14 @@ import System.IO              (Handle)
 defaultCiphers :: [Cipher]
 defaultCiphers = ciphersuite_all
 
--- |Enable a TLS context on the given handle.
-addTLS :: MonadIO m => HostName -> ByteString -> Handle -> [Cipher] -> m Context
-addTLS host bytes h ciphers = do
+-- |Enable a TLS context on the given socket.
+addTLS :: MonadIO m => HostName -> ByteString -> Socket -> [Cipher] -> m Context
+addTLS host bytes s ciphers = do
   let supported = def { supportedCiphers = ciphers }
   let clientctx = (defaultParamsClient host bytes) { clientSupported = supported }
 
   rng <- liftIO makeSystem
-  ctx <- contextNew h clientctx rng
+  ctx <- contextNew s clientctx rng
   handshake ctx
   return ctx
 
@@ -35,14 +35,14 @@ addTLS host bytes h ciphers = do
 
 -- |Run one of two functions depending on whether the connection is
 -- encrypted or not.
-withTLS :: (Context -> IRC a) -> (Handle -> IRC a) -> IRC a
+withTLS :: (Context -> IRC a) -> (Socket -> IRC a) -> IRC a
 withTLS tlsf plainf = do
   tls <- _tls    <$> connectionConfig
-  h   <- _handle <$> connectionConfig
+  s   <- _socket <$> connectionConfig
 
   case tls of
     Just ctx -> tlsf ctx
-    Nothing  -> plainf h
+    Nothing  -> plainf s
 
 -- |Run the provided function when there is a TLS context.
 whenTLS :: (Context -> IRC ()) -> IRC ()

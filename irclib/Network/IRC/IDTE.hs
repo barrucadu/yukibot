@@ -19,6 +19,7 @@ import Control.Monad          (forever, when, void)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.State  (runStateT)
+import Data.ByteString        (ByteString, singleton)
 import Data.ByteString.Char8  (pack, unpack)
 import Data.Char              (isAlphaNum)
 import Data.Monoid            ((<>))
@@ -26,7 +27,8 @@ import Data.Text              (Text, breakOn, takeEnd, toUpper)
 import Data.Time.Calendar     (Day(..), fromGregorian)
 import Data.Time.Clock        (UTCTime(..), addUTCTime, diffUTCTime, getCurrentTime)
 import Data.Time.Format       (formatTime)
-import Network                (HostName, PortID, connectTo)
+import Network
+import Network.Socket         (AddrInfo(..), Family(..), SockAddr(..), SocketType(..), defaultHints, defaultProtocol, getAddrInfo, socket)
 import Network.IRC            (Message, encode, decode)
 import Network.IRC.IDTE.Events (toEvent)
 import Network.IRC.IDTE.Messages
@@ -34,36 +36,44 @@ import Network.IRC.IDTE.TLS
 import Network.IRC.IDTE.Types
 import Network.TLS            (Cipher)
 import System.Locale          (defaultTimeLocale)
-import System.IO
 
-import qualified Data.Text as T
+import qualified Data.Text                 as T
+import qualified Network.Socket            as S
+import qualified Network.Socket.ByteString as SB
 
 -- *Connecting to an IRC network
 
 -- |Connect to a server without TLS.
-connect :: MonadIO m => HostName -> PortID -> m ConnectionConfig
+connect :: MonadIO m => HostName -> Int -> m ConnectionConfig
 connect host port = do
-  h <- liftIO $ do
-    h' <- connectTo host port
-    hSetEncoding    h' utf8
-    hSetBuffering   h' NoBuffering
-    hSetNewlineMode h' nativeNewlineMode
-    return h'
+  sock <- liftIO $ socket AF_INET Stream defaultProtocol
+  addr <- liftIO $ getAddrInfo (Just defaultHints) (Just host) Nothing
+
+  liftIO $ print addr
+
+  liftIO $ print port
+
+  case addr of
+    (a:_) -> case addrAddress a of
+              SockAddrInet _ hostaddr -> liftIO $ do print $ SockAddrInet (fromIntegral port) hostaddr
+                                                     S.connect sock $ SockAddrInet (fromIntegral port) hostaddr
+              _ -> liftIO $ putStrLn "Failed to connect"
+    _ -> liftIO $ putStrLn "Failed to connect"
 
   return ConnectionConfig
-             { _handle   = h
-             , _tls      = Nothing
-             , _server   = host
-             , _port     = port
+             { _socket = sock
+             , _tls    = Nothing
+             , _server = host
+             , _port   = port
              }
 
 -- |Connect to a server with TLS.
-connectWithTLS :: MonadIO m => HostName -> PortID -> m ConnectionConfig
+connectWithTLS :: MonadIO m => HostName -> Int -> m ConnectionConfig
 connectWithTLS host port = connectWithTLS' host port defaultCiphers
 
 -- |Connect to a server without TLS, supplying your own list of
 -- ciphers, ordered by preference.
-connectWithTLS' :: MonadIO m => HostName -> PortID -> [Cipher] -> m ConnectionConfig
+connectWithTLS' :: MonadIO m => HostName -> Int -> [Cipher] -> m ConnectionConfig
 connectWithTLS' host port ciphers = do
   -- Get an unencrypted connection
   irc <- connect host port
@@ -74,7 +84,7 @@ connectWithTLS' host port ciphers = do
   -- host which may have differing certificates. As it's a reasonable
   -- assumption that IRC servers don't have other TLS-using services
   -- on the same host, the choice is not important.
-  tls <- addTLS host (pack "deadbeef") (_handle irc) ciphers
+  tls <- addTLS host (pack "deadbeef") (_socket irc) ciphers
 
   return $ irc { _tls = Just tls }
 
@@ -152,11 +162,26 @@ send msg = do
 
   -- Send the message
   withTLS (sendTLS msg)
-          (\h -> liftIO $ hPrint h (encode msg) >> hPrint h "\r\n")
+          (\s -> liftIO . SB.sendAll s $ encode msg <> "\r\n")
 
 -- |Receive a message, using TLS if enabled. This blocks.
 recv :: IRC (Maybe Message)
-recv = withTLS recvTLS (fmap (decode . pack) . liftIO . hGetLine)
+recv = withTLS recvTLS (fmap decode . recvLine)
+
+-- |Receive a ByteString ending with a \r\n
+recvLine :: MonadIO m => Socket -> m ByteString
+recvLine s = liftIO $ go "" Nothing
+    where go bs Nothing   = getOne >>= go bs . Just
+          go bs (Just w8) = do
+            w8' <- getOne
+            if w8 == cr && w8' == lf
+            then return bs
+            else go (bs <> w8) $ Just w8'
+
+          getOne = SB.recv s 1
+
+          cr = singleton 0o015
+          lf = singleton 0o012
 
 -- *Disconnecting
 
@@ -164,9 +189,9 @@ recv = withTLS recvTLS (fmap (decode . pack) . liftIO . hGetLine)
 -- (if there is one).
 disconnect :: IRC ()
 disconnect = do
-  h <- _handle <$> connectionConfig
+  s <- _socket <$> connectionConfig
   endTLS
-  liftIO $ hClose h
+  liftIO $ sClose s
 
 -- *Default configuration
 
