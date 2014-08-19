@@ -89,7 +89,7 @@ data EventType = EEverything
                | ENothing
                -- ^Match no events
                | EPrivmsg | ENotice | ECTCP | ENick | EJoin | EPart | EQuit | EMode | ETopic | EInvite | EKick | EPing | ENumeric
-               deriving Eq
+               deriving (Eq, Show)
 
 -- |A function which handles an event.
 data EventHandler = EventHandler
@@ -112,6 +112,7 @@ data Source = Server
             | UnknownSource
             -- ^The source could not be determined, see the raw
             -- message
+            deriving (Eq, Show)
 
 -- |A decoded message
 data IrcMessage = Privmsg Text
@@ -170,3 +171,4 @@ data IrcMessage = Privmsg Text
                 | UnknownMessage
                 -- ^The message could not be decoded, see the raw
                 -- message.
+                deriving (Eq, Show)
