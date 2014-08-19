@@ -6,6 +6,7 @@ import Control.Monad.Trans.Class  (lift)
 import Control.Monad.Trans.Reader (ReaderT, ask)
 import Control.Monad.Trans.State  (StateT, get, put)
 import Data.Text                  (Text)
+import Data.Time.Clock            (UTCTime)
 import Network                    (HostName, PortID)
 import Network.IRC                (Message)
 import Network.TLS                (Context)
@@ -53,6 +54,12 @@ data InstanceConfig = InstanceConfig
     -- ^Current channels
     , _ctcpVer  :: Text
     -- ^Response to CTCP VERSION
+    , _floodDelay :: Int
+    -- ^Number of seconds to wait between sends
+    , _lastMessageTime :: UTCTime
+    -- ^The time of the last message (will be some time in the past
+    -- upon initialisation). This is used for flood control and should
+    -- NOT be updated by the user.
     , _eventHandlers :: [EventHandler]
     -- ^The registered event handlers
     }

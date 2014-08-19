@@ -13,7 +13,8 @@ module Network.IRC.IDTE
     ) where
 
 import Control.Applicative    ((<$>))
-import Control.Monad          (forever, void)
+import Control.Concurrent     (threadDelay)
+import Control.Monad          (forever, when, void)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.State  (runStateT)
@@ -21,7 +22,8 @@ import Data.ByteString.Char8  (pack, unpack)
 import Data.Char              (isAlphaNum)
 import Data.Monoid            ((<>))
 import Data.Text              (Text, breakOn, takeEnd, toUpper)
-import Data.Time.Clock        (getCurrentTime)
+import Data.Time.Calendar     (Day(..), fromGregorian)
+import Data.Time.Clock        (UTCTime(..), addUTCTime, diffUTCTime, getCurrentTime)
 import Data.Time.Format       (formatTime)
 import Network                (HostName, PortID, connectTo)
 import Network.IRC            (Message, encode, decode)
@@ -126,10 +128,27 @@ logmsg msg = do
 -- *Messaging
 
 -- |Send a message, using TLS if enabled.
--- TODO: Flood control
 send :: Message -> IRC ()
-send msg = withTLS (sendTLS msg)
-                   (\h -> liftIO $ hPrint h (encode msg) >> hPrint h "\r\n")
+send msg = do
+  -- Block until the flood delay passes
+  now     <- liftIO getCurrentTime
+  lastMsg <- _lastMessageTime <$> instanceConfig
+  flood   <- fromIntegral . _floodDelay <$> instanceConfig
+
+  let nextMsg = addUTCTime flood lastMsg
+  when (nextMsg > now) $
+    -- threadDelay uses microseconds, NominalDiffTime is in seconds,
+    -- but with a precision of nanoseconds.
+    liftIO . threadDelay . ceiling $ 1000000 * diffUTCTime nextMsg now
+
+  -- Update the last message time
+  ic   <- instanceConfig
+  now' <- liftIO getCurrentTime
+  putInstanceConfig ic { _lastMessageTime = now' }
+
+  -- Send the message
+  withTLS (sendTLS msg)
+          (\h -> liftIO $ hPrint h (encode msg) >> hPrint h "\r\n")
 
 -- |Receive a message, using TLS if enabled. This blocks.
 recv :: IRC (Maybe Message)
@@ -155,6 +174,8 @@ defaultIRCConf nick = InstanceConfig
                       , _realname      = nick
                       , _channels      = []
                       , _ctcpVer       = "idte-0.0.0.1"
+                      , _floodDelay    = 1
+                      , _lastMessageTime = UTCTime (fromGregorian 0 0 0) 0
                       , _eventHandlers = [ EventHandler "Respond to server PING requests"  EPing pingHandler
                                          , EventHandler "Respond to CTCP PING requests"    ECTCP ctcpPingHandler
                                          , EventHandler "Respond to CTCP VERSION requests" ECTCP ctcpVersionHandler
