@@ -49,7 +49,9 @@ getUnderlyingByteString = _getUnderlyingByteString
 
 -- *Encoding and decoding
 
--- |Turn a command name and arguments into a CTCP-encoded bytestring
+-- |Turn a command name and arguments into a CTCP-encoded
+-- bytestring. This encodes the text with UTF-8. If another encoding
+-- is desired, `encodeCTCP` should be used directly.
 toCTCP :: Text -> [Text] -> CTCPByteString
 toCTCP cmd args = encodeCTCP . encodeUtf8 . unwords $ cmd : args
 
@@ -70,7 +72,9 @@ encodeCTCP bs = CBS $ concat [ singleton soh
                         -- character.
                         Nothing -> singleton x
 
--- |Turn a CTCP-encoded bytestring into a command name and arguments
+-- |Turn a CTCP-encoded bytestring into a command name and
+-- arguments. This decodes the next with UTF-8. If another encoding is
+-- desired, `decodeCTCP` should be used directly.
 fromCTCP :: CTCPByteString -> (Text, [Text])
 fromCTCP bs = case splitOn (T.pack " ") . decodeUtf8 . decodeCTCP $ bs of
                 (cmd : args) -> (cmd, args)
