@@ -19,7 +19,7 @@ synopsis:            A simple IRC bot library.
 -- description:         
 
 -- URL for the project homepage or repository.
-homepage:            https://github.com/Barrucadu/lainbot
+homepage:            https://github.com/barrucadu/yukibot
 
 -- The license under which the package is released.
 license:             OtherLicense

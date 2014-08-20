@@ -1,6 +1,6 @@
-# Lainbot
+# Yukibot
 
-Lainbot is an IRC bot for the ##compsoc-uk-anime channel on Freenode,
+Yukibot is an IRC bot for the ##compsoc-uk-anime channel on Freenode,
 developed as three components:
 
 ## IRC Client Library: Integrated Data Thought Entity (IDTE)
@@ -71,7 +71,7 @@ example).
    - Register themselves with the Command Runner.
    - May specify a minimum permission required to execute the command.
 
-## Lainbot
+## Yukibot
 
 If we've done Boota right, this will just be a collection of commands
 and event handlers we register, along with some default configuration.
