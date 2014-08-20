@@ -3,7 +3,9 @@
 Yukibot is an IRC bot for the ##compsoc-uk-anime channel on Freenode,
 developed as three components:
 
-## IRC Client Library: Integrated Data Thought Entity (IDTE)
+## Components
+
+### IRC Client Library: Integrated Data Thought Entity (IDTE)
 
 Manages a connection to a single IRC network. We want to keep this
 simple and have nothing included simply because we intend to make a
@@ -18,7 +20,7 @@ bot. This should be able to stand on its own.
  - Provides primitives for sending messages (both raw and sum-typey).
  - Handles things like CTCPs and flood prevention behind-the-scenes.
 
-## IRC Bot Library: Boota
+### IRC Bot Library: Boota
 
 This brings in the core functionality of an IRC bot, but as yet
 doesn't include anything specific to *our* bot. Furthermore, we want
@@ -71,7 +73,7 @@ example).
    - Register themselves with the Command Runner.
    - May specify a minimum permission required to execute the command.
 
-## Yukibot
+### Yukibot
 
 If we've done Boota right, this will just be a collection of commands
 and event handlers we register, along with some default configuration.
@@ -98,3 +100,24 @@ Things we probably want:
 When implementing all this stuff, we should try to avoid importing
 things from IDTE (except types, obviously) and just use Boota, to
 reduce coupling and make future change easier.
+
+## Building
+
+This assumes you have a version of Cabal new enough to have
+sandboxes. If you don't, may God have mercy on your soul.
+
+    cabal sandbox init
+    cp cabal.sandbox.config irc-ctcp irclib botlib yukibot
+
+You can now build and install individual components by `cd`ing to
+their directory and using `cabal install`, assuming you have installed
+any components they depend upon.
+
+Alternatively, to build the bot and its dependencies in one fell
+swoop,
+
+    cd yukibot
+    cabal sandbox init
+    cabal sandbox add-source ../botlib ../irclib ../irc-ctcp
+    cabal install --only-dependencies
+    cabal build
