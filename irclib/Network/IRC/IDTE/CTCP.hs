@@ -23,6 +23,7 @@ module Network.IRC.IDTE.CTCP
     , encodeCTCP
     , decodeCTCP
     , isCTCP
+    , asCTCP
     , orCTCP
     ) where
 
@@ -122,10 +123,18 @@ decodings = map swap encodings
 isCTCP :: ByteString -> Bool
 isCTCP bs = and $ (B.length bs >= 2) : (B.head bs == soh) : (B.last bs == soh) : map (flip B.notElem bs . fst) encodings
 
+-- |Check if a ByteString looks like a CTCP, and if so, wrap it up in
+-- the CTCPByteString type.
+--
+-- This uses `isCTCP`, and so is lenient with escapes.
+asCTCP :: ByteString -> Maybe CTCPByteString
+asCTCP bs = if isCTCP bs
+            then Just $ CBS bs
+            else Nothing
+
 -- |Apply one of two functions depending on whether the bytestring is
 -- a CTCP or not.
 --
--- This uses `isCTCP` under the hood, and so is as lenient.
+-- This uses `isCTCP` under the hood, and so is lenient.
 orCTCP :: (ByteString -> a) -> (CTCPByteString -> a) -> ByteString -> a
-orCTCP f g bs | isCTCP bs = g $ CBS bs
-              | otherwise = f bs
+orCTCP f g bs = maybe (f bs) g (asCTCP bs)
