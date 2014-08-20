@@ -26,16 +26,15 @@ module Network.IRC.IDTE.CTCP
     , orCTCP
     ) where
 
-import Prelude hiding (concat, concatMap, head, init, last, length, notElem, tail, unwords)
-
-import Data.ByteString    (ByteString, concat, concatMap, head, init, last, length, notElem, pack, singleton, tail, unpack)
+import Data.ByteString    (ByteString, pack, singleton, unpack)
 import Data.List          (mapAccumL)
 import Data.Maybe         (catMaybes, fromMaybe)
-import Data.Text          (Text, splitOn, unwords)
+import Data.Text          (Text, splitOn)
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import Data.Tuple         (swap)
 
-import qualified Data.Text as T
+import qualified Data.ByteString as B
+import qualified Data.Text       as T
 
 -- *Types
 
@@ -53,16 +52,16 @@ getUnderlyingByteString = _getUnderlyingByteString
 -- bytestring. This encodes the text with UTF-8. If another encoding
 -- is desired, `encodeCTCP` should be used directly.
 toCTCP :: Text -> [Text] -> CTCPByteString
-toCTCP cmd args = encodeCTCP . encodeUtf8 . unwords $ cmd : args
+toCTCP cmd args = encodeCTCP . encodeUtf8 . T.unwords $ cmd : args
 
 -- |Encode a bytestring with CTCP encoding.
 encodeCTCP :: ByteString -> CTCPByteString
-encodeCTCP bs = CBS $ concat [ singleton soh
-                             , escape bs
-                             , singleton soh
-                             ]
+encodeCTCP bs = CBS $ B.concat [ singleton soh
+                               , escape bs
+                               , singleton soh
+                               ]
 
-    where escape = concatMap escape'
+    where escape = B.concatMap escape'
           escape' x = case lookup x encodings of
                         -- If there is an encoding, escape it and use
                         -- that.
@@ -82,7 +81,7 @@ fromCTCP bs = case splitOn (T.pack " ") . decodeUtf8 . decodeCTCP $ bs of
 
 -- |Decode a CTCP-encoded bytestring
 decodeCTCP :: CTCPByteString -> ByteString
-decodeCTCP (CBS bs) | isCTCP bs = unescape . tail . init $ bs
+decodeCTCP (CBS bs) | isCTCP bs = unescape . B.tail . B.init $ bs
                     | otherwise = bs
 
     where unescape = pack . catMaybes . snd . mapAccumL step False . unpack
@@ -121,7 +120,7 @@ decodings = map swap encodings
 -- that escape characters are placed correctly. This is because the
 -- spec states that misplaced escape characters should be discarded.
 isCTCP :: ByteString -> Bool
-isCTCP bs = and $ (length bs >= 2) : (head bs == soh) : (last bs == soh) : map (flip notElem bs . fst) encodings
+isCTCP bs = and $ (B.length bs >= 2) : (B.head bs == soh) : (B.last bs == soh) : map (flip B.notElem bs . fst) encodings
 
 -- |Apply one of two functions depending on whether the bytestring is
 -- a CTCP or not.
