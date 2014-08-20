@@ -72,6 +72,7 @@ library
                      , bytestring   >=0.10
                      , cprng-aes    >=0.5
                      , data-default >=0.5
+                     , x509-validation >=1.5
                      , irc          >=0.6
                      , irc-ctcp     >=0.1
                      , network      >=2.5

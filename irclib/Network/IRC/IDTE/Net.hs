@@ -22,6 +22,7 @@ import Data.ByteString        (singleton)
 import Data.ByteString.Lazy   (fromChunks)
 import Data.Default           (def)
 import Data.Monoid            ((<>))
+import Data.X509.Validation   (FailedReason(..))
 import Network                (HostName)
 import Network.IRC            (Message, encode, decode)
 import Network.IRC.IDTE.Types
@@ -65,15 +66,24 @@ connectWithTLS' host port ciphers = do
 
   case plain of
     Right sock -> risky $ do
-      -- And add a TLS context to it
+      -- Try only the requested ciphers.
       let supported = def { supportedCiphers = ciphers }
+
+      -- Accept self-signed certificates and certificates from unknown
+      -- CAs
+      let acceptable = [SelfSigned, UnknownCA]
+      let hooks = def { onServerCertificate = \cs vc sid cc -> do
+                          reasons <- onServerCertificate def cs vc sid cc
+                          return $ filter (flip notElem acceptable) reasons
+                      }
 
       -- The bytestring ("deadbeef") given is used to differentiate
       -- services on the same host which may have differing
       -- certificates. As it's a reasonable assumption that IRC
       -- servers don't have other TLS-using services on the same host,
       -- the choice is not important.
-      let clientctx = (defaultParamsClient host "deadbeef") { clientSupported = supported }
+      let clientctx = (defaultParamsClient host "deadbeef") { clientHooks     = hooks
+                                                            , clientSupported = supported }
 
       -- Perform the TLS handshake
       rng <- makeSystem
@@ -109,8 +119,9 @@ whenTLS tlsf = withTLS tlsf (const $ return ())
 
 -- |Send a message.
 send :: Message -> IRC ()
-send msg = withTLS (\ctx -> sendData ctx $ fromChunks [encode msg])
-                   (\sck -> liftIO . SB.sendAll sck $ encode msg <> "\r\n")
+send msg = withTLS (\ctx -> sendData ctx $ fromChunks [msg'])
+                   (\sck -> liftIO . SB.sendAll sck $ msg')
+    where msg' = encode msg <> "\r\n"
 
 -- |Receive a message.
 recv :: IRC (Maybe Message)
