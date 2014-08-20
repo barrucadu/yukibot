@@ -14,7 +14,6 @@ module Network.IRC.IDTE.Net
     ) where
 
 import Control.Applicative    ((<$>))
-import Control.Exception      (IOException, catch)
 import Control.Monad          (liftM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Crypto.Random.AESCtr   (makeSystem)
@@ -29,6 +28,7 @@ import Network.IRC.IDTE.Types
 import Network.Socket         (AddrInfo(..), Family(..), SockAddr(..), Socket, SocketType(..), defaultHints, defaultProtocol, getAddrInfo, sClose, socket)
 import Network.TLS
 import Network.TLS.Extra      (ciphersuite_all)
+import System.IO.Error        (catchIOError)
 
 import qualified Network.Socket            as S
 import qualified Network.Socket.ByteString as SB
@@ -48,8 +48,8 @@ connect host port = risky riskyConnect
           case addr of
             (a:_) -> case addrAddress a of
                       SockAddrInet _ hostaddr -> S.connect sock $ SockAddrInet (fromIntegral port) hostaddr
-                      _ -> error "Failed to connect to host."
-            _ -> error "Could not resolve hostname."
+                      _ -> ioError $ userError "Failed to connect to host."
+            _ -> ioError $ userError "Could not resolve hostname."
 
           return sock
 
@@ -155,6 +155,6 @@ disconnect = do
 -- |Try something risky, catching exceptions and turning them to
 -- strings on error.
 risky :: MonadIO m => IO a -> m (Either String a)
-risky x = liftIO $ risk `catch` exc
+risky x = liftIO $ risk `catchIOError` exc
     where risk = liftM Right x
-          exc  = return . Left . show :: IOException -> IO (Either String a)
+          exc  = return . Left . show
