@@ -11,6 +11,7 @@ module Network.IRC.IDTE
     , send
     , disconnect
     , defaultIRCConf
+    , setNick
     ) where
 
 import Control.Applicative    ((<$>))
@@ -215,11 +216,11 @@ nickMangler ev = do
 
   case _message ev of
     -- ERR_ERRONEUSNICKNAME: Bad characters in nick
-    Numeric 432 _ -> send . nick $ fresh theNick
+    Numeric 432 _ -> setNick $ fresh theNick
     -- ERR_NICKNAMEINUSE: Nick in use
-    Numeric 433 _ -> send . nick $ mangle theNick
+    Numeric 433 _ -> setNick $ mangle theNick
     -- ERR_NICKCOLLISION: Nick registered
-    Numeric 436 _ -> send . nick $ mangle theNick
+    Numeric 436 _ -> setNick $ mangle theNick
     _ -> return ()
 
   where fresh n  = takeEnd nicklen $ let n' = T.filter isAlphaNum n
@@ -263,3 +264,13 @@ nickMangler ev = do
                              in if T.length after >= T.length delim
                                 then Just (before, T.drop (T.length delim) after)
                                 else Nothing
+
+-- *Utilities
+
+-- |Update the nick in the instance configuration and also send an
+-- update message to the server.
+setNick :: Text -> IRC ()
+setNick new = do
+  iconf <- instanceConfig
+  putInstanceConfig iconf { _nick = new }
+  send $ nick new
