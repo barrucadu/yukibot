@@ -112,11 +112,17 @@ decodings = map swap encodings
 
 -- |Check if a message body represents a CTCP. CTCPs are at least two
 -- bytes long, and start and end with a SOH.
+--
+-- This is intentionally very lenient, in particular it doesn't check
+-- that escape characters are placed correctly. This is because the
+-- spec states that misplaced escape characters should be discarded.
 isCTCP :: ByteString -> Bool
 isCTCP bs = and $ (length bs >= 2) : (head bs == soh) : (last bs == soh) : map (flip notElem bs . fst) encodings
 
 -- |Apply one of two functions depending on whether the bytestring is
 -- a CTCP or not.
+--
+-- This uses `isCTCP` under the hood, and so is as lenient.
 orCTCP :: (ByteString -> a) -> (CTCPByteString -> a) -> ByteString -> a
 orCTCP f g bs | isCTCP bs = g $ CBS bs
               | otherwise = f bs
