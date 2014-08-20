@@ -7,7 +7,7 @@ module Network.IRC.IDTE
     , connect
     , connectWithTLS
     , connectWithTLS'
-    , run
+    , start
     , send
     , disconnect
     , defaultIRCConf
@@ -15,11 +15,10 @@ module Network.IRC.IDTE
     ) where
 
 import Control.Applicative    ((<$>))
-import Control.Concurrent     (threadDelay)
-import Control.Monad          (forever, when, void)
+import Control.Concurrent     (forkIO, threadDelay)
+import Control.Monad          (forever, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (runReaderT)
-import Control.Monad.Trans.State  (runStateT)
 import Data.Char              (isAlphaNum)
 import Data.Maybe             (fromMaybe)
 import Data.Monoid            ((<>))
@@ -80,8 +79,8 @@ connectWithTLS' host port ciphers = do
 
 -- |Run the event loop for a server, receiving messages and handing
 -- them off to handlers as appropriate.
-run :: MonadIO m => ConnectionConfig -> InstanceConfig -> m ()
-run cconf iconf = liftIO . void . flip runStateT iconf $ runReaderT runner cconf
+start :: MonadIO m => ConnectionConfig -> InstanceConfig -> m ()
+start cconf iconf = newIRCState cconf iconf >>= liftIO . runReaderT runner
 
 -- |The event loop.
 runner :: IRC ()
@@ -106,9 +105,12 @@ runner = do
 
         event <- toEvent msg' send
 
+        -- Get the current state
+        state <- ircState
+
+        -- And run every handler in parallel
         handlers <- getHandlersFor event . _eventHandlers <$> instanceConfig
-        -- TODO: Parallelise this (requires bunging state behind an MVar)
-        mapM_ ($ event) handlers
+        liftIO $ mapM_ (\h -> forkIO $ runReaderT (h event) state) handlers
 
       -- Ignore malformed messages
       Nothing   -> return ()
@@ -129,28 +131,33 @@ logmsg fromsrv msg = do
 
 -- *Messaging
 
--- |Send a message, using TLS if enabled.
+-- |Send a message, using TLS if enabled. This blocks if messages are
+-- sent too rapidly.
 send :: Message -> IRC ()
 send msg = do
-  -- Block until the flood delay passes
-  now     <- liftIO getCurrentTime
-  lastMsg <- _lastMessageTime <$> instanceConfig
-  flood   <- fromIntegral . _floodDelay <$> instanceConfig
+  state <- ircState
 
-  let nextMsg = addUTCTime flood lastMsg
-  when (nextMsg > now) $
-    -- threadDelay uses microseconds, NominalDiffTime is in seconds,
-    -- but with a precision of nanoseconds.
-    liftIO . threadDelay . ceiling $ 1000000 * diffUTCTime nextMsg now
+  -- Send the message atomically.
+  withLock . flip runReaderT state $ do
+    -- Block until the flood delay passes
+    now     <- liftIO getCurrentTime
+    lastMsg <- _lastMessageTime <$> instanceConfig
+    flood   <- fromIntegral . _floodDelay <$> instanceConfig
 
-  -- Update the last message time
-  ic   <- instanceConfig
-  now' <- liftIO getCurrentTime
-  putInstanceConfig ic { _lastMessageTime = now' }
+    let nextMsg = addUTCTime flood lastMsg
+    when (nextMsg > now) $
+      -- threadDelay uses microseconds, NominalDiffTime is in seconds,
+      -- but with a precision of nanoseconds.
+      liftIO . threadDelay . ceiling $ 1000000 * diffUTCTime nextMsg now
 
-  -- Send the message
-  logmsg False msg
-  N.send msg
+    -- Update the last message time
+    ic   <- instanceConfig
+    now' <- liftIO getCurrentTime
+    putInstanceConfig ic { _lastMessageTime = now' }
+
+    -- Send the message
+    logmsg False msg
+    N.send msg
 
 -- *Disconnecting
 

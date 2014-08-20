@@ -1,10 +1,32 @@
 -- |Types for IRC clients, because GHC doesn't do recursive modules
 -- well.
-module Network.IRC.IDTE.Types where
+module Network.IRC.IDTE.Types
+    ( -- *State
+      IRC
+    , IRCState
+    , ConnectionConfig(..)
+    , InstanceConfig(..)
+    , newIRCState
+    , ircState
+    , connectionConfig
+    , instanceConfigTVar
+    , instanceConfig
+    , putInstanceConfig
+    , withLock
 
-import Control.Monad.Trans.Class  (lift)
+    -- *Events
+    , Event(..)
+    , EventType(..)
+    , EventHandler(..)
+    , Source(..)
+    , IrcMessage(..)
+    ) where
+
+import Control.Applicative        ((<$>))
+import Control.Concurrent.MVar    (MVar, newMVar, withMVar)
+import Control.Concurrent.STM     (TVar, atomically, readTVar, newTVar, writeTVar)
+import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ReaderT, ask)
-import Control.Monad.Trans.State  (StateT, get, put)
 import Data.Text                  (Text)
 import Data.Time.Clock            (UTCTime)
 import Network                    (HostName)
@@ -14,21 +36,56 @@ import Network.TLS                (Context)
 
 -- *State
 
--- |The IRC monad: read-only connection configuration and mutable
--- instance configuration.
-type IRC a = ReaderT ConnectionConfig (StateT InstanceConfig IO) a
+-- |The IRC monad: read-only connection configuration, mutable
+-- instance configuration in STM, and a lock behind an MVar.
+type IRC a = ReaderT IRCState IO a
+
+data IRCState = IRCState { _connectionConfig :: ConnectionConfig
+                         -- ^Read-only connection configuration
+                         , _instanceConfig   :: TVar InstanceConfig
+                         -- ^Mutable instance configuration in STM
+                         , _globalLock       :: MVar ()
+                         -- ^Lock for atomic operations
+                         }
+
+-- |Construct a new IRC state
+newIRCState :: MonadIO m => ConnectionConfig -> InstanceConfig -> m IRCState
+newIRCState cconf iconf = do
+  tvar <- liftIO . atomically . newTVar $ iconf
+  mvar <- liftIO . newMVar $ ()
+
+  return IRCState { _connectionConfig = cconf
+                  , _instanceConfig   = tvar
+                  , _globalLock       = mvar
+                  }
+
+-- |Access the entire state.
+ircState :: IRC IRCState
+ircState = ask
 
 -- |Access the connection config
 connectionConfig :: IRC ConnectionConfig
-connectionConfig = ask
+connectionConfig = _connectionConfig <$> ask
 
--- |Access the instance config.
+-- |Access the instance config TVar
+instanceConfigTVar :: IRC (TVar InstanceConfig)
+instanceConfigTVar = _instanceConfig <$> ask
+
+-- |Access the instance config as it is right now.
 instanceConfig :: IRC InstanceConfig
-instanceConfig = lift get
+instanceConfig = instanceConfigTVar >>= liftIO . atomically . readTVar
 
--- |Update the instance config.
+-- |Overwrite the instance config, even if it has changed since we
+-- looked at it.
 putInstanceConfig :: InstanceConfig -> IRC ()
-putInstanceConfig = lift . put
+putInstanceConfig iconf = instanceConfigTVar >>= liftIO . atomically . flip writeTVar iconf
+
+-- |Run a function atomically with respect to the global lock. This
+-- blocks until the lock is free.
+withLock :: IO a -> IRC a
+withLock f = do
+  mvar <- _globalLock <$> ask
+  liftIO $ withMVar mvar (const f)
 
 -- |The state of an IRC server connection
 data ConnectionConfig = ConnectionConfig

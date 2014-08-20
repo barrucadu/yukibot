@@ -54,11 +54,11 @@ library
   exposed-modules:     Network.IRC.IDTE
                      , Network.IRC.IDTE.Events
                      , Network.IRC.IDTE.Messages
-                     , Network.IRC.IDTE.Net
                      , Network.IRC.IDTE.Types
   
   -- Modules included in this library but not exported.
   other-modules:       Network.IRC.IDTE.Utils
+                     , Network.IRC.IDTE.Net
   
   -- Compile with -Wall by default
   ghc-options:         -Wall
@@ -77,6 +77,7 @@ library
                      , irc-ctcp     >=0.1
                      , network      >=2.5
                      , text         >=1.1
+                     , stm          >=2.4
                      , time         >=1.4
                      , tls          >=1.2
                      , transformers >=0.4
