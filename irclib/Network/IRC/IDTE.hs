@@ -19,11 +19,11 @@ import Control.Monad          (forever, when, void)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.State  (runStateT)
-import Data.ByteString.Char8  (unpack)
 import Data.Char              (isAlphaNum)
 import Data.Maybe             (fromMaybe)
 import Data.Monoid            ((<>))
-import Data.Text              (Text, breakOn, takeEnd, toUpper)
+import Data.Text              (Text, breakOn, takeEnd, toUpper, unpack)
+import Data.Text.Encoding     (decodeUtf8)
 import Data.Time.Calendar     (fromGregorian)
 import Data.Time.Clock        (UTCTime(..), addUTCTime, diffUTCTime, getCurrentTime)
 import Data.Time.Format       (formatTime)
@@ -123,7 +123,7 @@ logmsg fromsrv msg = do
 
   liftIO . putStrLn $ unwords [ formatTime defaultTimeLocale "%c" now
                               , if fromsrv then "<---" else "--->"
-                              , unpack $ encode msg
+                              , unpack . decodeUtf8 . encode $ msg
                               ]
 
 -- *Messaging
