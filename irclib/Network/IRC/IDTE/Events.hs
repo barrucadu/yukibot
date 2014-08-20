@@ -28,40 +28,30 @@ toEvent :: Message
         -- ^The message to decode
         -> (Message -> IRC ())
         -- ^Message sending function
-        -> IRC (Maybe Event)
+        -> IRC Event
 toEvent msg send = do
   nick <- _nick <$> instanceConfig
 
-  return $ do
-    (source, message) <- decode nick msg
-    return Event { _rawMessage = msg
-                 , _eventType  = toEventType message
-                 , _source     = source
-                 , _message    = message
-                 , _reply      = send' source
-                 , _send       = send'
-                 }
+  let (source, message) = decode nick msg
+
+  return Event { _rawMessage = msg
+               , _eventType  = toEventType message
+               , _source     = source
+               , _message    = message
+               , _reply      = send' source
+               , _send       = send'
+               }
   where send' s = maybe (return ()) send . encode s
 
 -- |Decode a message into a source and (nice) message, or die (return
 -- a silly value) trying.
 --
--- Messages originating from the provided nick are discarded. All
--- other messages get decoded, but perhaps not successfully.
---
--- See http://tools.ietf.org/html/rfc1459
+-- See http://tools.ietf.org/html/rfc2812
 decode :: Text
        -- ^The nick of the client (used for disambiguationg
        -- channels/nicks)
-       -> Message -> Maybe (Source, IrcMessage)
-decode n ms = case decode' n ms of
-                r@(User n', _) | n' == n    -> Nothing
-                               | otherwise -> Just r
-                r -> Just r
-
--- |Like `decode`, but always works.
-decode' :: Text -> Message -> (Source, IrcMessage)
-decode' nick msg = case msg of
+       -> Message -> (Source, IrcMessage)
+decode nick msg = case msg of
                     Message (Just (NickName n _ _)) "PRIVMSG" [t, m] | t == nick' -> (user n,   privmsg `orCTCP` ctcp $ m)
                                                                      | otherwise -> (chan n t, privmsg `orCTCP` ctcp $ m)
                     Message (Just (NickName n _ _)) "NOTICE"  [t, m] | t == nick' -> (user n,   notice  `orCTCP` ctcp $ m)
