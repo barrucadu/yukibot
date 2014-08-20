@@ -15,7 +15,7 @@
 --
 -- See http://www.irchelp.org/irchelp/rfc/ctcpspec.html for more
 -- details.
-module Network.IRC.IDTE.CTCP
+module Network.IRC.CTCP
     ( CTCPByteString
     , getUnderlyingByteString
     , toCTCP

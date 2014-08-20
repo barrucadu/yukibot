@@ -11,7 +11,7 @@ import Data.String        (fromString)
 import Data.Text          (Text, concat)
 import Data.Text.Encoding (encodeUtf8)
 import Network.IRC        (Message(..))
-import Network.IRC.IDTE.CTCP
+import Network.IRC.CTCP   (getUnderlyingByteString, toCTCP)
 import Network.IRC.IDTE.Utils
 
 -- *Messages

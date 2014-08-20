@@ -13,7 +13,7 @@ import Data.Char           (isDigit)
 import Data.Text           (Text, unpack, singleton)
 import Data.Text.Encoding  (decodeUtf8, encodeUtf8)
 import Network.IRC         (Message(..), Prefix(..))
-import Network.IRC.IDTE.CTCP
+import Network.IRC.CTCP    (fromCTCP, orCTCP)
 import Network.IRC.IDTE.Messages
 import Network.IRC.IDTE.Types
 import Network.IRC.IDTE.Utils
