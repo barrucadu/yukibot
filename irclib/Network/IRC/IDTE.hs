@@ -192,7 +192,7 @@ pingHandler ev =
 ctcpPingHandler :: Event -> IRC ()
 ctcpPingHandler ev =
   case (_source ev, _message ev) of
-    (User n, CTCP p xs) | toUpper p == "PING" -> send $ ctcp n "PONG" xs
+    (User n, CTCP p xs) | toUpper p == "PING" -> send $ ctcpReply n "PING" xs
     _ -> return ()
 
 -- |Respond to CTCP VERSIONs
@@ -200,7 +200,7 @@ ctcpVersionHandler :: Event -> IRC ()
 ctcpVersionHandler ev = do
   ver <- _ctcpVer <$> instanceConfig
   case (_source ev, _message ev) of
-    (User n, CTCP v []) | toUpper v == "VERSION" -> send $ ctcp n "PONG" [ver]
+    (User n, CTCP v []) | toUpper v == "VERSION" -> send $ ctcpReply n "VERSION" [ver]
     _ -> return ()
 
 -- |Respond to CTCP TIMEs
@@ -208,7 +208,7 @@ ctcpTimeHandler :: Event -> IRC ()
 ctcpTimeHandler ev = do
   now <- liftIO getCurrentTime
   case (_source ev, _message ev) of
-    (User n, CTCP t []) | toUpper t == "TIME" -> send $ ctcp n "TIME" [T.pack $ formatTime defaultTimeLocale "%c" now]
+    (User n, CTCP t []) | toUpper t == "TIME" -> send $ ctcpReply n "TIME" [T.pack $ formatTime defaultTimeLocale "%c" now]
     _ -> return ()
 
 -- |Mangle the nick if there's a collision when we set it

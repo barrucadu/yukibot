@@ -42,6 +42,10 @@ ctcp :: Text
      -> Message
 ctcp t cmd args = mkMessage "PRIVMSG" [encodeUtf8 t, getUnderlyingByteString $ toCTCP cmd args]
 
+-- |Reply to a CTCP. Like 'ctcp', but sends a NOTICE.
+ctcpReply :: Text -> Text -> [Text] -> Message
+ctcpReply t cmd args = mkMessage "NOTICE" [encodeUtf8 t, getUnderlyingByteString $ toCTCP cmd args]
+
 -- |Set your nick
 nick :: Text -> Message
 nick n = mkMessage "NICK" >$: [n]
