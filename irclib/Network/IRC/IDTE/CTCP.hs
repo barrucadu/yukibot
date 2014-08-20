@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 -- |Functions for encoding and decoding CTCPs.
 --
 -- CTCP messages are sent as a PRIVMSG or NOTICE, where the first and
@@ -37,6 +35,8 @@ import Data.Text          (Text, splitOn, unwords)
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import Data.Tuple         (swap)
 
+import qualified Data.Text as T
+
 -- *Types
 
 -- |Type representing a CTCP-encoded string. The constructor is NOT
@@ -72,9 +72,9 @@ encodeCTCP bs = CBS $ concat [ singleton soh
 
 -- |Turn a CTCP-encoded bytestring into a command name and arguments
 fromCTCP :: CTCPByteString -> (Text, [Text])
-fromCTCP bs = case splitOn " " . decodeUtf8 . decodeCTCP $ bs of
+fromCTCP bs = case splitOn (T.pack " ") . decodeUtf8 . decodeCTCP $ bs of
                 (cmd : args) -> (cmd, args)
-                _            -> ("", [])
+                _            -> (T.pack "", [])
 
 -- |Decode a CTCP-encoded bytestring
 decodeCTCP :: CTCPByteString -> ByteString
