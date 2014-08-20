@@ -19,7 +19,7 @@
 -- details.
 module Network.IRC.IDTE.CTCP
     ( CTCPByteString
-    , toByteString
+    , getUnderlyingByteString
     , toCTCP
     , fromCTCP
     , encodeCTCP
@@ -44,8 +44,8 @@ import Data.Tuple         (swap)
 newtype CTCPByteString = CBS { _getUnderlyingByteString :: ByteString }
 
 -- |Get the underlying (encoded) bytestring from a CTCP bytestring.
-toByteString :: CTCPByteString -> ByteString
-toByteString = _getUnderlyingByteString
+getUnderlyingByteString :: CTCPByteString -> ByteString
+getUnderlyingByteString = _getUnderlyingByteString
 
 -- *Encoding and decoding
 

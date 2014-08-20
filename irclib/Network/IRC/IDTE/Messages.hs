@@ -40,7 +40,7 @@ ctcp :: Text
      -> [Text]
     -- ^The arguments
      -> Message
-ctcp t cmd args = mkMessage "PRIVMSG" [encodeUtf8 t, toByteString $ toCTCP cmd args]
+ctcp t cmd args = mkMessage "PRIVMSG" [encodeUtf8 t, getUnderlyingByteString $ toCTCP cmd args]
 
 -- |Set your nick
 nick :: Text -> Message
