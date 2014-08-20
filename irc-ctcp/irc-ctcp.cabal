@@ -62,7 +62,6 @@ library
   -- Other library packages from which modules are imported.
   build-depends:       base       >=4.7
                      , bytestring >=0.10
-                     , irc        >=0.6
                      , text       >=1.1
   
   -- Directories containing source files.
