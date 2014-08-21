@@ -20,7 +20,7 @@ bot. This should be able to stand on its own.
  - Provides primitives for sending messages (both raw and sum-typey).
  - Handles things like CTCPs and flood prevention behind-the-scenes.
 
-### IRC Bot Library: Boota
+### IRC Bot Library: Asakura
 
 This brings in the core functionality of an IRC bot, but as yet
 doesn't include anything specific to *our* bot. Furthermore, we want
@@ -75,7 +75,7 @@ example).
 
 ### Yukibot
 
-If we've done Boota right, this will just be a collection of commands
+If we've done Asakura right, this will just be a collection of commands
 and event handlers we register, along with some default configuration.
 
 Things we probably want:
