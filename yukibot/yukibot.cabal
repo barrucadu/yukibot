@@ -61,8 +61,8 @@ executable yukibot
   
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.7
-                     , asakura >= 0.0.0.1
-                     , idte >=0.1
+                     , asakura >= 0.0.2
+                     , idte >=0.1.2
                      , network >=2.6
                      , text >=1.1
                      , transformers >= 0.3
