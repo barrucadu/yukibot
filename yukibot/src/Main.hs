@@ -3,19 +3,17 @@
 module Main where
 
 import Control.Applicative ((<$>))
+import Control.Monad       (void)
 import Data.Monoid         ((<>))
 import Data.Text           (pack)
+import Network.IRC.Asakura
 import Network.IRC.IDTE
 
 main :: IO ()
 main = do
-  cconf <- connect "irc.freenode.net" 6667
-  case cconf of
-    Right cconf' -> do
-      let iconf  = defaultIRCConf "yukibot"
-      let iconf' = iconf { _eventHandlers = EventHandler "Reply to everything" EEverything bounceBack : _eventHandlers iconf }
-      run cconf' iconf'
-    Left err -> error err
+  let iconf  = defaultIRCConf "yukibot"
+  let iconf' = iconf { _eventHandlers = EventHandler "Reply to everything" EEverything bounceBack : _eventHandlers iconf }
+  void $ createAndRun "irc.freenode.net" 6667 (Right iconf')
 
 bounceBack :: Event -> IRC ()
 bounceBack ev = do
