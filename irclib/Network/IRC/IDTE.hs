@@ -8,9 +8,11 @@ module Network.IRC.IDTE
     , connectWithTLS
     , connectWithTLS'
     , start
+    , start'
     , send
     , disconnect
     , defaultIRCConf
+    , defaultDisconnectHandler
     , setNick
     ) where
 
@@ -34,6 +36,7 @@ import Network.IRC.IDTE.Messages
 import Network.IRC.IDTE.Types
 import Network.TLS            (Cipher)
 import System.Locale          (defaultTimeLocale)
+import System.IO.Error        (catchIOError)
 
 import qualified Data.Text            as T
 import qualified Network.IRC.IDTE.Net as N
@@ -52,6 +55,7 @@ connect host port = do
                      , _tls    = Nothing
                      , _server = host
                      , _port   = port
+                     , _disconnect = defaultDisconnectHandler
                      }
       Left err -> Left err
 
@@ -72,6 +76,7 @@ connectWithTLS' host port ciphers = do
                             , _tls    = Just ctx
                             , _server = host
                             , _port   = port
+                            , _disconnect = defaultDisconnectHandler
                             }
       Left err -> Left err
 
@@ -80,7 +85,11 @@ connectWithTLS' host port ciphers = do
 -- |Run the event loop for a server, receiving messages and handing
 -- them off to handlers as appropriate.
 start :: MonadIO m => ConnectionConfig -> InstanceConfig -> m ()
-start cconf iconf = newIRCState cconf iconf >>= liftIO . runReaderT runner
+start cconf iconf = newIRCState cconf iconf >>= start'
+
+-- |Like 'start', but use the provided initial state.
+start' :: MonadIO m => IRCState -> m ()
+start' = liftIO . runReaderT runner
 
 -- |The event loop.
 runner :: IRC ()
@@ -96,24 +105,32 @@ runner = do
   -- Connect to channels
   mapM_ (send . join) . _channels <$> instanceConfig
 
-  -- Event loop
-  forever $ do
-    msg <- N.recv
-    case msg of
-      Just msg' -> do
-        logmsg True msg'
+  -- Run the event loop, and call the disconnect handler if the remote
+  -- end closes the socket.
+  state     <- ircState
+  dchandler <- _disconnect <$> connectionConfig
+  liftIO $ forever (runReaderT step state) `catchIOError` const (runReaderT dchandler state)
 
-        event <- toEvent msg' send
+-- |One step of the event loop: block on receiving a message, attempt
+-- to decode it, and invoke all matching handlers simultaneously.
+step :: IRC ()
+step = do
+  msg <- N.recv
+  case msg of
+    Just msg' -> do
+      logmsg True msg'
 
-        -- Get the current state
-        state <- ircState
+      event <- toEvent msg' send
 
-        -- And run every handler in parallel
-        handlers <- getHandlersFor event . _eventHandlers <$> instanceConfig
-        liftIO $ mapM_ (\h -> forkIO $ runReaderT (h event) state) handlers
+      -- Get the current state
+      state <- ircState
 
-      -- Ignore malformed messages
-      Nothing   -> return ()
+      -- And run every handler in parallel
+      handlers <- getHandlersFor event . _eventHandlers <$> instanceConfig
+      liftIO $ mapM_ (\h -> forkIO $ runReaderT (h event) state) handlers
+
+    -- Ignore malformed messages
+    Nothing -> return ()
 
 -- |Get the event handlers for an event.
 getHandlersFor :: Event -> [EventHandler] -> [Event -> IRC ()]
@@ -165,6 +182,10 @@ send msg = do
 -- (if there is one).
 disconnect :: IRC ()
 disconnect = N.disconnect
+
+-- |The default disconnect handler: do nothing.
+defaultDisconnectHandler :: IRC ()
+defaultDisconnectHandler = return ()
 
 -- *Default configuration
 

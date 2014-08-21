@@ -8,6 +8,8 @@ module Network.IRC.IDTE.Types
     , InstanceConfig(..)
     , newIRCState
     , ircState
+    , getConnectionConfig
+    , getInstanceConfig
     , connectionConfig
     , instanceConfigTVar
     , instanceConfig
@@ -63,6 +65,14 @@ newIRCState cconf iconf = do
 ircState :: IRC IRCState
 ircState = ask
 
+-- |Extract the connection configuration from an IRC state
+getConnectionConfig :: IRCState -> ConnectionConfig
+getConnectionConfig = _connectionConfig
+
+-- |Extract the instance configuration from an IRC state
+getInstanceConfig :: IRCState -> TVar InstanceConfig
+getInstanceConfig = _instanceConfig
+
 -- |Access the connection config
 connectionConfig :: IRC ConnectionConfig
 connectionConfig = _connectionConfig <$> ask
@@ -89,14 +99,16 @@ withLock f = do
 
 -- |The state of an IRC server connection
 data ConnectionConfig = ConnectionConfig
-    { _socket :: Socket
+    { _socket     :: Socket
     -- ^Server connection socket
-    , _tls    :: Maybe Context
+    , _tls        :: Maybe Context
     -- ^TLS context, if TLS was used.
-    , _server :: HostName
+    , _server     :: HostName
     -- ^The server host
-    , _port   :: Int
+    , _port       :: Int
     -- ^The server port
+    , _disconnect :: IRC ()
+    -- ^Action to run if the remote server closes the connection.
     }
 
 -- |The updateable state of an IRC connection
