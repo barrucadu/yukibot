@@ -10,6 +10,7 @@ module Network.IRC.IDTE.Types
     , ircState
     , getConnectionConfig
     , getInstanceConfig
+    , getInstanceConfig'
     , connectionConfig
     , instanceConfigTVar
     , instanceConfig
@@ -72,6 +73,11 @@ getConnectionConfig = _connectionConfig
 -- |Extract the instance configuration from an IRC state
 getInstanceConfig :: IRCState -> TVar InstanceConfig
 getInstanceConfig = _instanceConfig
+
+-- |Extract the current snapshot of the instance configuration from an
+-- IRC state
+getInstanceConfig' :: MonadIO m => IRCState -> m InstanceConfig
+getInstanceConfig' = liftIO . atomically . readTVar . _instanceConfig
 
 -- |Access the connection config
 connectionConfig :: IRC ConnectionConfig
