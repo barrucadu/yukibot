@@ -12,15 +12,22 @@ module Network.IRC.Asakura.Commands
     , registerCommand
     -- *Miscellaneous
     , setPrefix
+    , setChannelPrefix
     ) where
 
 import Control.Concurrent.STM     (TVar, atomically, newTVar, readTVar, writeTVar)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
+import Data.Maybe                 (fromMaybe)
 import Data.Monoid                ((<>))
 import Data.Text                  (Text, isPrefixOf, splitOn)
+import Network                    (HostName)
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types
-import Network.IRC.IDTE.Types     (Event(..), EventType(..), InstanceConfig(..), IRC, IrcMessage(..), IRCState, Source(..), getInstanceConfig)
+import Network.IRC.IDTE.Types     ( ConnectionConfig(..)
+                                  , Event(..), EventType(..)
+                                  , InstanceConfig(..), IRC, IrcMessage(..), IRCState
+                                  , Source(..)
+                                  , getConnectionConfig, getInstanceConfig)
 
 import qualified Data.Text as T
 
@@ -35,6 +42,9 @@ data CommandState = CommandState
     -- ^ A substring which must, if the bot was not addressed
     -- directly, preceed the command name in order for it to be a
     -- match.
+    , _channelPrefixes :: TVar [((HostName, Text), Text)]
+    -- ^Channel-specific command prefixes, which will be used instead
+    -- of the generic prefix if present.
     , _commandList   :: TVar [(Text, [Text] -> IRCState -> Event -> Bot (IRC ()))] }
 
 -- |Initialise the state for this module. This should only be done
@@ -44,10 +54,12 @@ initialise :: MonadIO m
            -- ^The command prefix (may later be changed).
            -> m CommandState
 initialise pref = do
-  tvarP <- liftIO . atomically . newTVar $ pref
-  tvarL <- liftIO . atomically . newTVar $ []
-  return CommandState { _commandPrefix  = tvarP
-                      , _commandList    = tvarL }
+  tvarP  <- liftIO . atomically . newTVar $ pref
+  tvarCP <- liftIO . atomically . newTVar $ []
+  tvarL  <- liftIO . atomically . newTVar $ []
+  return CommandState { _commandPrefix   = tvarP
+                      , _channelPrefixes = tvarCP
+                      , _commandList     = tvarL }
 
 -- *Events
 
@@ -69,13 +81,26 @@ runCmd :: CommandState -> IRCState -> Event -> Bot (IRC ())
 runCmd state ircstate ev = do
   let Privmsg msg = _message ev
 
+  -- Extract the channel name, if there is one, so we can use the
+  -- channel-specific prefix.
+  let host = _server $ getConnectionConfig ircstate
+  let chan = case _source ev of
+               Channel _ c -> Just c
+               _           -> Nothing
+
   -- Read the state
   (nick, prefix, commands) <- liftIO . atomically $ do
-    iconf    <- readTVar . getInstanceConfig $ ircstate
-    prefix   <- readTVar . _commandPrefix    $ state
-    commands <- readTVar . _commandList      $ state
+    iconf        <- readTVar . getInstanceConfig $ ircstate
+    defprefix    <- readTVar . _commandPrefix    $ state
+    chanprefixes <- readTVar . _channelPrefixes  $ state
+    commands     <- readTVar . _commandList      $ state
 
-    return (_nick iconf, prefix, commands)
+    -- Look for a channel-specific prefix
+    let pref = case chan of
+                 Just c  -> defprefix `fromMaybe` lookup (host, c) chanprefixes
+                 Nothing -> defprefix
+
+    return (_nick iconf, pref, commands)
 
   -- Split off the prefix
   let splitted = case _source ev of
@@ -146,3 +171,11 @@ registerCommand state cmd f = liftIO . atomically $ do
 -- |Change the command prefix.
 setPrefix :: MonadIO m => CommandState -> Text -> m ()
 setPrefix state prefix = liftIO . atomically $ writeTVar (_commandPrefix state) prefix
+
+-- |Change the command prefix for a specific channel.
+setChannelPrefix :: MonadIO m => CommandState -> HostName -> Text -> Text -> m ()
+setChannelPrefix state network channel prefix = liftIO . atomically $ do
+  let tvarCP = _channelPrefixes state
+
+  prefixes <- readTVar tvarCP
+  writeTVar tvarCP $ ((network, channel), prefix) : filter ((/=(network, channel)) . fst) prefixes
