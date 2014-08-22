@@ -42,8 +42,11 @@ description:
   Characters are escaped as follows:
   .
      [@\\000@ (NUL)] @\\020 \\060@ ("0")
+  .
      [@\\012@ (NL)]  @\\020 \\156@ ("n")
+  .
      [@\\015@ (CR)]  @\\020 \\162@ ("r")
+  .
      [@\\020@ (DLE)] @\\020 \\020@
   .
   All other appearences of the escape character are errors, and are
