@@ -10,7 +10,7 @@ name:                asakura
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.0.2.0
+version:             0.0.3.0
 
 -- A short (one-line) description of the package.
 synopsis:            A simple IRC bot library.
@@ -52,6 +52,7 @@ cabal-version:       >=1.10
 library
   -- Modules exported by the library.
   exposed-modules:     Network.IRC.Asakura
+                     , Network.IRC.Asakura.Commands
                      , Network.IRC.Asakura.Events
                      , Network.IRC.Asakura.Types
 

@@ -39,27 +39,17 @@ example).
  - Manages per-network and per-channel configuration.
    - Channel/Network admins [see permissions plugin].
    - Per-network nick.
-   - Per-channel plugins.
+   - Per-channel event handlers.
 
- - Adds a concept of "Plugins".
-   - Plugins all have mutable state (use acid-state?)
-   - May have dependencies (in which case the dependencies must be
-     enabled, or an error is raised).
-   - A plugin can call functions from another plugin.
-   - *Not* event handlers, or even any user-facing thing at all
-     necessarily.
-
- - Adds a "Command Runner" plugin.
-   - Hooks into PRIVMSG, matches the command prefix, and runs the
-     registered command.
-   - *Not* a new 'primitive', this is a plugin built on top of the
-     existing event handler architecture.
+ - A "Command Runner" module
+   - Provides a event handler for PRIVMSG which matches the command
+     prefix and runs the registered command.
    - In a /query, no command prefix is needed.
    - Addressing the bot by nick is the same as using a command prefix.
    - Provides a "register command" function.
    - Depends on permissions plugin.
 
- - Adds a "Permisions" plugin.
+ - A "Permisions" module
    - Users are divided into three classes: User, Channel Admin,
      Network Admin.
    - Channel ops are automatically placed into the Channel Admin
@@ -69,7 +59,7 @@ example).
    - Provides a "grant permission" function.
 
  - Adds "commands".
-   - Are plugins
+   - Are event handlers associated with a verb.
    - Register themselves with the Command Runner.
    - May specify a minimum permission required to execute the command.
 
