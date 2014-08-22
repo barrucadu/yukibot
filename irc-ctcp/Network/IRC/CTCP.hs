@@ -1,21 +1,4 @@
 -- |Functions for encoding and decoding CTCPs.
---
--- CTCP messages are sent as a PRIVMSG or NOTICE, where the first and
--- last characters are @0o001@ (SOH), and the escape character is
--- @0o020@ (DLE).
---
--- Characters are escaped as follows:
--- 
---   [@0o000@ (NUL)] @0o020 0o060@ ("0")
---   [@0o012@ (NL)]  @0o020 0o156@ ("n")
---   [@0o015@ (CR)]  @0o020 0o162@ ("r")
---   [@0o020@ (DLE)] @0o020 0o020@
---
--- All other appearences of the escape character are errors, and are
--- dropped.
---
--- See <http://www.irchelp.org/irchelp/rfc/ctcpspec.html> for more
--- details.
 module Network.IRC.CTCP
     ( -- *Types
       CTCPByteString
@@ -43,22 +26,21 @@ import Data.Tuple         (swap)
 import qualified Data.ByteString as B
 import qualified Data.Text       as T
 
--- |Type representing a CTCP-encoded string.
+-- |Type representing a CTCP-encoded bytestring.
 newtype CTCPByteString = CBS
     { getUnderlyingByteString :: ByteString
     -- ^Get the underlying (encoded) bytestring from a CTCP
     -- bytestring.
     }
 
--- |Turn a command name and arguments into a CTCP-encoded
--- bytestring.
+-- |Turn a command name and arguments into a CTCP-encoded bytestring.
 --
 -- This encodes the text with UTF-8. If another encoding is desired,
 -- 'encodeCTCP' should be used directly.
 toCTCP :: Text -> [Text] -> CTCPByteString
 toCTCP cmd args = encodeCTCP . encodeUtf8 . T.unwords $ cmd : args
 
--- |Encode a bytestring with CTCP encoding.
+-- |Encode a bytestring according to the CTCP spec.
 encodeCTCP :: ByteString -> CTCPByteString
 encodeCTCP bs = CBS $ B.concat [ singleton soh
                                , escape bs
@@ -75,8 +57,8 @@ encodeCTCP bs = CBS $ B.concat [ singleton soh
                         -- character.
                         Nothing -> singleton x
 
--- |Turn a CTCP-encoded bytestring into a command name and
--- arguments.
+-- |Decode a CTCP-encoded bytestring and turn it into a command name
+-- and arguments.
 --
 -- This decodes the text with UTF-8. If another encoding is desired,
 -- 'decodeCTCP' should be used directly.
@@ -85,10 +67,9 @@ fromCTCP bs = case splitOn (T.pack " ") . decodeUtf8 . decodeCTCP $ bs of
                 (cmd : args) -> (cmd, args)
                 _            -> (T.pack "", [])
 
--- |Decode a CTCP-encoded bytestring.
+-- |Decode a CTCP bytestring. Extraeneous escapes are dropped.
 decodeCTCP :: CTCPByteString -> ByteString
-decodeCTCP (CBS bs) | isCTCP bs = unescape . B.tail . B.init $ bs
-                    | otherwise = bs
+decodeCTCP (CBS bs) = unescape . B.tail . B.init $ bs
 
     where unescape = pack . catMaybes . snd . mapAccumL step False . unpack
 
@@ -117,15 +98,16 @@ encodings = [ (0o000, 0o060)
 decodings :: Integral i => [(i, i)]
 decodings = map swap encodings
 
--- |Check if a message body represents a CTCP.
+-- |Check if a bytestring represents a CTCP.
 --
 -- This is intentionally very lenient, in particular it doesn't check
--- that escape characters are placed correctly. This is because the
--- spec states that misplaced escape characters should be discarded.
+-- that there are no extra escape characters. This is because the spec
+-- states that misplaced escape characters should be discarded by the
+-- decoding process.
 isCTCP :: ByteString -> Bool
 isCTCP bs = and $ (B.length bs >= 2) : (B.head bs == soh) : (B.last bs == soh) : map (flip B.notElem bs . fst) encodings
 
--- |Check if a ByteString looks like a CTCP, and if so, wrap it up in
+-- |Check if a bytestring looks like a CTCP, and if so, wrap it up in
 -- the 'CTCPByteString' type.
 --
 -- This uses 'isCTCP', and so is lenient with escapes.

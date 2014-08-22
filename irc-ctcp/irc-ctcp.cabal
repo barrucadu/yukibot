@@ -16,7 +16,41 @@ version:             0.1.0.0
 synopsis:            A CTCP encoding and decoding library for IRC clients.
 
 -- A longer description of the package.
--- description:         
+description:
+  CTCP (Client To Client Protocol) is a way of sending arbitrary data
+  over an IRC network, which may include bytes not allowed in standard
+  IRC messages. CTCPs are sent as a PRIVMSG or NOTICE, where the first
+  and last characters as @\\001@ (SOH), and special bytes are escaped
+  by encoding them into a two-byte sequence beginning with @\\020@
+  (DLE). CTCPs consist of command name (typically in upper-case)
+  followed by list of space-separated arguments, which may be empty.
+  .
+  One use of CTCPs supported by the vast majority of IRC clients today
+  is the ACTION command, typically invoked with /me. For example, if
+  the user @foo@ in the channel @#bar@ were to issue
+  .
+  > /me dances
+  .
+  everyone in the channel would receive the message
+  .
+  > :foo PRIVMSG #bar :\001ACTION dances\001
+  .
+  Other common uses of CTCP include requesting the name and version of
+  a user's IRC client, their local time, determining ping times, and
+  initiating file transfers (DCC).
+  .
+  Characters are escaped as follows:
+  .
+     [@\\000@ (NUL)] @\\020 \\060@ ("0")
+     [@\\012@ (NL)]  @\\020 \\156@ ("n")
+     [@\\015@ (CR)]  @\\020 \\162@ ("r")
+     [@\\020@ (DLE)] @\\020 \\020@
+  .
+  All other appearences of the escape character are errors, and are
+  dropped.
+  .
+  See <http://www.irchelp.org/irchelp/rfc/ctcpspec.html> for more
+  details.
 
 -- URL for the project homepage or repository.
 homepage:            https://github.com/barrucadu/yukibot
