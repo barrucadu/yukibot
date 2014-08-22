@@ -203,6 +203,7 @@ defaultIRCConf n = InstanceConfig
                                         , EventHandler "Respond to CTCP PING requests"    ECTCP ctcpPingHandler
                                         , EventHandler "Respond to CTCP VERSION requests" ECTCP ctcpVersionHandler
                                         , EventHandler "Respond to CTCP TIME requests"    ECTCP ctcpTimeHandler
+                                        , EventHandler "Update the nick upon welcome"     ENumeric welcomeNick
                                         , EventHandler "Mangle the nick on collision"     ENumeric nickMangler
                                         ]
                      }
@@ -237,29 +238,49 @@ ctcpTimeHandler ev = do
     (User n, CTCP t []) | toUpper t == "TIME" -> send $ ctcpReply n "TIME" [T.pack $ formatTime defaultTimeLocale "%c" now]
     _ -> return ()
 
+-- |Update the nick upon welcome, as it may not be what we requested
+-- (eg, in the case of a nick too long).
+welcomeNick :: Event -> IRC ()
+welcomeNick ev = case _message ev of
+                   Numeric 001 (srvNick:_) -> do
+                     iconf <- instanceConfig
+                     putInstanceConfig iconf { _nick = srvNick }
+                   _ -> return ()
+
 -- |Mangle the nick if there's a collision when we set it
 nickMangler :: Event -> IRC ()
 nickMangler ev = do
   theNick <- _nick <$> instanceConfig
 
+  -- Produce the new nick based on what the server thinks our nick is,
+  -- not what we think.
+  let Numeric _ (_:srvNick:_) = _message ev
+
+  -- If the length of our nick and the server's idea of our nick
+  -- differ, it was truncated - so calculate the allowable length.
+  let nicklen = if T.length srvNick /= T.length theNick
+                then Just $ T.length srvNick
+                else Nothing
+
   case _message ev of
     -- ERR_ERRONEUSNICKNAME: Bad characters in nick
-    Numeric 432 _ -> setNick $ fresh theNick
+    Numeric 432 _ -> setNick . trunc nicklen $ fresh srvNick
     -- ERR_NICKNAMEINUSE: Nick in use
-    Numeric 433 _ -> setNick $ mangle theNick
+    Numeric 433 _ -> setNick . trunc nicklen $ mangle srvNick
     -- ERR_NICKCOLLISION: Nick registered
-    Numeric 436 _ -> setNick $ mangle theNick
+    Numeric 436 _ -> setNick . trunc nicklen $ mangle srvNick
     _ -> return ()
 
-  where fresh n  = takeEnd nicklen $ let n' = T.filter isAlphaNum n
-                                     in if T.length n' == 0
-                                        then "f"
-                                        else n'
+  where fresh n  = let n' = T.filter isAlphaNum n
+                   in if T.length n' == 0
+                      then "f"
+                      else n'
 
-        mangle n = takeEnd nicklen $ (n <> "1") `fromMaybe` charsubst n
+        mangle n = (n <> "1") `fromMaybe` charsubst n
 
-        -- Maximum length of a nick
-        nicklen = 16
+        -- Truncate a nick, if there is a known length limit.
+        trunc (Just len) txt = takeEnd len txt
+        trunc Nothing    txt = txt
 
         -- List of substring substitutions. It's important that
         -- these don't contain any loops!
