@@ -7,6 +7,7 @@ module Network.IRC.Asakura.Permissions
       PermissionLevel(..)
     -- *State
     , PermissionState
+    , PermissionStateSnapshot(..)
     , initialise
     -- *Checking permissions
     , getPermission
@@ -19,61 +20,13 @@ module Network.IRC.Asakura.Permissions
     ) where
 
 import Control.Applicative    ((<$>))
-import Control.Concurrent.STM (STM, TVar, atomically, newTVar, readTVar, writeTVar)
+import Control.Concurrent.STM (STM, atomically, readTVar, writeTVar)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.List              (sort)
 import Data.Maybe             (catMaybes, listToMaybe)
-import Data.Ord               (Down(..), comparing)
 import Data.Text              (Text)
 import Network                (HostName)
-
--- *Permission levels
-
--- |Users are divided up into three classes. In the Admin/TrustedUser
--- classes, lower integers represent higher permission levels (0 being
--- the highest, just like in a priority-based algorithm).
-data PermissionLevel = God
-                     | Admin   Int
-                     | Trusted Int
-                     deriving (Eq, Show)
-
-instance Ord PermissionLevel where
-    -- All gods are equal.
-    compare God God = EQ
-
-    -- Lesser mortals are ranked in reverse integer order.
-    compare (Admin   i) (Admin   j) = comparing Down i j
-    compare (Trusted i) (Trusted j) = comparing Down i j
-
-    -- And constructor order determines the rest.
-    compare God       _ = GT
-    compare (Admin _) _ = GT
-
-    compare _ _ = LT
-
--- *State
-
--- |A uniquely-identified permission. When determining someone's
--- permission in a given situation, the better permission takes
--- priority: so if someone is a network admin and a trusted user in
--- the channel in question, the network admin permission wins.
-data PermissionDef = PChan Text HostName Text
-                   -- ^Nick, network, channel
-                   | PNet  Text HostName
-                   -- ^Nick, network
-                   deriving (Eq, Show)
-
-data PermissionState = PermissionState
-    { _permissions :: TVar [(PermissionDef, PermissionLevel)]
-    -- ^List of permissions known to the bot.
-    }
-
--- |Initialise a fresh permission state. As in the Command module,
--- this should only be done once and the state shared.
-initialise :: MonadIO m => m PermissionState
-initialise = do
-  tvarP <- liftIO . atomically . newTVar $ []
-  return PermissionState { _permissions = tvarP }
+import Network.IRC.Asakura.Permissions.State
 
 -- *Checking permissions
 

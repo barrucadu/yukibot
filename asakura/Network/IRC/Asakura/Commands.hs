@@ -5,6 +5,7 @@
 module Network.IRC.Asakura.Commands
     ( -- *State
       CommandState
+    , CommandStateSnapshot(..)
     , CommandDef(..)
     , initialise
     -- *Events
@@ -17,12 +18,13 @@ module Network.IRC.Asakura.Commands
     , setChannelPrefix
     ) where
 
-import Control.Concurrent.STM     (TVar, atomically, newTVar, readTVar, writeTVar)
+import Control.Concurrent.STM     (atomically, readTVar, writeTVar)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Data.Maybe                 (fromMaybe)
 import Data.Monoid                ((<>))
 import Data.Text                  (Text, isPrefixOf, splitOn)
 import Network                    (HostName)
+import Network.IRC.Asakura.Commands.State
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Permissions (PermissionLevel, PermissionState, hasPermission)
 import Network.IRC.Asakura.Types
@@ -35,52 +37,6 @@ import Network.IRC.IDTE.Types     ( ConnectionConfig(..)
                                   , getConnectionConfig, getInstanceConfig)
 
 import qualified Data.Text as T
-
--- *State
-
--- |The private state of this module, used by functions to access the
--- state.
-data CommandState = CommandState
-    { _commandPrefix   :: TVar Text
-    -- ^ A substring which must, if the bot was not addressed
-    -- directly, preceed the command name in order for it to be a
-    -- match.
-    , _channelPrefixes :: TVar [((HostName, Text), Text)]
-    -- ^Channel-specific command prefixes, which will be used instead
-    -- of the generic prefix if present.
-    , _commandList     :: TVar [(Text, CommandDef)]
-    -- ^List of commands
-    , _pstate          :: PermissionState
-    -- ^State of the permission system.
-    }
-
--- |A single command.
-data CommandDef = CommandDef
-    { _permission :: Maybe PermissionLevel
-    -- ^The minimum required permission level, if set
-    , _action     :: [Text] -> IRCState -> Event -> Bot (IRC ())
-    -- ^The function to run on a match. This is like a regular event
-    -- handler, except it takes the space-separated list of arguments
-    -- to the command as the first parameter.
-    }
-
--- |Initialise the state for this module. This should only be done
--- once.
-initialise :: MonadIO m
-           => Text
-           -- ^The command prefix (may later be changed).
-           -> PermissionState
-           -- ^The initialised state of the permission system.
-           -> m CommandState
-initialise pref pstate = do
-  tvarP  <- liftIO . atomically . newTVar $ pref
-  tvarCP <- liftIO . atomically . newTVar $ []
-  tvarL  <- liftIO . atomically . newTVar $ []
-  return CommandState { _commandPrefix   = tvarP
-                      , _channelPrefixes = tvarCP
-                      , _commandList     = tvarL
-                      , _pstate          = pstate
-                      }
 
 -- *Events
 

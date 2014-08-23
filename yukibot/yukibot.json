@@ -1,0 +1,12 @@
+{
+    "permissions": {
+        "irc.freenode.net": {
+            "barrucadu": {
+                "network": "god"
+            }
+        }
+    },
+    "prefixes": {
+        "defaultPrefix": "#"
+    }
+}
