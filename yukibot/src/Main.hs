@@ -11,19 +11,23 @@ import Network.IRC.Asakura
 import Network.IRC.Asakura.Types
 import Network.IRC.IDTE
 
-import qualified Network.IRC.Asakura.Commands as C
+import qualified Network.IRC.Asakura.Commands    as C
+import qualified Network.IRC.Asakura.Permissions as P
 
 main :: IO ()
 main = do
   cconf <- connect "irc.freenode.net" 6667
   state <- newBotState
 
-  commandState <- C.initialise "#"
+  permissionState <- P.initialise
+  commandState    <- C.initialise "#" permissionState
 
-  C.registerCommand commandState "echo"  bounceBack
-  C.registerCommand commandState "rizon" joinRizon
-  C.registerCommand commandState "join"  joinChannel
-  C.registerCommand commandState "part"  partChannel
+  P.setNetworkPermission permissionState "barrucadu" "irc.freenode.net" P.God
+
+  C.registerCommand commandState "echo"  Nothing bounceBack
+  C.registerCommand commandState "rizon" (Just P.God) joinRizon
+  C.registerCommand commandState "join"  (Just $ P.Admin 0) joinChannel
+  C.registerCommand commandState "part"  (Just $ P.Admin 0) partChannel
 
   addGlobalEventHandler' state $ C.eventRunner commandState
 

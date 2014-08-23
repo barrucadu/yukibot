@@ -5,11 +5,13 @@
 module Network.IRC.Asakura.Commands
     ( -- *State
       CommandState
+    , CommandDef(..)
     , initialise
     -- *Events
     , eventRunner
     -- *Registering commands
     , registerCommand
+    , registerCommand'
     -- *Miscellaneous
     , setPrefix
     , setChannelPrefix
@@ -22,7 +24,10 @@ import Data.Monoid                ((<>))
 import Data.Text                  (Text, isPrefixOf, splitOn)
 import Network                    (HostName)
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
+import Network.IRC.Asakura.Permissions (PermissionLevel, PermissionState, hasPermission)
 import Network.IRC.Asakura.Types
+import Network.IRC.IDTE           (send)
+import Network.IRC.IDTE.Messages  (privmsg, query)
 import Network.IRC.IDTE.Types     ( ConnectionConfig(..)
                                   , Event(..), EventType(..)
                                   , InstanceConfig(..), IRC, IrcMessage(..), IRCState
@@ -35,31 +40,47 @@ import qualified Data.Text as T
 
 -- |The private state of this module, used by functions to access the
 -- state.
---
--- TODO: Per-channel command prefix.
 data CommandState = CommandState
-    { _commandPrefix :: TVar Text
+    { _commandPrefix   :: TVar Text
     -- ^ A substring which must, if the bot was not addressed
     -- directly, preceed the command name in order for it to be a
     -- match.
     , _channelPrefixes :: TVar [((HostName, Text), Text)]
     -- ^Channel-specific command prefixes, which will be used instead
     -- of the generic prefix if present.
-    , _commandList   :: TVar [(Text, [Text] -> IRCState -> Event -> Bot (IRC ()))] }
+    , _commandList     :: TVar [(Text, CommandDef)]
+    -- ^List of commands
+    , _pstate          :: PermissionState
+    -- ^State of the permission system.
+    }
+
+-- |A single command.
+data CommandDef = CommandDef
+    { _permission :: Maybe PermissionLevel
+    -- ^The minimum required permission level, if set
+    , _action     :: [Text] -> IRCState -> Event -> Bot (IRC ())
+    -- ^The function to run on a match. This is like a regular event
+    -- handler, except it takes the space-separated list of arguments
+    -- to the command as the first parameter.
+    }
 
 -- |Initialise the state for this module. This should only be done
 -- once.
 initialise :: MonadIO m
            => Text
            -- ^The command prefix (may later be changed).
+           -> PermissionState
+           -- ^The initialised state of the permission system.
            -> m CommandState
-initialise pref = do
+initialise pref pstate = do
   tvarP  <- liftIO . atomically . newTVar $ pref
   tvarCP <- liftIO . atomically . newTVar $ []
   tvarL  <- liftIO . atomically . newTVar $ []
   return CommandState { _commandPrefix   = tvarP
                       , _channelPrefixes = tvarCP
-                      , _commandList     = tvarL }
+                      , _commandList     = tvarL
+                      , _pstate          = pstate
+                      }
 
 -- *Events
 
@@ -74,13 +95,10 @@ eventRunner state = AsakuraEventHandler
                       , _appliesDef  = runAlways
                       }
 
--- |Check if a PRIVMSG is calling a known command and, if so, run it.
---
--- TODO: Integrate this with permissions (todo: permissions)
+-- |Check if a PRIVMSG is calling a known command and, if so, run it i
+-- the user has appropriate permissions.
 runCmd :: CommandState -> IRCState -> Event -> Bot (IRC ())
 runCmd state ircstate ev = do
-  let Privmsg msg = _message ev
-
   -- Extract the channel name, if there is one, so we can use the
   -- channel-specific prefix.
   let host = _server $ getConnectionConfig ircstate
@@ -102,47 +120,77 @@ runCmd state ircstate ev = do
 
     return (_nick iconf, pref, commands)
 
-  -- Split off the prefix
-  let splitted = case _source ev of
-                   Channel _ _ -> mapFirst (stripPrefix msg) $ prefixes prefix nick
-
-                   -- The empty string is a valid prefix in queries.
-                   User _      -> mapFirst (stripPrefix msg) $ prefixes prefix nick ++ [""]
-
-                   _           -> Nothing
-
   -- Try to find a matching command
-  case splitted of
+  case splitCommand nick ev prefix of
     Just (cmd, args) -> case lookup cmd commands of
-                         Just handler -> handler args ircstate ev
-                         Nothing      -> return $ return ()
+                         Just cdef -> do
+                           -- Check the permissions, and don't run the
+                           -- command if the user isn't allowed.
+                           allowed <- case _source ev of
+                                       Channel n _ -> isAllowed cdef n (_pstate state) host chan
+                                       User    n   -> isAllowed cdef n (_pstate state) host chan
+                                       _ -> return False
+
+                           if allowed
+                           then _action cdef args ircstate ev
+                           else return $ berate ev
+
+                         Nothing -> return $ return ()
+
     Nothing -> return $ return ()
 
-  where -- Map a Maybe-producing function over a list, returning the
-        -- first Just.
-        mapFirst f (x:xs) = case f x of
-                              Just x' -> Just x'
-                              Nothing -> mapFirst f xs
-        mapFirst _ []     = Nothing
+-- |Strip a command prefix and split it up into parts
+splitCommand :: Text -> Event -> Text -> Maybe (Text, [Text])
+splitCommand nick ev prefix = case _source ev of
+                                Channel _ _ -> mapFirst stripPrefix $ prefixes prefix nick
 
-        -- Check if the command has a given prefix and, if so, strip
-        -- it off. If the prefix *is* the command, the next argument
-        -- (if present) is the actual command.
-        stripPrefix msg prefix | prefix `isPrefixOf` msg = Just . splitCmd . T.strip . T.drop (T.length prefix) $ msg
-                               | otherwise = Nothing
+                              -- The empty string is a valid prefix in queries.
+                                User _      -> mapFirst stripPrefix $ prefixes prefix nick ++ [""]
 
-        -- Split a trimmed message into (command, args)
-        splitCmd msg = case splitOn " " msg of
-                         (cmd:args) -> (cmd, args)
-                         _          -> (msg, [])
+                                _  -> Nothing
 
-        -- List of accepted command prefixes.
-        prefixes prefix nick = [ nick <> ":"
-                               , nick <> ","
-                               , "@" <> nick
-                               , nick
-                               , prefix
-                               ]
+    where Privmsg msg = _message ev
+
+          -- Map a Maybe-producing function over a list, returning the
+          -- first Just.
+          mapFirst f (x:xs) = case f x of
+                                Just x' -> Just x'
+                                Nothing -> mapFirst f xs
+          mapFirst _ []     = Nothing
+
+          -- Check if the command has a given prefix and, if so, strip
+          -- it off. If the prefix *is* the command, the next argument
+          -- (if present) is the actual command.
+          stripPrefix pref | pref `isPrefixOf` msg = Just . splitCmd . T.strip . T.drop (T.length pref) $ msg
+                           | otherwise = Nothing
+
+          -- Split a trimmed message into (command, args)
+          splitCmd msg' = case splitOn " " msg' of
+                            (cmd:args) -> (cmd, args)
+                            _          -> (msg, [])
+
+          -- List of accepted command prefixes.
+          prefixes pref nck = [ nck <> ":"
+                              , nck <> ","
+                              , "@" <> nck
+                              , nck
+                              , pref
+                              ]
+
+-- |Check if a user is allowed to run a command
+isAllowed :: MonadIO m => CommandDef -> Text -> PermissionState -> HostName -> Maybe Text -> m Bool
+isAllowed cdef nick pstate host chan = case _permission cdef of
+                                         Just req -> hasPermission pstate nick host chan req
+                                         Nothing  -> return True
+
+-- |Tell a user off for not having permissions.
+--
+-- TODO: Make the response configurable.
+berate :: Event -> IRC ()
+berate ev = case _source ev of
+              Channel n c -> send . privmsg c $ "I'm sorry " <> n <> ", I'm afraid I can't do that."
+              User    n   -> send . query   n $ "I'm sorry " <> n <> ", I'm afraid I can't do that."
+              _ -> return ()
 
 -- *Registering commands
 
@@ -157,14 +205,23 @@ registerCommand :: MonadIO m
                 -- ^The initialised state
                 -> Text
                 -- ^The command name
+                -> Maybe PermissionLevel
+                -- ^The minimum required permission level
                 -> ([Text] -> IRCState -> Event -> Bot (IRC ()))
                 -- ^The command handler
                 -> m ()
-registerCommand state cmd f = liftIO . atomically $ do
+registerCommand state cmd perm f = registerCommand' state cmd CommandDef
+                                   { _permission = perm
+                                   , _action     = f
+                                   }
+
+-- |Register a 'CommandDef' as a command.
+registerCommand' :: MonadIO m => CommandState -> Text -> CommandDef -> m ()
+registerCommand' state cmd cdef = liftIO . atomically $ do
   let tvarL = _commandList state
 
   commands <- readTVar tvarL
-  writeTVar tvarL $ (cmd, f) : commands
+  writeTVar tvarL $ (cmd, cdef) : commands
 
 -- *Miscellaneous
 
