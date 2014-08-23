@@ -1,7 +1,4 @@
 -- |Per-channel and per-network permission settings.
---
--- TODO: Event handler to automatically update the permissions of
--- chanops.
 module Network.IRC.Asakura.Permissions
     ( -- *Permission levels
       PermissionLevel(..)

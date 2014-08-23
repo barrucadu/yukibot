@@ -47,13 +47,9 @@ example).
    - In a /query, no command prefix is needed.
    - Addressing the bot by nick is the same as using a command prefix.
    - Provides a "register command" function.
-   - Depends on permissions plugin.
 
  - A "Permisions" module
-   - Users are divided into three classes: User, Channel Admin,
-     Network Admin.
-   - Channel ops are automatically placed into the Channel Admin
-     class.
+   - Users are divided into classes: Trusted, Admin, and God.
    - A user+channel+network can be queried, and resolved to a
      permission.
    - Provides a "grant permission" function.
@@ -62,6 +58,12 @@ example).
    - Are event handlers associated with a verb.
    - Register themselves with the Command Runner.
    - May specify a minimum permission required to execute the command.
+
+ - Abstract over saving and restoring state.
+   - We want shared mutable state, but also to be able to easily save
+     and restore bits of it.
+   - Provide methods to "snapshot" and "rollback" the live state.
+   - Allow "snapshots" to be serialised.
 
 ### Yukibot
 
