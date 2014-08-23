@@ -68,6 +68,7 @@ executable yukibot
                      , directory    >=1.2
                      , idte         >=0.1.4
                      , network      >=2.6
+                     , stm          >=2.4
                      , text         >=1.1
                      , transformers >= 0.3
 
