@@ -1,4 +1,8 @@
 {
+    "linkinfo": {
+        "maxLen": 20,
+        "numLinks": 1
+    },
     "permissions": {
         "irc.freenode.net": {
             "barrucadu": {
