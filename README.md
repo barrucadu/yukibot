@@ -99,7 +99,7 @@ This assumes you have a version of Cabal new enough to have
 sandboxes. If you don't, may God have mercy on your soul.
 
     cabal sandbox init
-    cp cabal.sandbox.config irc-ctcp irclib botlib yukibot
+    cp cabal.sandbox.config irc-ctcp idte asakura yukibot
 
 You can now build and install individual components by `cd`ing to
 their directory and using `cabal install`, assuming you have installed
@@ -110,6 +110,6 @@ swoop,
 
     cd yukibot
     cabal sandbox init
-    cabal sandbox add-source ../botlib ../irclib ../irc-ctcp
+    cabal sandbox add-source ../asakura ../idte ../irc-ctcp
     cabal install --only-dependencies
     cabal build
