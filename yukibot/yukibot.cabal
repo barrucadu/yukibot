@@ -69,6 +69,7 @@ executable yukibot
                      , aeson-pretty >=0.7
                      , asakura      >=0.0.6
                      , bytestring   >=0.10
+                     , data-default-class >=0.0.1
                      , directory    >=1.2
                      , hxt          >=9.3
                      , hxt-curl     >=9.1

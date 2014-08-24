@@ -43,7 +43,8 @@ runWithState ys = do
   addGlobalEventHandler' state $ C.eventRunner cs
 
   -- Start LinkInfo
-  addGlobalEventHandler' state L.eventHandler
+  let lis = _linkinfoState ys
+  addGlobalEventHandler' state $ L.eventHandler lis
 
   case cconf of
     Right cconf' -> do

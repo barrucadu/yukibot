@@ -6,9 +6,10 @@ module Yukibot.State where
 import Control.Applicative      ((<$>), (<*>))
 import Control.Monad            (join)
 import Control.Monad.IO.Class   (MonadIO, liftIO)
-import Data.Aeson               (FromJSON(..), ToJSON(..), Value(..), (.=), (.:), object, decode')
+import Data.Aeson               (FromJSON(..), ToJSON(..), Value(..), (.=), (.:), (.:?), (.!=), object, decode')
 import Data.Aeson.Encode.Pretty (Config(..), encodePretty')
 import Data.ByteString.Lazy     (ByteString)
+import Data.Default.Class       (def)
 import Data.Text                ()
 import Network.IRC.Asakura.State
 import System.Directory         (doesFileExist)
@@ -16,6 +17,7 @@ import System.Directory         (doesFileExist)
 import qualified Data.ByteString.Lazy            as B
 import qualified Network.IRC.Asakura.Commands    as C
 import qualified Network.IRC.Asakura.Permissions as P
+import qualified Yukibot.Plugins.LinkInfo        as L
 
 -- *Live State
 
@@ -23,6 +25,7 @@ import qualified Network.IRC.Asakura.Permissions as P
 data YukibotState = YS
     { _commandState    :: C.CommandState
     , _permissionState :: P.PermissionState
+    , _linkinfoState   :: L.LinkInfoCfg
     }
 
 -- *Snapshotting
@@ -31,6 +34,7 @@ data YukibotState = YS
 data YukibotStateSnapshot = YSS
     { _commandSnapshot    :: C.CommandStateSnapshot
     , _permissionSnapshot :: P.PermissionStateSnapshot
+    , _linkinfoSnapshot   :: L.LinkInfoCfg
     }
 
 instance Snapshot YukibotState YukibotStateSnapshot where
@@ -40,6 +44,7 @@ instance Snapshot YukibotState YukibotStateSnapshot where
 
       return YSS { _commandSnapshot    = css
                  , _permissionSnapshot = pss
+                 , _linkinfoSnapshot   = _linkinfoState ys
                  }
 
 instance Rollback YukibotStateSnapshot YukibotState where
@@ -49,16 +54,19 @@ instance Rollback YukibotStateSnapshot YukibotState where
 
       return YS { _commandState    = cs ps
                 , _permissionState = ps
+                , _linkinfoState   = _linkinfoSnapshot yss
                 }
 
 instance ToJSON YukibotStateSnapshot where
     toJSON yss = object [ "prefixes"    .= toJSON (_commandSnapshot yss)
                         , "permissions" .= toJSON (_permissionSnapshot yss)
+                        , "linkinfo"    .= toJSON (_linkinfoSnapshot yss)
                         ]
 
 instance FromJSON YukibotStateSnapshot where
-    parseJSON (Object v) = YSS <$> v .: "prefixes"
-                               <*> v .: "permissions"
+    parseJSON (Object v) = YSS <$> v .:  "prefixes"
+                               <*> v .:  "permissions"
+                               <*> v .:? "linkinfo" .!= def
     parseJSON _ = fail "Expected object"
 
 -- *Initialisation
@@ -71,6 +79,7 @@ initialise = do
 
   return YS { _commandState    = cs
             , _permissionState = ps
+            , _linkinfoState   = def
             }
 
 -- |Attempt to load a state from a lazy ByteString.
