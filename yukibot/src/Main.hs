@@ -12,8 +12,10 @@ import System.Directory    (doesFileExist)
 import System.Exit         (exitFailure)
 import Yukibot.State
 
-import qualified Network.IRC.Asakura.Commands as C
-import qualified Yukibot.Plugins.LinkInfo     as L
+import qualified Network.IRC.Asakura.Commands    as C
+import qualified Network.IRC.Asakura.Permissions as P
+import qualified Yukibot.Plugins.Channels        as CH
+import qualified Yukibot.Plugins.LinkInfo        as L
 
 -- |Load the configuration file, if it exists, otherwise initialise a
 -- new state. Upon successfully constructing a state, run the bot.
@@ -35,7 +37,10 @@ runWithState ys = do
   state <- newBotState
 
   -- Start commands
-  addGlobalEventHandler' state $ C.eventRunner $ _commandState ys
+  let cs = _commandState ys
+  C.registerCommand cs "join" (Just $ P.Admin 0) CH.joinCmd
+  C.registerCommand cs "part" (Just $ P.Admin 0) CH.partCmd
+  addGlobalEventHandler' state $ C.eventRunner cs
 
   -- Start LinkInfo
   addGlobalEventHandler' state L.eventHandler
