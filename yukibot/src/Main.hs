@@ -1,16 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- TODO: Catch SIGTERM and disconnect from all networks.
 module Main where
 
-import Control.Applicative ((<$>))
-import Control.Monad       (void)
+import Control.Applicative    ((<$>))
+import Control.Concurrent.STM (atomically, readTVar)
+import Control.Monad          (void)
+import Control.Monad.Trans.Reader (runReaderT)
 import Network.IRC.Asakura
 import Network.IRC.Asakura.Types
 import Network.IRC.IDTE
-import System.Directory    (doesFileExist)
-import System.Environment  (getArgs)
-import System.Exit         (exitFailure)
+import System.Directory       (doesFileExist)
+import System.Environment     (getArgs)
+import System.Exit            (exitFailure)
+import System.Posix.Signals   (Handler(..), installHandler, sigINT, sigTERM)
 import Yukibot.State
 
 import qualified Network.IRC.Asakura.Commands    as C
@@ -47,6 +49,10 @@ runWithState fp ys = do
   cconf <- connect "irc.freenode.net" 6667
   state <- newBotState
 
+  -- Register signal handlers
+  installHandler sigINT  (Catch $ handler state) Nothing
+  installHandler sigTERM (Catch $ handler state) Nothing
+
   -- Start commands
   let cs = _commandState ys
   C.registerCommand cs "join" (Just $ P.Admin 0) CH.joinCmd
@@ -63,3 +69,10 @@ runWithState fp ys = do
       save fp ys
 
     Left err -> putStrLn err >> exitFailure
+
+-- |Handle a signal by disconnecting from every IRC network.
+handler :: BotState -> IO ()
+handler botstate = (atomically . readTVar . _connections $ botstate) >>= mapM_ (runReaderT dc . snd)
+    where dc = do
+            send . quit $ Just "Process interrupted."
+            disconnect
