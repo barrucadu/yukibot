@@ -4,7 +4,6 @@
 module Yukibot.State where
 
 import Control.Applicative      ((<$>), (<*>))
-import Control.Concurrent.STM   (atomically)
 import Control.Monad            (join)
 import Control.Monad.IO.Class   (MonadIO, liftIO)
 import Data.Aeson               (FromJSON(..), ToJSON(..), Value(..), (.=), (.:), object, decode')

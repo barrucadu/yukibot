@@ -53,8 +53,11 @@ executable yukibot
   -- .hs or .lhs file containing the Main module.
   main-is:             Main.hs
 
+  ghc-options:         -Wall
+
   -- Modules included in this executable, other than Main.
-  -- other-modules:       
+  other-modules:       Yukibot.Plugins.LinkInfo
+                     , Yukibot.State
   
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:    
@@ -66,8 +69,10 @@ executable yukibot
                      , asakura      >=0.0.6
                      , bytestring   >=0.10
                      , directory    >=1.2
+                     , hxt          >=9.3
+                     , hxt-curl     >=9.1
+                     , hxt-tagsoup  >=9.1
                      , idte         >=0.1.4
-                     , network      >=2.6
                      , stm          >=2.4
                      , text         >=1.1
                      , transformers >= 0.3
