@@ -6,9 +6,9 @@
 module Network.IRC.Asakura.Commands.State where
 
 import Control.Applicative             ((<$>), (<*>))
-import Control.Concurrent.STM          (TVar, atomically, newTVar, readTVar)
-import Control.Monad.IO.Class          (MonadIO, liftIO)
+import Control.Concurrent.STM          (TVar, newTVar, readTVar)
 import Data.Aeson                      (FromJSON(..), ToJSON(..), Value(..), (.=), (.:), (.:?), (.!=), object)
+import Data.Default.Class              (Default(..))
 import Data.Map                        (Map)
 import Data.Text                       (Text)
 import Network                         (HostName)
@@ -57,6 +57,13 @@ data CommandStateSnapshot = CommandStateSnapshot
     , _ssChanPrefixes :: Map HostName (Map Text Text)
     }
 
+instance Default CommandStateSnapshot where
+    -- |Prefix of "!", no channel prefixes.
+    def = CommandStateSnapshot
+            { _ssDefPrefix    = "!"
+            , _ssChanPrefixes = M.empty
+            }
+
 instance ToJSON CommandStateSnapshot where
     toJSON ss | M.null (_ssChanPrefixes ss) = object [ "defaultPrefix"   .= _ssDefPrefix ss ]
               | otherwise = object [ "defaultPrefix"   .= _ssDefPrefix ss
@@ -98,23 +105,3 @@ instance Rollback CommandStateSnapshot (PermissionState -> CommandState) where
             fromNets (host, chans) = map (fromChans host) chans
 
             fromChans host (chan, pref) = ((host, chan), pref)
-
--- *Initialisation
-
--- |Initialise the state for this module. This should only be done
--- once.
-initialise :: MonadIO m
-           => Text
-           -- ^The command prefix (may later be changed).
-           -> PermissionState
-           -- ^The initialised state of the permission system.
-           -> m CommandState
-initialise pref pstate = liftIO . atomically $ do
-  tvarP  <- newTVar pref
-  tvarCP <- newTVar []
-  tvarL  <- newTVar []
-  return CommandState { _commandPrefix   = tvarP
-                      , _channelPrefixes = tvarCP
-                      , _commandList     = tvarL
-                      , _pstate          = pstate
-                      }

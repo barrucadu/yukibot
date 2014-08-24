@@ -5,9 +5,9 @@
 module Network.IRC.Asakura.Permissions.State where
 
 import Control.Applicative    ((<$>), (<*>), (<|>), pure)
-import Control.Concurrent.STM (TVar, atomically, newTVar, readTVar)
-import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Concurrent.STM (TVar, newTVar, readTVar)
 import Data.Aeson             (FromJSON(..), ToJSON(..), Value(..), (.=), (.:), (.:?), (.!=), object)
+import Data.Default.Class     (Default(..))
 import Data.Map               (Map)
 import Data.Ord               (Down(..), comparing)
 import Data.Text              (Text)
@@ -76,14 +76,18 @@ data PermissionStateSnapshot = PermissionStateSnapshot
     -- ^host -> nick -> (network permission, channel -> channel permission)
     }
 
+instance Default PermissionStateSnapshot where
+    -- |No specific permissions
+    def = PermissionStateSnapshot { _ssPermissions = M.empty }
+
 -- |The permissions of a single user
 data UserPermissions = UserPermissions (Maybe PermissionLevel) (Map Text PermissionLevel)
 
 instance ToJSON UserPermissions where
-    toJSON (UserPermissions (Just def) ps) | M.null ps = object [ "network" .= toJSON def ]
-                                           | otherwise = object [ "network"  .= toJSON def
-                                                                , "channels" .= toJSON ps
-                                                                ]
+    toJSON (UserPermissions (Just d) ps) | M.null ps = object [ "network"  .= toJSON d ]
+                                         | otherwise = object [ "network"  .= toJSON d
+                                                              , "channels" .= toJSON ps
+                                                              ]
     toJSON (UserPermissions Nothing    ps) | M.null ps = Null
                                            | otherwise = object [ "channels" .= toJSON ps ]
 
@@ -128,16 +132,7 @@ instance Rollback PermissionStateSnapshot PermissionState where
 
             fromNickMap network (nick, ups) = fromUserPerms network nick ups
 
-            fromUserPerms network nick (UserPermissions (Just def) cps) = (PNet nick network, def) : map (fromChanMap network nick) (M.toList cps)
-            fromUserPerms network nick (UserPermissions Nothing cps)    = map (fromChanMap network nick) (M.toList cps)
+            fromUserPerms network nick (UserPermissions (Just d) cps) = (PNet nick network, d) : map (fromChanMap network nick) (M.toList cps)
+            fromUserPerms network nick (UserPermissions Nothing cps)  = map (fromChanMap network nick) (M.toList cps)
 
             fromChanMap network nick (channel, perm) = (PChan nick network channel, perm)
-
--- *Initialisation
-
--- |Initialise a fresh permission state. As in the Command module,
--- this should only be done once and the state shared.
-initialise :: MonadIO m => m PermissionState
-initialise = do
-  tvarP <- liftIO . atomically . newTVar $ []
-  return PermissionState { _permissions = tvarP }

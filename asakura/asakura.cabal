@@ -10,7 +10,7 @@ name:                asakura
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.0.6.0
+version:             0.0.7.0
 
 -- A short (one-line) description of the package.
 synopsis:            A simple IRC bot library.
@@ -73,6 +73,7 @@ library
   build-depends:       base         >=4.7 && <5
                      , aeson        >=0.8
                      , containers   >=0.5
+                     , data-default-class >=0.0.1
                      , idte         >=0.1.3
                      , network      >=2.5
                      , stm          >=2.4

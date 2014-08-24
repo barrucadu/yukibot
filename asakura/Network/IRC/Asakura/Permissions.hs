@@ -5,7 +5,6 @@ module Network.IRC.Asakura.Permissions
     -- *State
     , PermissionState
     , PermissionStateSnapshot(..)
-    , initialise
     -- *Checking permissions
     , getPermission
     , hasPermission

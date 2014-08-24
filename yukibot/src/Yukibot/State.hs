@@ -6,10 +6,10 @@ module Yukibot.State where
 import Control.Applicative      ((<$>), (<*>))
 import Control.Monad            (join)
 import Control.Monad.IO.Class   (MonadIO, liftIO)
-import Data.Aeson               (FromJSON(..), ToJSON(..), Value(..), (.=), (.:), (.:?), (.!=), object, decode')
+import Data.Aeson               (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object, decode')
 import Data.Aeson.Encode.Pretty (Config(..), encodePretty')
 import Data.ByteString.Lazy     (ByteString)
-import Data.Default.Class       (def)
+import Data.Default.Class       (Default(..))
 import Data.Text                ()
 import Network.IRC.Asakura.State
 import System.Directory         (doesFileExist)
@@ -36,6 +36,12 @@ data YukibotStateSnapshot = YSS
     , _permissionSnapshot :: P.PermissionStateSnapshot
     , _linkinfoSnapshot   :: L.LinkInfoCfg
     }
+
+instance Default YukibotStateSnapshot where
+    def = YSS { _commandSnapshot    = def
+              , _permissionSnapshot = def
+              , _linkinfoSnapshot   = def
+              }
 
 instance Snapshot YukibotState YukibotStateSnapshot where
     snapshotSTM ys = do
@@ -64,23 +70,12 @@ instance ToJSON YukibotStateSnapshot where
                         ]
 
 instance FromJSON YukibotStateSnapshot where
-    parseJSON (Object v) = YSS <$> v .:  "prefixes"
-                               <*> v .:  "permissions"
-                               <*> v .:? "linkinfo" .!= def
+    parseJSON (Object v) = YSS <$> v .:? "prefixes"    .!= def
+                               <*> v .:? "permissions" .!= def
+                               <*> v .:? "linkinfo"    .!= def
     parseJSON _ = fail "Expected object"
 
 -- *Initialisation
-
--- |Construct a new state, with a default command prefix of "!".
-initialise :: MonadIO m => m YukibotState
-initialise = do
-  ps <- P.initialise
-  cs <- C.initialise "!" ps
-
-  return YS { _commandState    = cs
-            , _permissionState = ps
-            , _linkinfoState   = def
-            }
 
 -- |Attempt to load a state from a lazy ByteString.
 stateFromByteString :: (Functor m, MonadIO m) => ByteString -> m (Maybe YukibotState)

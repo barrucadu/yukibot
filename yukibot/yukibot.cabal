@@ -69,7 +69,7 @@ executable yukibot
   build-depends:       base         >=4.7 && <5
                      , aeson        >=0.8
                      , aeson-pretty >=0.7
-                     , asakura      >=0.0.6
+                     , asakura      >=0.0.7
                      , bytestring   >=0.10
                      , curl         >=1.3
                      , data-default-class >=0.0.1
