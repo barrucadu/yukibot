@@ -7,7 +7,7 @@ module Network.IRC.Asakura.Commands.State where
 
 import Control.Applicative             ((<$>), (<*>))
 import Control.Concurrent.STM          (TVar, newTVar, readTVar)
-import Data.Aeson                      (FromJSON(..), ToJSON(..), Value(..), (.=), (.:), (.:?), (.!=), object)
+import Data.Aeson                      (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
 import Data.Default.Class              (Default(..))
 import Data.Map                        (Map)
 import Data.Text                       (Text)
@@ -65,15 +65,15 @@ instance Default CommandStateSnapshot where
             }
 
 instance ToJSON CommandStateSnapshot where
-    toJSON ss | M.null (_ssChanPrefixes ss) = object [ "defaultPrefix"   .= _ssDefPrefix ss ]
+    toJSON ss | M.null (_ssChanPrefixes ss) = object [ "defaultPrefix"  .= _ssDefPrefix ss ]
               | otherwise = object [ "defaultPrefix"   .= _ssDefPrefix ss
-                                   , "channelPrefixes" .= (toJSON . _ssChanPrefixes $ ss)
+                                   , "channelPrefixes" .= toJSON (_ssChanPrefixes ss)
                                    ]
 
 instance FromJSON CommandStateSnapshot where
     parseJSON (Object v) = CommandStateSnapshot
-                             <$> v .: "defaultPrefix"
-                             <*> v .:? "channelPrefixes" .!= M.fromList []
+                             <$> v .:? "defaultPrefix"   .!= _ssDefPrefix    def
+                             <*> v .:? "channelPrefixes" .!= _ssChanPrefixes def
     parseJSON _ = fail "Bad type"
 
 instance Snapshot CommandState CommandStateSnapshot where
