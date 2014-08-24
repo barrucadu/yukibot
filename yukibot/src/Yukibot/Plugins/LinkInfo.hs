@@ -16,17 +16,15 @@ import Control.Monad              (liftM)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Data.Aeson                 (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
 import Data.Default.Class         (Default(..))
-import Data.Maybe                 (catMaybes)
 import Data.Monoid                ((<>))
 import Data.Text                  (Text, isPrefixOf, pack, unpack)
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
 import Network.IRC.IDTE           (privmsg, query, send)
 import Network.IRC.IDTE.Types     (Event(..), EventType(EPrivmsg), IRC, IrcMessage(..), IRCState, Source(..))
-import Text.XML.HXT.Arrow.XmlOptions (a_redirect)
-import Text.XML.HXT.Core          ((//>), readDocument, hasName, getText, runX, withParseHTML, withWarnings, no, yes)
-import Text.XML.HXT.Curl          (withCurl)
+import Text.XML.HXT.Core          ((//>), readString, hasName, getText, runX, withParseHTML, withWarnings, no, yes)
 import Text.XML.HXT.TagSoup       (withTagSoup)
+import Yukibot.Utils              (fetchHtml)
 
 import qualified Data.Text as T
 
@@ -76,41 +74,41 @@ eventFunc cfg _ ev = return $ do
   let Privmsg msg = _message ev
   let urls = filter (isPrefixOf $ pack "http") . T.words $ msg
 
-  responses <- take (_numLinks cfg) . catMaybes . zipWith showTitle urls <$> mapM (fetchTitle cfg) urls
+  responses <- take (_numLinks cfg) . zipWith showTitle urls <$> mapM (fetchTitle cfg) urls
 
   case _source ev of
     Channel _ c -> mapM_ (send . privmsg c) responses
     User n      -> mapM_ (send . query n)   responses
     _           -> return ()
 
-  where showTitle _ ""      = Nothing
-        showTitle url title = Just $  "\"" <> title <> "\" [" <> url <> "]"
+  where showTitle url (Just title) = "\"" <> title <> "\" [" <> url <> "]"
+        showTitle url Nothing      = "Could not retrieve title for " <> url
 
 -- *External usage
 
 -- |Try to fetch the title of a URL.
 --
 -- Truncate titles longer than `maxLen`.
-fetchTitle :: MonadIO m => LinkInfoCfg -> Text -> m Text
-fetchTitle cfg url = liftM trunc $ fetchTitle' url
+fetchTitle :: MonadIO m => LinkInfoCfg -> Text -> m (Maybe Text)
+fetchTitle cfg url = liftM (fmap trunc) $ fetchTitle' url
     where trunc txt | T.length txt > _maxTitleLen cfg = T.take (_maxTitleLen cfg - 1) txt <> "…"
           trunc txt = txt
 
 -- |Try to fetch the title of a URL, with no length limit.
---
--- Note: an empty title is returned on failure - or if the title was
--- simply empty. I need to implement proper failure detection for
--- this.
-fetchTitle' :: MonadIO m => Text -> m Text
+fetchTitle' :: MonadIO m => Text -> m (Maybe Text)
 fetchTitle' url = liftIO $ do
-  let doc = readDocument [ withParseHTML      yes
-                         , withTagSoup
-                         , withCurl           [(a_redirect, "")]
-                         , withWarnings       no
-                         ] $ unpack url
+  downloaded <- fetchHtml $ unpack url
+  case downloaded of
+    Just html -> do
+      let doc = readString [ withParseHTML yes
+                           , withTagSoup
+                           , withWarnings  no
+                           ] html
 
-  title <- runX $ doc //> hasName "title" //> getText
-  return . pack . toPlainText . concat $ title
+      title <- runX $ doc //> hasName "title" //> getText
+      return . Just . pack . toPlainText . concat $ title
+
+    Nothing -> return Nothing
 
   where toPlainText = dequote . unwords . words
         dequote ('\"':xs) | last xs == '\"' = init xs

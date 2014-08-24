@@ -58,6 +58,7 @@ executable yukibot
   -- Modules included in this executable, other than Main.
   other-modules:       Yukibot.Plugins.Channels
                      , Yukibot.Plugins.LinkInfo
+                     , Yukibot.Utils
                      , Yukibot.State
   
   -- LANGUAGE extensions used by modules in this package.
@@ -69,10 +70,10 @@ executable yukibot
                      , aeson-pretty >=0.7
                      , asakura      >=0.0.6
                      , bytestring   >=0.10
+                     , curl         >=1.3
                      , data-default-class >=0.0.1
                      , directory    >=1.2
                      , hxt          >=9.3
-                     , hxt-curl     >=9.1
                      , hxt-tagsoup  >=9.1
                      , idte         >=0.1.4
                      , stm          >=2.4
