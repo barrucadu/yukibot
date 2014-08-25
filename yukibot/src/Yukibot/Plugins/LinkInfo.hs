@@ -7,50 +7,22 @@ module Yukibot.Plugins.LinkInfo
     -- *Event handler
     , eventHandler
     -- *External usage
+    , fetchLinkInfo
     , fetchTitle
-    , fetchTitle'
     ) where
 
-import Control.Applicative        ((<$>), (<*>))
+import Control.Applicative        ((<$>))
 import Control.Monad              (liftM)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
-import Data.Aeson                 (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
-import Data.Default.Class         (Default(..))
 import Data.Monoid                ((<>))
-import Data.Text                  (Text, isPrefixOf, pack, unpack)
+import Data.Text                  (Text, isPrefixOf, pack)
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
 import Network.IRC.IDTE           (privmsg, query, send)
 import Network.IRC.IDTE.Types     (Event(..), EventType(EPrivmsg), IRC, IrcMessage(..), IRCState, Source(..))
-import Text.XML.HXT.Core          ((//>), readString, hasName, getText, runX, withParseHTML, withWarnings, no, yes)
-import Text.XML.HXT.TagSoup       (withTagSoup)
-import Yukibot.Utils              (fetchHtml)
+import Yukibot.Plugins.LinkInfo.Common
 
 import qualified Data.Text as T
-
--- *Configuration
-
--- |Currently configurable settings: number of link titles to show,
--- and length limit of titles.
-data LinkInfoCfg = LIC
-    { _numLinks    :: Int
-    , _maxTitleLen :: Int
-    }
-
-instance ToJSON LinkInfoCfg where
-    toJSON cfg = object [ "numLinks" .= _numLinks    cfg
-                        , "maxLen"   .= _maxTitleLen cfg
-                        ]
-
-instance FromJSON LinkInfoCfg where
-    parseJSON (Object v) = LIC <$> v .:? "numLinks" .!= _numLinks    def
-                               <*> v .:? "maxLen"   .!= _maxTitleLen def
-    parseJSON _ = fail "Expected object"
-
-instance Default LinkInfoCfg where
-    def = LIC { _numLinks    = 5
-              , _maxTitleLen = 100
-              }
 
 -- *Event handler
 
@@ -74,7 +46,7 @@ eventFunc cfg _ ev = return $ do
   let Privmsg msg = _message ev
   let urls = filter (isPrefixOf $ pack "http") . T.words $ msg
 
-  responses <- take (_numLinks cfg) . zipWith showTitle urls <$> mapM (fetchTitle cfg) urls
+  responses <- take (_numLinks cfg) . zipWith showTitle urls <$> mapM (fetchLinkInfo cfg) urls
 
   case _source ev of
     Channel _ c -> mapM_ (send . privmsg c) responses
@@ -86,30 +58,11 @@ eventFunc cfg _ ev = return $ do
 
 -- *External usage
 
--- |Try to fetch the title of a URL.
---
--- Truncate titles longer than `maxLen`.
-fetchTitle :: MonadIO m => LinkInfoCfg -> Text -> m (Maybe Text)
-fetchTitle cfg url = liftM (fmap trunc) $ fetchTitle' url
+-- |Try to fetch information on a URL. If there is no specific
+-- handler, this will just be the truncated title.
+fetchLinkInfo :: MonadIO m => LinkInfoCfg -> Text -> m (Maybe Text)
+fetchLinkInfo cfg url = case getLinkHandler cfg url of
+                          Just handler -> liftIO $ handler url
+                          Nothing      -> liftM (fmap trunc) $ fetchTitle url
     where trunc txt | T.length txt > _maxTitleLen cfg = T.take (_maxTitleLen cfg - 1) txt <> "…"
           trunc txt = txt
-
--- |Try to fetch the title of a URL, with no length limit.
-fetchTitle' :: MonadIO m => Text -> m (Maybe Text)
-fetchTitle' url = liftIO $ do
-  downloaded <- fetchHtml $ unpack url
-  case downloaded of
-    Just html -> do
-      let doc = readString [ withParseHTML yes
-                           , withTagSoup
-                           , withWarnings  no
-                           ] html
-
-      title <- runX $ doc //> hasName "title" //> getText
-      return . Just . pack . toPlainText . concat $ title
-
-    Nothing -> return Nothing
-
-  where toPlainText = dequote . unwords . words
-        dequote ('\"':xs) | last xs == '\"' = init xs
-        dequote x = x
