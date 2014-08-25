@@ -18,8 +18,8 @@ import Data.Monoid                ((<>))
 import Data.Text                  (Text, isPrefixOf, pack)
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
-import Network.IRC.IDTE           (privmsg, query, send)
-import Network.IRC.IDTE.Types     (Event(..), EventType(EPrivmsg), IRC, IrcMessage(..), IRCState, Source(..))
+import Network.IRC.IDTE           (reply)
+import Network.IRC.IDTE.Types     (Event(..), EventType(EPrivmsg), IRC, IrcMessage(..), IRCState)
 import Yukibot.Plugins.LinkInfo.Common
 
 import qualified Data.Text as T
@@ -48,10 +48,7 @@ eventFunc cfg _ ev = return $ do
 
   responses <- take (_numLinks cfg) . zipWith showTitle urls <$> mapM (fetchLinkInfo cfg) urls
 
-  case _source ev of
-    Channel _ c -> mapM_ (send . privmsg c) responses
-    User n      -> mapM_ (send . query n)   responses
-    _           -> return ()
+  mapM_ (reply ev) responses
 
   where showTitle url (Just title) = "\"" <> title <> "\" [" <> url <> "]"
         showTitle url Nothing      = "Could not retrieve title for " <> url

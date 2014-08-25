@@ -19,8 +19,8 @@ import Data.Default.Class        (Default(..))
 import Data.Monoid               ((<>))
 import Data.Text                 (Text, pack, unpack, intercalate)
 import Network.IRC.Asakura.Types (Bot)
-import Network.IRC.IDTE          (send, privmsg, query)
-import Network.IRC.IDTE.Types    (IRC, IRCState, Event(..), Source(..))
+import Network.IRC.IDTE          (reply)
+import Network.IRC.IDTE.Types    (IRC, IRCState, Event(..))
 import Text.XML.HXT.Core
 import Yukibot.Utils             (fetchHtmlWithCreds)
 
@@ -60,14 +60,8 @@ malCommand mc args _ ev = return $ do
   res <- malQuery mc term
 
   case res of
-    Just result -> case _source ev of
-                    Channel _ c -> mapM_ (send . privmsg c) result
-                    User n      -> mapM_ (send . query   n) result
-                    _ -> return ()
-    Nothing     -> case _source ev of
-                    Channel _ c -> send . privmsg c $ "Failed to get information on " <> term
-                    User n      -> send . query   n $ "Failed to get information on " <> term
-                    _ -> return ()
+    Just result -> mapM_ (reply ev) result
+    Nothing     -> reply ev $ "Failed to get information on " <> term
 
 -- *External usage
 
