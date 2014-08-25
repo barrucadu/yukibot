@@ -22,7 +22,8 @@ import Network.IRC.Asakura.Types (Bot)
 import Network.IRC.IDTE          (reply)
 import Network.IRC.IDTE.Types    (IRC, IRCState, Event(..))
 import Text.XML.HXT.Core
-import Yukibot.Utils             (fetchHtmlWithCreds)
+import Network.URI               (escapeURIString, isAllowedInURI)
+import Yukibot.Utils             (fetchHtmlWithCreds, makeUri)
 
 import qualified Data.Text as T
 
@@ -68,7 +69,8 @@ malCommand mc args _ ev = return $ do
 -- |Use the MAL search API to look up an anime.
 malQuery :: MonadIO m => MALCfg -> Text -> m (Maybe [Text])
 malQuery mc term = liftIO $ do
-  downloaded <- fetchHtmlWithCreds ("http://myanimelist.net/api/anime/search.xml?q=" <> unpack term) (_username mc) $ _password mc
+  let uri = makeUri "myanimelist.net" "/api/anime/search.xml" . Just $ "q=" <> escapeURIString isAllowedInURI (unpack term)
+  downloaded <- fetchHtmlWithCreds uri (_username mc) $ _password mc
 
   case downloaded of
     Just xml -> do
@@ -85,18 +87,18 @@ malQuery mc term = liftIO $ do
 
 -- |Turn a show info tuple into a textual description
 toShowInfo :: (Text, Text, Text, Text, Text) -> Text
-toShowInfo (id, title, episodes, type_, status) = T.unwords [ typeInfo
-                                                            , title
-                                                            , link
-                                                            , currentlyAiring
-                                                            ]
+toShowInfo (id_, title, episodes, type_, status) = T.unwords [ typeInfo
+                                                             , title
+                                                             , link
+                                                             , currentlyAiring
+                                                             ]
 
     where typeInfo = case (episodes, type_) of
                        ("1", _)     -> "[" <> type_ <> "]"
                        (_, "Movie") -> "[" <> type_ <> "]"
                        _            -> "[" <> type_ <> " " <> episodes <> " eps]"
 
-          link = "[http://myanimelist.net/anime/" <> id <> "]"
+          link = "[http://myanimelist.net/anime/" <> id_ <> "]"
 
           currentlyAiring | status == "Currently Airing" = "~Currently Airing~"
                           | otherwise = ""

@@ -3,15 +3,16 @@
 -- |Common functions for LinkInfo plugins
 module Yukibot.Plugins.LinkInfo.Common where
 
-import Control.Applicative        ((<$>), (<*>), pure)
-import Control.Monad.IO.Class     (MonadIO, liftIO)
-import Data.Aeson                 (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
-import Data.Default.Class         (Default(..))
-import Data.Maybe                 (listToMaybe)
-import Data.Text                  (Text, pack, unpack)
-import Text.XML.HXT.Core          ((//>), readString, hasName, getText, runX, withParseHTML, withWarnings, no, yes)
-import Text.XML.HXT.TagSoup       (withTagSoup)
-import Yukibot.Utils              (fetchHtml)
+import Control.Applicative    ((<$>), (<*>), pure)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Aeson             (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
+import Data.Default.Class     (Default(..))
+import Data.Maybe             (listToMaybe)
+import Data.Text              (Text, pack)
+import Text.XML.HXT.Core      ((//>), readString, hasName, getText, runX, withParseHTML, withWarnings, no, yes)
+import Text.XML.HXT.TagSoup   (withTagSoup)
+import Network.URI            (URI)
+import Yukibot.Utils          (fetchHtml)
 
 -- *Configuration
 
@@ -20,7 +21,7 @@ import Yukibot.Utils              (fetchHtml)
 data LinkInfoCfg = LIC
     { _numLinks     :: Int
     , _maxTitleLen  :: Int
-    , _linkHandlers :: [(Text -> Bool, Text -> IO (Maybe Text))]
+    , _linkHandlers :: [(URI -> Bool, URI -> IO (Maybe Text))]
     -- ^Link handlers are used for providing site-specific
     -- information.
     }
@@ -46,9 +47,9 @@ instance Default LinkInfoCfg where
 
 -- |Add a new link handler
 addLinkHandler :: LinkInfoCfg
-               -> (Text -> Bool)
-               -- ^Predicate function, applied to the URI.
-               -> (Text -> IO (Maybe Text))
+               -> (URI -> Bool)
+               -- ^Predicate function.
+               -> (URI -> IO (Maybe Text))
                -- ^Link info function, applied if the predicate matches.
                -> LinkInfoCfg
 addLinkHandler lic p h = LIC { _numLinks     = _numLinks lic
@@ -57,15 +58,15 @@ addLinkHandler lic p h = LIC { _numLinks     = _numLinks lic
                              }
 
 -- |Find the handler for a URI.
-getLinkHandler :: LinkInfoCfg -> Text -> Maybe (Text -> IO (Maybe Text))
+getLinkHandler :: LinkInfoCfg -> URI -> Maybe (URI -> IO (Maybe Text))
 getLinkHandler lic uri = listToMaybe . map snd . filter (($uri) . fst) . _linkHandlers $ lic
 
 -- *Title fetching
 
 -- |Try to fetch the title of a URL.
-fetchTitle :: MonadIO m => Text -> m (Maybe Text)
-fetchTitle url = liftIO $ do
-  downloaded <- fetchHtml $ unpack url
+fetchTitle :: MonadIO m => URI -> m (Maybe Text)
+fetchTitle uri = liftIO $ do
+  downloaded <- fetchHtml uri
   case downloaded of
     Just html -> do
       let doc = readString [ withParseHTML yes

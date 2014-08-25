@@ -14,13 +14,16 @@ module Yukibot.Plugins.LinkInfo
 import Control.Applicative        ((<$>))
 import Control.Monad              (liftM)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
+import Data.Maybe                 (mapMaybe)
 import Data.Monoid                ((<>))
-import Data.Text                  (Text, isPrefixOf, pack)
+import Data.Text                  (Text, pack, unpack)
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
 import Network.IRC.IDTE           (reply)
+import Network.URI                (URI, parseURI)
 import Network.IRC.IDTE.Types     (Event(..), EventType(EPrivmsg), IRC, IrcMessage(..), IRCState)
 import Yukibot.Plugins.LinkInfo.Common
+import Yukibot.Utils              (showUri)
 
 import qualified Data.Text as T
 
@@ -44,20 +47,20 @@ eventHandler cfg = AsakuraEventHandler
 eventFunc :: LinkInfoCfg -> IRCState -> Event -> Bot (IRC ())
 eventFunc cfg _ ev = return $ do
   let Privmsg msg = _message ev
-  let urls = filter (isPrefixOf $ pack "http") . T.words $ msg
+  let urls = mapMaybe (parseURI . unpack) . T.words $ msg
 
   responses <- take (_numLinks cfg) . zipWith showTitle urls <$> mapM (fetchLinkInfo cfg) urls
 
   mapM_ (reply ev) responses
 
-  where showTitle url (Just title) = "\"" <> title <> "\" [" <> url <> "]"
-        showTitle url Nothing      = "Could not retrieve title for " <> url
+  where showTitle url (Just title) = "\"" <> title <> "\" [" <> showUri url <> "]"
+        showTitle url Nothing      = "Could not retrieve title for " <> showUri url
 
 -- *External usage
 
 -- |Try to fetch information on a URL. If there is no specific
 -- handler, this will just be the truncated title.
-fetchLinkInfo :: MonadIO m => LinkInfoCfg -> Text -> m (Maybe Text)
+fetchLinkInfo :: MonadIO m => LinkInfoCfg -> URI -> m (Maybe Text)
 fetchLinkInfo cfg url = case getLinkHandler cfg url of
                           Just handler -> liftIO $ handler url
                           Nothing      -> liftM (fmap trunc) $ fetchTitle url

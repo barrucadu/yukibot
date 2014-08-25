@@ -79,6 +79,7 @@ executable yukibot
                      , hxt          >=9.3
                      , hxt-tagsoup  >=9.1
                      , idte         >=0.1.5
+                     , network-uri  >=2.5
                      , stm          >=2.4
                      , text         >=1.1
                      , transformers >=0.3
