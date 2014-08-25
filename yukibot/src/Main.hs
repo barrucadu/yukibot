@@ -20,7 +20,9 @@ import Yukibot.State
 import qualified Network.IRC.Asakura.Commands    as C
 import qualified Network.IRC.Asakura.Permissions as P
 import qualified Yukibot.Plugins.Channels        as CH
+import qualified Yukibot.Plugins.ImgurLinks      as I
 import qualified Yukibot.Plugins.LinkInfo        as L
+import qualified Yukibot.Plugins.LinkInfo.Common as LC
 import qualified Yukibot.Plugins.MAL             as M
 
 -- |Default configuration file name
@@ -66,7 +68,7 @@ runWithState fp ys = do
   addGlobalEventHandler' state $ C.eventRunner cs
 
   -- Start LinkInfo
-  let lis = _linkinfoState ys
+  let lis = LC.addLinkHandler (_linkinfoState ys) I.licPredicate I.licHandler
   addGlobalEventHandler' state $ L.eventHandler lis
 
   case cconf of
