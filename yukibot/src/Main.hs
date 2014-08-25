@@ -21,6 +21,7 @@ import qualified Network.IRC.Asakura.Commands    as C
 import qualified Network.IRC.Asakura.Permissions as P
 import qualified Yukibot.Plugins.Channels        as CH
 import qualified Yukibot.Plugins.LinkInfo        as L
+import qualified Yukibot.Plugins.MAL             as M
 
 -- |Default configuration file name
 defaultConfigFile :: FilePath
@@ -57,8 +58,11 @@ runWithState fp ys = do
 
   -- Start commands
   let cs = _commandState ys
+
   C.registerCommand cs "join" (Just $ P.Admin 0) CH.joinCmd
   C.registerCommand cs "part" (Just $ P.Admin 0) CH.partCmd
+  C.registerCommand cs "mal" Nothing $ M.malCommand (_malState ys)
+
   addGlobalEventHandler' state $ C.eventRunner cs
 
   -- Start LinkInfo

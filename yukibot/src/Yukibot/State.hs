@@ -18,6 +18,7 @@ import qualified Data.ByteString.Lazy            as B
 import qualified Network.IRC.Asakura.Commands    as C
 import qualified Network.IRC.Asakura.Permissions as P
 import qualified Yukibot.Plugins.LinkInfo        as L
+import qualified Yukibot.Plugins.MAL             as M
 
 -- *Live State
 
@@ -26,6 +27,7 @@ data YukibotState = YS
     { _commandState    :: C.CommandState
     , _permissionState :: P.PermissionState
     , _linkinfoState   :: L.LinkInfoCfg
+    , _malState        :: M.MALCfg
     }
 
 -- *Snapshotting
@@ -35,13 +37,11 @@ data YukibotStateSnapshot = YSS
     { _commandSnapshot    :: C.CommandStateSnapshot
     , _permissionSnapshot :: P.PermissionStateSnapshot
     , _linkinfoSnapshot   :: L.LinkInfoCfg
+    , _malSnapshot        :: M.MALCfg
     }
 
 instance Default YukibotStateSnapshot where
-    def = YSS { _commandSnapshot    = def
-              , _permissionSnapshot = def
-              , _linkinfoSnapshot   = def
-              }
+    def = YSS def def def def
 
 instance Snapshot YukibotState YukibotStateSnapshot where
     snapshotSTM ys = do
@@ -51,6 +51,7 @@ instance Snapshot YukibotState YukibotStateSnapshot where
       return YSS { _commandSnapshot    = css
                  , _permissionSnapshot = pss
                  , _linkinfoSnapshot   = _linkinfoState ys
+                 , _malSnapshot        = _malState ys
                  }
 
 instance Rollback YukibotStateSnapshot YukibotState where
@@ -61,18 +62,21 @@ instance Rollback YukibotStateSnapshot YukibotState where
       return YS { _commandState    = cs ps
                 , _permissionState = ps
                 , _linkinfoState   = _linkinfoSnapshot yss
+                , _malState        = _malSnapshot yss
                 }
 
 instance ToJSON YukibotStateSnapshot where
     toJSON yss = object [ "prefixes"    .= toJSON (_commandSnapshot yss)
                         , "permissions" .= toJSON (_permissionSnapshot yss)
                         , "linkinfo"    .= toJSON (_linkinfoSnapshot yss)
+                        , "myanimelist" .= toJSON (_malSnapshot yss)
                         ]
 
 instance FromJSON YukibotStateSnapshot where
     parseJSON (Object v) = YSS <$> v .:? "prefixes"    .!= def
                                <*> v .:? "permissions" .!= def
                                <*> v .:? "linkinfo"    .!= def
+                               <*> v .:? "myanimelist" .!= def
     parseJSON _ = fail "Expected object"
 
 -- *Initialisation

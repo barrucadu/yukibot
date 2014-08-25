@@ -3,6 +3,10 @@
         "maxLen": 100,
         "numLinks": 1
     },
+    "myanimelist": {
+        "password": "",
+        "username": ""
+    },
     "permissions": {
         "irc.freenode.net": {
             "barrucadu": {

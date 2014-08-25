@@ -11,8 +11,17 @@ import Network.Curl           (CurlBuffer, CurlOption(..), CurlResponse_(..), UR
 -- |Download an HTML document. Return (Just html) if we get a 200
 -- response code, and a html-y content-type. This follows redirects.
 fetchHtml :: MonadIO m => URLString -> m (Maybe String)
-fetchHtml url = do
-  res <- fetchHttp url
+fetchHtml = flip fetchHtml' []
+
+-- |Like 'fetchHtml', but accepts a username and password.
+fetchHtmlWithCreds :: MonadIO m => URLString -> String -> String -> m (Maybe String)
+fetchHtmlWithCreds url user pass = fetchHtml' url [ CurlUserPwd $ user ++ ":" ++ pass ]
+
+-- |Like 'fetchHtml', but takes options (in addition to following
+-- redirects).
+fetchHtml' :: MonadIO m => URLString -> [CurlOption] -> m (Maybe String)
+fetchHtml' url opts = do
+  res <- fetchHttp' url opts
 
   return $ do
     response <- res
@@ -26,12 +35,14 @@ fetchHtml url = do
 -- |Download something over HTTP, returning (Just response) on a 200
 -- response code. This follows redirects.
 fetchHttp :: (CurlBuffer c, MonadIO m) => URLString -> m (Maybe (CurlResponse_ [(String, String)] c))
-fetchHttp = liftIO . withCurlDo . fetchHttp'
-    where fetchHttp' url = do
-            res <- curlGetResponse_ url curlOpts
+fetchHttp = flip fetchHttp' []
 
-            return $ if respStatus res == 200
-                     then Just res
-                     else Nothing
+-- |Like 'fetchHttp', but also takes options (in addition to following
+-- redirects).
+fetchHttp' :: (CurlBuffer c, MonadIO m) => URLString -> [CurlOption] -> m (Maybe (CurlResponse_ [(String, String)] c))
+fetchHttp' url opts = liftIO . withCurlDo $ do
+  res <- curlGetResponse_ url $ CurlFollowLocation True : opts
 
-          curlOpts = [ CurlFollowLocation True ]
+  return $ if respStatus res == 200
+           then Just res
+           else Nothing
