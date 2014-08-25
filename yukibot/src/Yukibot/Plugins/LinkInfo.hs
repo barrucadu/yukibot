@@ -14,7 +14,7 @@ module Yukibot.Plugins.LinkInfo
 import Control.Applicative        ((<$>))
 import Control.Monad              (liftM)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
-import Data.Maybe                 (mapMaybe)
+import Data.Maybe                 (catMaybes, mapMaybe)
 import Data.Monoid                ((<>))
 import Data.Text                  (Text, pack, unpack)
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
@@ -49,20 +49,22 @@ eventFunc cfg _ ev = return $ do
   let Privmsg msg = _message ev
   let urls = mapMaybe (parseURI . unpack) . T.words $ msg
 
-  responses <- take (_numLinks cfg) . zipWith showTitle urls <$> mapM (fetchLinkInfo cfg) urls
+  responses <- take (_numLinks cfg) . catMaybes . zipWith showTitle urls <$> mapM (fetchLinkInfo cfg) urls
 
   mapM_ (reply ev) responses
 
-  where showTitle url (Just title) = "\"" <> title <> "\" [" <> showUri url <> "]"
-        showTitle url Nothing      = "Could not retrieve title for " <> showUri url
+  where showTitle url (Title title) = Just $ "\"" <> title <> "\" [" <> showUri url <> "]"
+        showTitle _   (Info info)   = Just info
+        showTitle _   NoTitle       = Nothing
+        showTitle url Failed        = Just $ "Could not retrieve title for " <> showUri url
 
 -- *External usage
 
 -- |Try to fetch information on a URL. If there is no specific
 -- handler, this will just be the truncated title.
-fetchLinkInfo :: MonadIO m => LinkInfoCfg -> URI -> m (Maybe Text)
+fetchLinkInfo :: MonadIO m => LinkInfoCfg -> URI -> m (LinkInfo Text)
 fetchLinkInfo cfg url = case getLinkHandler cfg url of
                           Just handler -> liftIO $ handler url
-                          Nothing      -> liftM (fmap trunc) $ fetchTitle url
+                          Nothing      -> liftM (fmap trunc) $ liftHandler fetchTitle url
     where trunc txt | T.length txt > _maxTitleLen cfg = T.take (_maxTitleLen cfg - 1) txt <> "…"
           trunc txt = txt

@@ -4,6 +4,7 @@
 module Yukibot.Plugins.LinkInfo.Common where
 
 import Control.Applicative    ((<$>), (<*>), pure)
+import Control.Monad          (liftM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson             (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
 import Data.Default.Class     (Default(..))
@@ -21,7 +22,7 @@ import Yukibot.Utils          (fetchHtml)
 data LinkInfoCfg = LIC
     { _numLinks     :: Int
     , _maxTitleLen  :: Int
-    , _linkHandlers :: [(URI -> Bool, URI -> IO (Maybe Text))]
+    , _linkHandlers :: [(URI -> Bool, URI -> IO (LinkInfo Text))]
     -- ^Link handlers are used for providing site-specific
     -- information.
     }
@@ -45,11 +46,23 @@ instance Default LinkInfoCfg where
 
 -- *Link handlers
 
+data LinkInfo a = Title a -- ^This is the title to be displayed.
+                | Info a  -- ^Information to display, and don't also
+                          -- display the uri.
+                | NoTitle -- ^The URI has no title.
+                | Failed  -- ^Retrieving the title failed.
+
+instance Functor LinkInfo where
+    fmap f (Title a) = Title $ f a
+    fmap f (Info a)  = Info $ f a
+    fmap _ NoTitle   = NoTitle
+    fmap _ Failed    = Failed
+
 -- |Add a new link handler
 addLinkHandler :: LinkInfoCfg
                -> (URI -> Bool)
                -- ^Predicate function.
-               -> (URI -> IO (Maybe Text))
+               -> (URI -> IO (LinkInfo Text))
                -- ^Link info function, applied if the predicate matches.
                -> LinkInfoCfg
 addLinkHandler lic p h = LIC { _numLinks     = _numLinks lic
@@ -58,8 +71,13 @@ addLinkHandler lic p h = LIC { _numLinks     = _numLinks lic
                              }
 
 -- |Find the handler for a URI.
-getLinkHandler :: LinkInfoCfg -> URI -> Maybe (URI -> IO (Maybe Text))
+getLinkHandler :: LinkInfoCfg -> URI -> Maybe (URI -> IO (LinkInfo Text))
 getLinkHandler lic uri = listToMaybe . map snd . filter (($uri) . fst) . _linkHandlers $ lic
+
+-- |Turn a function producing a Maybe title into a function producing
+-- a LinkTitle.
+liftHandler :: MonadIO m => (URI -> m (Maybe Text)) -> URI -> m (LinkInfo Text)
+liftHandler f uri = liftM (maybe Failed Title) $ f uri
 
 -- *Title fetching
 
