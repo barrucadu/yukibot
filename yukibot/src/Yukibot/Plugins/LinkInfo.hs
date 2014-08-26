@@ -16,7 +16,7 @@ import Control.Monad              (liftM)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Data.Maybe                 (catMaybes, mapMaybe)
 import Data.Monoid                ((<>))
-import Data.Text                  (Text, pack, unpack)
+import Data.Text                  (Text, pack, unpack, isPrefixOf)
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
 import Network.IRC.IDTE           (reply)
@@ -47,13 +47,16 @@ eventHandler cfg = AsakuraEventHandler
 eventFunc :: LinkInfoCfg -> IRCState -> Event -> Bot (IRC ())
 eventFunc cfg _ ev = return $ do
   let Privmsg msg = _message ev
-  let urls = mapMaybe (parseURI . unpack) . T.words $ msg
+  let urls = mapMaybe toUri . T.words $ msg
 
   responses <- take (_numLinks cfg) . catMaybes . zipWith showTitle urls <$> mapM (fetchLinkInfo cfg) urls
 
   mapM_ (reply ev) responses
 
-  where showTitle url (Title title) = Just $ "\"" <> title <> "\" [" <> showUri url <> "]"
+  where toUri uri | "http" `isPrefixOf` uri = parseURI $ unpack uri
+                  | otherwise = Nothing
+
+        showTitle url (Title title) = Just $ "\"" <> title <> "\" [" <> showUri url <> "]"
         showTitle _   (Info info)   = Just info
         showTitle _   NoTitle       = Nothing
         showTitle url Failed        = Just $ "Could not retrieve title for " <> showUri url
