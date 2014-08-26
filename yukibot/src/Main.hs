@@ -24,6 +24,7 @@ import qualified Yukibot.Plugins.ImgurLinks      as I
 import qualified Yukibot.Plugins.LinkInfo        as L
 import qualified Yukibot.Plugins.LinkInfo.Common as LC
 import qualified Yukibot.Plugins.MAL             as M
+import qualified Yukibot.Plugins.Memory          as Me
 
 -- |Default configuration file name
 defaultConfigFile :: FilePath
@@ -64,6 +65,12 @@ runWithState fp ys = do
   C.registerCommand cs "join" (Just $ P.Admin 0) CH.joinCmd
   C.registerCommand cs "part" (Just $ P.Admin 0) CH.partCmd
   C.registerCommand cs "mal" Nothing $ M.malCommand (_malState ys)
+
+  let ms  = _memoryState ys
+  let wfs = Me.simpleFactStore ms "watching"
+
+  C.registerCommand cs "watching"     Nothing $ Me.simpleGetCommand wfs
+  C.registerCommand cs "watching.set" Nothing $ Me.simpleSetCommand wfs
 
   addGlobalEventHandler' state $ C.eventRunner cs
 
