@@ -81,6 +81,7 @@ executable yukibot
                      , directory    >=1.2
                      , hxt          >=9.3
                      , hxt-tagsoup  >=9.1
+                     , lens         >=4.0
                      , idte         >=0.1.5
                      , network-uri  >=2.5
                      , stm          >=2.4

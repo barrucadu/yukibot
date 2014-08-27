@@ -24,6 +24,7 @@ module Yukibot.Plugins.Memory
 
 import Control.Applicative       ((<$>))
 import Control.Concurrent.STM    (TVar, atomically, newTVar, readTVar, writeTVar)
+import Control.Lens              ((&), (^.), (%~), at, non)
 import Control.Monad             (liftM)
 import Control.Monad.IO.Class    (MonadIO, liftIO)
 import Data.Aeson                (FromJSON(..), ToJSON(..))
@@ -86,12 +87,7 @@ getFactValues ms network nick fact = liftM (concatMap snd . filter relevent) fac
 getFacts :: MonadIO m => MemoryState -> String -> Text -> m [(Text, [Text])]
 getFacts ms network nick = liftIO . atomically $ do
   facts <- readTVar $ _facts ms
-  let userfacts = do
-        networkFacts <- M.lookup network facts
-        nickFacts    <- M.lookup nick networkFacts
-        return $ M.toList nickFacts
-
-  return $ fromMaybe [] userfacts
+  return . M.toList $ facts ^. at network . non M.empty . at nick . non M.empty
 
 -- *Updating
 
@@ -117,15 +113,8 @@ alterFacts ms f network nick fact = liftIO . atomically $ do
   writeTVar (_facts ms) $ alterFacts' facts f network nick fact
 
 alterFacts' :: FactStore -> ([Text] -> Maybe [Text]) -> String -> Text -> Text -> FactStore
-alterFacts' fs f network nick fact = M.alter (Just . updateNetwork) network fs
-
-    where updateNetwork networkFacts = M.alter (Just . updateNick) nick $ fromMaybe emptyNickMap networkFacts
-          updateNick    nickFacts    = M.alter updateFact fact $ fromMaybe emptyFactMap nickFacts
-
-          updateFact factValues   = f $ fromMaybe [] factValues
-
-          emptyNickMap    = M.fromList [(nick, emptyFactMap)]
-          emptyFactMap    = M.fromList [(fact, [])]
+alterFacts' fs f network nick fact = fs & at network . non M.empty . at nick . non M.empty . at fact %~ f'
+    where f' = maybe Nothing f
 
 -- *Integration with other things
 
