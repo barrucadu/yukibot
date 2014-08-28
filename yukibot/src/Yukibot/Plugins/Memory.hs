@@ -114,7 +114,7 @@ alterFacts ms f network nick fact = liftIO . atomically $ do
 
 alterFacts' :: FactStore -> ([Text] -> Maybe [Text]) -> String -> Text -> Text -> FactStore
 alterFacts' fs f network nick fact = fs & at network . non M.empty . at nick . non M.empty . at fact %~ f'
-    where f' = maybe Nothing f
+    where f' = f . fromMaybe []
 
 -- *Integration with other things
 
