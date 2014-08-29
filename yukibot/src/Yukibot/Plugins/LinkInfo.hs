@@ -56,7 +56,7 @@ eventFunc cfg _ ev = return $ do
   where toUri uri | "http" `isPrefixOf` uri = parseURI $ unpack uri
                   | otherwise = Nothing
 
-        showTitle url (Title title) = Just $ "\"" <> title <> "\" [" <> showUri url <> "]"
+        showTitle _   (Title title) = Just $ "Title: \"" <> title <> "\""
         showTitle _   (Info info)   = Just info
         showTitle _   NoTitle       = Nothing
         showTitle url Failed        = Just $ "Could not retrieve title for " <> showUri url
