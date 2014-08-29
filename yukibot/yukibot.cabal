@@ -63,6 +63,7 @@ executable yukibot
                      , Yukibot.Plugins.LinkInfo.Common
                      , Yukibot.Plugins.MAL
                      , Yukibot.Plugins.Memory
+                     , Yukibot.Plugins.Trigger
                      , Yukibot.Utils
                      , Yukibot.State
   
@@ -84,6 +85,7 @@ executable yukibot
                      , lens         >=4.0
                      , idte         >=0.1.5
                      , network-uri  >=2.5
+                     , random       >=1.0
                      , stm          >=2.4
                      , text         >=1.1
                      , transformers >=0.3

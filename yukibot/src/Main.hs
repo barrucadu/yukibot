@@ -25,6 +25,7 @@ import qualified Yukibot.Plugins.LinkInfo        as L
 import qualified Yukibot.Plugins.LinkInfo.Common as LC
 import qualified Yukibot.Plugins.MAL             as M
 import qualified Yukibot.Plugins.Memory          as Me
+import qualified Yukibot.Plugins.Trigger         as T
 
 -- |Default configuration file name
 defaultConfigFile :: FilePath
@@ -77,6 +78,10 @@ runWithState fp ys = do
   -- Start LinkInfo
   let lis = LC.addLinkHandler (_linkinfoState ys) I.licPredicate I.licHandler
   addGlobalEventHandler' state $ L.eventHandler lis
+
+  -- Start triggers
+  let ts = _triggerState ys
+  addGlobalEventHandler' state $ T.eventHandler ts
 
   case cconf of
     Right cconf' -> do
