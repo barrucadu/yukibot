@@ -17,6 +17,7 @@ import System.Directory         (doesFileExist)
 import qualified Data.ByteString.Lazy            as B
 import qualified Network.IRC.Asakura.Commands    as C
 import qualified Network.IRC.Asakura.Permissions as P
+import qualified Yukibot.Plugins.Blacklist       as BL
 import qualified Yukibot.Plugins.LinkInfo        as L
 import qualified Yukibot.Plugins.MAL             as M
 import qualified Yukibot.Plugins.Memory          as Me
@@ -32,6 +33,7 @@ data YukibotState = YS
     , _malState        :: M.MALCfg
     , _memoryState     :: Me.MemoryState
     , _triggerState    :: T.TriggerState
+    , _blacklistState  :: BL.BlacklistState
     }
 
 -- *Snapshotting
@@ -44,10 +46,11 @@ data YukibotStateSnapshot = YSS
     , _malSnapshot        :: M.MALCfg
     , _memorySnapshot     :: Me.MemoryStateSnapshot
     , _triggerSnapshot    :: T.TriggerStateSnapshot
+    , _blacklistSnapshot  :: BL.BlacklistStateSnapshot
     }
 
 instance Default YukibotStateSnapshot where
-    def = YSS def def def def def def
+    def = YSS def def def def def def def
 
 instance Snapshot YukibotState YukibotStateSnapshot where
     snapshotSTM ys = do
@@ -55,6 +58,7 @@ instance Snapshot YukibotState YukibotStateSnapshot where
       pss <- snapshotSTM . _permissionState $ ys
       mss <- snapshotSTM . _memoryState     $ ys
       tss <- snapshotSTM . _triggerState    $ ys
+      bss <- snapshotSTM . _blacklistState  $ ys
 
       return YSS { _commandSnapshot    = css
                  , _permissionSnapshot = pss
@@ -62,6 +66,7 @@ instance Snapshot YukibotState YukibotStateSnapshot where
                  , _malSnapshot        = _malState ys
                  , _memorySnapshot     = mss
                  , _triggerSnapshot    = tss
+                 , _blacklistSnapshot  = bss
                  }
 
 instance Rollback YukibotStateSnapshot YukibotState where
@@ -70,6 +75,7 @@ instance Rollback YukibotStateSnapshot YukibotState where
       ps <- rollbackSTM . _permissionSnapshot $ yss
       ms <- rollbackSTM . _memorySnapshot     $ yss
       ts <- rollbackSTM . _triggerSnapshot    $ yss
+      bs <- rollbackSTM . _blacklistSnapshot  $ yss
 
       return YS { _commandState    = cs ps
                 , _permissionState = ps
@@ -77,6 +83,7 @@ instance Rollback YukibotStateSnapshot YukibotState where
                 , _malState        = _malSnapshot yss
                 , _memoryState     = ms
                 , _triggerState    = ts
+                , _blacklistState  = bs
                 }
 
 instance ToJSON YukibotStateSnapshot where
@@ -86,6 +93,7 @@ instance ToJSON YukibotStateSnapshot where
                         , "myanimelist" .= toJSON (_malSnapshot        yss)
                         , "memory"      .= toJSON (_memorySnapshot     yss)
                         , "triggers"    .= toJSON (_triggerSnapshot    yss)
+                        , "blacklist"   .= toJSON (_blacklistSnapshot  yss)
                         ]
 
 instance FromJSON YukibotStateSnapshot where
@@ -95,6 +103,7 @@ instance FromJSON YukibotStateSnapshot where
                                <*> v .:? "myanimelist" .!= def
                                <*> v .:? "memory"      .!= def
                                <*> v .:? "triggers"    .!= def
+                               <*> v .:? "blacklist"   .!= def
     parseJSON _ = fail "Expected object"
 
 -- *Initialisation

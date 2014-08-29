@@ -19,6 +19,7 @@ import Yukibot.State
 
 import qualified Network.IRC.Asakura.Commands    as C
 import qualified Network.IRC.Asakura.Permissions as P
+import qualified Yukibot.Plugins.Blacklist       as BL
 import qualified Yukibot.Plugins.Channels        as CH
 import qualified Yukibot.Plugins.ImgurLinks      as I
 import qualified Yukibot.Plugins.LinkInfo        as L
@@ -57,36 +58,37 @@ runWithState fp ys = do
   cconf <- connect "irc.freenode.net" 6667
   state <- newBotState
 
+  let cs  = _commandState   ys
+  let bs  = _blacklistState ys
+  let ms  = _memoryState    ys
+  let ts  = _triggerState   ys
+
+  let wfs = Me.simpleFactStore ms "watching"
+  let lis = LC.addLinkHandler (_linkinfoState ys) I.licPredicate I.licHandler
+
   -- Register signal handlers
   installHandler sigINT  (Catch $ handler state) Nothing
   installHandler sigTERM (Catch $ handler state) Nothing
 
-  -- Start commands
-  let cs = _commandState ys
+  -- Register commands
+  C.registerCommand cs "join"      (Just $ P.Admin 0) CH.joinCmd
+  C.registerCommand cs "part"      (Just $ P.Admin 0) CH.partCmd
+  C.registerCommand cs "blacklist" (Just $ P.Admin 0) $ BL.blacklistCmd bs
+  C.registerCommand cs "whitelist" (Just $ P.Admin 0) $ BL.whitelistCmd bs
 
-  C.registerCommand cs "join" (Just $ P.Admin 0) CH.joinCmd
-  C.registerCommand cs "part" (Just $ P.Admin 0) CH.partCmd
-  C.registerCommand cs "mal" Nothing $ M.malCommand (_malState ys)
+  C.registerCommand cs "mal"          Nothing $ M.malCommand (_malState ys)
+  C.registerCommand cs "watching"     Nothing $ BL.wrapsCmd bs "watching" $ Me.simpleGetCommand wfs
+  C.registerCommand cs "watching.set" Nothing $ BL.wrapsCmd bs "watching" $ Me.simpleSetCommand wfs
+  C.registerCommand cs "seen"         Nothing $ BL.wrapsCmd bs "seen"     $ S.command ms
 
-  let ms  = _memoryState ys
-  let wfs = Me.simpleFactStore ms "watching"
-
-  C.registerCommand cs "watching"     Nothing $ Me.simpleGetCommand wfs
-  C.registerCommand cs "watching.set" Nothing $ Me.simpleSetCommand wfs
-
-  C.registerCommand cs "seen" Nothing $ S.command ms
-
+  -- Register event handlers
   addGlobalEventHandler' state $ C.eventRunner cs
-  addGlobalEventHandler' state $ S.eventHandler ms
 
-  -- Start LinkInfo
-  let lis = LC.addLinkHandler (_linkinfoState ys) I.licPredicate I.licHandler
-  addGlobalEventHandler' state $ L.eventHandler lis
+  addGlobalEventHandler' state $ BL.wraps bs "seen"     $ S.eventHandler ms
+  addGlobalEventHandler' state $ BL.wraps bs "linkinfo" $ L.eventHandler lis
+  addGlobalEventHandler' state $ BL.wraps bs "triggers" $ T.eventHandler ts
 
-  -- Start triggers
-  let ts = _triggerState ys
-  addGlobalEventHandler' state $ T.eventHandler ts
-
+  -- Start
   case cconf of
     Right cconf' -> do
       void $ run cconf' (defaultIRCConf "yukibot") state
