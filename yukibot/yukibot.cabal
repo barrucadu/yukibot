@@ -63,6 +63,7 @@ executable yukibot
                      , Yukibot.Plugins.LinkInfo.Common
                      , Yukibot.Plugins.MAL
                      , Yukibot.Plugins.Memory
+                     , Yukibot.Plugins.Seen
                      , Yukibot.Plugins.Trigger
                      , Yukibot.Utils
                      , Yukibot.State

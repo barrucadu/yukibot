@@ -25,6 +25,7 @@ import qualified Yukibot.Plugins.LinkInfo        as L
 import qualified Yukibot.Plugins.LinkInfo.Common as LC
 import qualified Yukibot.Plugins.MAL             as M
 import qualified Yukibot.Plugins.Memory          as Me
+import qualified Yukibot.Plugins.Seen            as S
 import qualified Yukibot.Plugins.Trigger         as T
 
 -- |Default configuration file name
@@ -73,7 +74,10 @@ runWithState fp ys = do
   C.registerCommand cs "watching"     Nothing $ Me.simpleGetCommand wfs
   C.registerCommand cs "watching.set" Nothing $ Me.simpleSetCommand wfs
 
+  C.registerCommand cs "seen" Nothing $ S.command ms
+
   addGlobalEventHandler' state $ C.eventRunner cs
+  addGlobalEventHandler' state $ S.eventHandler ms
 
   -- Start LinkInfo
   let lis = LC.addLinkHandler (_linkinfoState ys) I.licPredicate I.licHandler
