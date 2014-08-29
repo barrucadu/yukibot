@@ -68,6 +68,6 @@ eventFunc cfg _ ev = return $ do
 fetchLinkInfo :: MonadIO m => LinkInfoCfg -> URI -> m (LinkInfo Text)
 fetchLinkInfo cfg url = case getLinkHandler cfg url of
                           Just handler -> liftIO $ handler url
-                          Nothing      -> liftM (fmap trunc) $ liftHandler fetchTitle url
+                          Nothing      -> liftM (fmap trunc . maybe NoTitle Title) $ fetchTitle url
     where trunc txt | T.length txt > _maxTitleLen cfg = T.take (_maxTitleLen cfg - 1) txt <> "…"
           trunc txt = txt
