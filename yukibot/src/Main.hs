@@ -46,7 +46,7 @@ main = do
   confExists <- doesFileExist configFile
   ys <- if confExists
        then stateFromFile configFile
-       else Just <$> rollback (def :: YukibotStateSnapshot)
+       else Just <$> rollback def
 
   case ys of
     Just ys' -> runWithState configFile ys'

@@ -1,4 +1,5 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
 
 -- |Typeclasses for STM-y state which can be snapshotted and restored.
 module Network.IRC.Asakura.State where
@@ -12,7 +13,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 -- immediately serialised with no further processing.
 --
 -- Minimal complete definition: snapshotSTM.
-class Snapshot active shot where
+class Snapshot active shot | active -> shot, shot -> active where
     -- |Take a snapshot of the state in STM.
     snapshotSTM :: active -> STM shot
 
@@ -26,7 +27,7 @@ class Snapshot active shot where
 -- parameters.
 --
 -- Minimal complete definition: rollbackSTM.
-class Rollback shot active where
+class Rollback shot active | shot -> active, active -> shot where
     -- |Roll back a snapshot into live state.
     rollbackSTM :: shot -> STM active
 
