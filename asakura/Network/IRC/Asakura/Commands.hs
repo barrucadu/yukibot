@@ -15,6 +15,7 @@ module Network.IRC.Asakura.Commands
     -- *Miscellaneous
     , setPrefix
     , setChannelPrefix
+    , unsetChannelPrefix
     ) where
 
 import Control.Concurrent.STM     (atomically, readTVar, writeTVar)
@@ -191,3 +192,11 @@ setChannelPrefix state network channel prefix = liftIO . atomically $ do
 
   prefixes <- readTVar tvarCP
   writeTVar tvarCP $ ((network, channel), prefix) : filter ((/=(network, channel)) . fst) prefixes
+
+-- |Remove the command prefix for a specific channel.
+unsetChannelPrefix :: MonadIO m => CommandState -> HostName -> Text -> m ()
+unsetChannelPrefix state network channel = liftIO . atomically $ do
+  let tvarCP = _channelPrefixes state
+
+  prefixes <- readTVar tvarCP
+  writeTVar tvarCP $ filter ((/=(network, channel)) . fst) prefixes

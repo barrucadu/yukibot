@@ -7,12 +7,16 @@ module Yukibot.Plugins.Channels
     ( -- *Commands
       joinCmd
     , partCmd
+    , setChanPrefix
+    , unsetChanPrefix
     ) where
 
-import Data.Text                 (Text)
-import Network.IRC.Asakura.Types (Bot)
-import Network.IRC.IDTE          (send, join, part, reply)
-import Network.IRC.IDTE.Types    (Event(..), IRCState, IRC, Source(..))
+import Control.Applicative          ((<$>))
+import Data.Text                    (Text)
+import Network.IRC.Asakura.Commands (CommandState, setChannelPrefix, unsetChannelPrefix)
+import Network.IRC.Asakura.Types    (Bot)
+import Network.IRC.IDTE             (send, join, part, reply)
+import Network.IRC.IDTE.Types       (ConnectionConfig(_server), Event(..), IRCState, IRC, Source(..), connectionConfig)
 
 -- |Join a channel. The first argument is the name of the channel to
 -- join.
@@ -26,3 +30,20 @@ partCmd _ _ ev = return $ case _source ev of
                             Channel _ c -> send . part c $ Just "Goodbye"
                             User _      -> reply ev "This isn't a channel!"
                             _           -> return ()
+
+-- |Set the channel-specific prefix
+setChanPrefix :: CommandState -> [Text] -> IRCState -> Event -> Bot (IRC ())
+setChanPrefix cs (pref:_) _ ev = return $ do
+  network <- _server <$> connectionConfig
+  case _source ev of
+    Channel _ c -> setChannelPrefix cs network c pref
+    _           -> reply ev "This isn't a channel!"
+setChanPrefix _ [] _ ev = return . reply ev $ "You need to give me a new prefix!"
+
+-- |Unset the channel-specific prefix
+unsetChanPrefix :: CommandState -> [Text] -> IRCState -> Event -> Bot (IRC ())
+unsetChanPrefix cs _ _ ev = return $ do
+  network <- _server <$> connectionConfig
+  case _source ev of
+    Channel _ c -> unsetChannelPrefix cs network c
+    _           -> reply ev "This isn't a channel!"
