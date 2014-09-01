@@ -32,7 +32,7 @@ newtype CTCPByteString = CBS
     -- ^Get the underlying (encoded) bytestring from a CTCP
     -- bytestring.
     }
-    deriving (Eq)
+    deriving (Eq, Show)
 
 -- |Turn a command name and arguments into a CTCP-encoded bytestring.
 --
