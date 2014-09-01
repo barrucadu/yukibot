@@ -27,12 +27,12 @@ import qualified Data.ByteString as B
 import qualified Data.Text       as T
 
 -- |Type representing a CTCP-encoded bytestring.
-newtype CTCPByteString = CBS
-    { getUnderlyingByteString :: ByteString
-    -- ^Get the underlying (encoded) bytestring from a CTCP
-    -- bytestring.
-    }
+newtype CTCPByteString = CBS ByteString
     deriving (Eq, Show)
+
+-- |Get the underlying (encoded) bytestring from a CTCP bytestring.
+getUnderlyingByteString :: CTCPByteString -> ByteString
+getUnderlyingByteString (CBS bs) = bs
 
 -- |Turn a command name and arguments into a CTCP-encoded bytestring.
 --
