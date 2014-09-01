@@ -7,11 +7,12 @@ module Network.IRC.Asakura.Permissions.State where
 import Control.Applicative    ((<$>), (<*>), (<|>), pure)
 import Control.Concurrent.STM (TVar, newTVar, readTVar)
 import Data.Aeson             (FromJSON(..), ToJSON(..), Value(..), (.=), (.:), (.:?), (.!=), object)
+import Data.ByteString        (ByteString)
+import Data.ByteString.Char8  (pack, unpack)
 import Data.Default.Class     (Default(..))
 import Data.Map               (Map)
 import Data.Ord               (Down(..), comparing)
 import Data.Text              (Text)
-import Network                (HostName)
 import Network.IRC.Asakura.State
 import Network.IRC.Asakura.Utils
 
@@ -57,9 +58,9 @@ instance FromJSON PermissionLevel where
 -- permission in a given situation, the better permission takes
 -- priority: so if someone is a network admin and a trusted user in
 -- the channel in question, the network admin permission wins.
-data PermissionDef = PChan Text HostName Text
+data PermissionDef = PChan Text ByteString Text
                    -- ^Nick, network, channel
-                   | PNet  Text HostName
+                   | PNet  Text ByteString
                    -- ^Nick, network
                    deriving (Eq, Show)
 
@@ -72,7 +73,7 @@ data PermissionState = PermissionState
 -- *Snapshotting
 
 data PermissionStateSnapshot = PermissionStateSnapshot
-    { _ssPermissions :: Map HostName (Map Text UserPermissions)
+    { _ssPermissions :: Map String (Map Text UserPermissions)
     -- ^host -> nick -> (network permission, channel -> channel permission)
     }
 
@@ -113,8 +114,8 @@ instance Snapshot PermissionState PermissionStateSnapshot where
 
             -- Turn the 'PermissionDef' into something we can process
             -- with standard functions
-            extractBits (PChan nick hostname channel, pdef) = (hostname, (nick, UserPermissions Nothing $ M.fromList [(channel, pdef)]))
-            extractBits (PNet nick hostname, pdef)          = (hostname, (nick, UserPermissions (Just pdef) $ M.fromList []))
+            extractBits (PChan nick hostname channel, pdef) = (unpack hostname, (nick, UserPermissions Nothing $ M.fromList [(channel, pdef)]))
+            extractBits (PNet nick hostname, pdef)          = (unpack hostname, (nick, UserPermissions (Just pdef) $ M.fromList []))
 
             -- Merge the UserPermissions into a single one
             mergeUserPermissions = foldl mergeUP defUP
@@ -128,7 +129,7 @@ instance Rollback PermissionStateSnapshot PermissionState where
 
       where fromPermTree = concatMap fromNetworkMap . M.toList
 
-            fromNetworkMap (network, nickmap) = concatMap (fromNickMap network) $ M.toList nickmap
+            fromNetworkMap (network, nickmap) = concatMap (fromNickMap $ pack network) $ M.toList nickmap
 
             fromNickMap network (nick, ups) = fromUserPerms network nick ups
 

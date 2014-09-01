@@ -13,8 +13,8 @@ import Control.Concurrent.STM     (STM, atomically, readTVar, writeTVar)
 import Control.Monad              (join)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ask, runReaderT)
+import Data.ByteString            (ByteString)
 import Data.Text                  (Text)
-import Network                    (HostName)
 import Network.IRC.Asakura.Types
 import Network.IRC.IDTE.Types     (Event(..), EventHandler, ConnectionConfig(..), InstanceConfig(..), IRCState, Source(..))
 
@@ -75,7 +75,7 @@ demote state h ircstate = IT.EventHandler
     where network = _server $ IT.getConnectionConfig ircstate
           demoted ev = do
             active <- case _source ev of
-                       Channel _ c -> _appliesTo h network c
+                       Channel c _ -> _appliesTo h network c
                        _           -> _appliesDef h network
 
             if active
@@ -85,10 +85,10 @@ demote state h ircstate = IT.EventHandler
 -- *Constructing event handlers
 
 -- |Helper for when you want an event handler to run in all channels.
-runEverywhere :: HostName -> Text -> Bot Bool
+runEverywhere :: ByteString -> Text -> Bot Bool
 runEverywhere _ _ = return True
 
 -- |Helper for when you want an event handler to run always outside of
 -- channels.
-runAlways :: HostName -> Bot Bool
+runAlways :: ByteString -> Bot Bool
 runAlways _ = return True

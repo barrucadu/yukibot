@@ -4,9 +4,9 @@ module Network.IRC.Asakura.Types where
 import Control.Concurrent.STM     (TVar, atomically, newTVar)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ReaderT)
+import Data.ByteString            (ByteString)
 import Data.Text                  (Text)
-import Network                    (HostName)
-import Network.IRC.IDTE.Types     (Event, EventType, IRC, IRCState)
+import Network.IRC.IDTE.Types     (EventType, IRC, IRCState, UnicodeEvent)
 
 -- *State
 
@@ -14,7 +14,7 @@ import Network.IRC.IDTE.Types     (Event, EventType, IRC, IRCState)
 type Bot a = ReaderT BotState IO a
 
 data BotState = BotState
-    { _connections :: TVar [(HostName, IRCState)]
+    { _connections :: TVar [(ByteString, IRCState)]
     -- ^We abstract over a particular IRC client by instead dealing
     -- with a map from network names to individual client states,
     -- which we can update in order to communicate with clients.
@@ -41,9 +41,9 @@ newBotState = do
 data AsakuraEventHandler = AsakuraEventHandler
     { _description :: Text
     , _matchType   :: EventType
-    , _eventFunc   :: IRCState -> Event -> Bot (IRC ())
-    , _appliesTo   :: HostName -> Text -> Bot Bool
+    , _eventFunc   :: IRCState -> UnicodeEvent -> Bot (IRC ())
+    , _appliesTo   :: ByteString -> Text -> Bot Bool
     -- ^Check if the event handler applies to this network/channel
-    , _appliesDef  :: HostName -> Bot Bool
+    , _appliesDef  :: ByteString -> Bot Bool
     -- ^Whether the handler applies outside of a channel
     }

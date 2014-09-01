@@ -4,7 +4,6 @@ module Network.IRC.Asakura
     ( -- *Initialisation
       createAndRun
     , createAndRunWithTLS
-    , createAndRunWithTLS'
     -- *Running bots
     , start
     , run
@@ -22,35 +21,29 @@ import Control.Concurrent.STM     (TVar, atomically, readTVar, retry, writeTVar)
 import Control.Monad              (unless)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ask, runReaderT)
+import Data.ByteString            (ByteString)
 import Data.Text                  (Text)
-import Network                    (HostName)
-import Network.TLS                (Cipher)
+import Data.Time.Clock            (NominalDiffTime)
 import Network.IRC.Asakura.Events (addDefaultHandlers, addGlobalEventHandler, addGlobalEventHandler', runEverywhere, runAlways)
 import Network.IRC.Asakura.Types
-import Network.IRC.IDTE           (connect, connectWithTLS, connectWithTLS', defaultIRCConf, start')
+import Network.IRC.IDTE           (connect, connectWithTLS, defaultIRCConf, start')
 import Network.IRC.IDTE.Types     (ConnectionConfig(..), InstanceConfig(..), newIRCState)
 
 -- *Initialisation
 
--- |Create a new bot, connecting to the given initial network. If
--- connecting fails, this returns the error message. Otherwise, this
+-- |Create a new bot, connecting to the given initial network. This
 -- blocks until all networks are disconnected from.
-createAndRun :: MonadIO m => HostName -> Int -> Either Text InstanceConfig -> m (Maybe String)
-createAndRun host port inst = connect host port >>= flip runWith inst
+createAndRun :: MonadIO m => ByteString -> Int -> NominalDiffTime -> Either Text InstanceConfig -> m ()
+createAndRun host port flood inst = connect host port flood >>= flip runWith inst
 
 -- |Like 'createAndRun', but connect with the default TLS configuration
-createAndRunWithTLS :: MonadIO m => HostName -> Int -> Either Text InstanceConfig -> m (Maybe String)
-createAndRunWithTLS host port inst = connectWithTLS host port >>= flip runWith inst
-
--- |Like 'createAndRunWithTLS', but take a list of ciphers.
-createAndRunWithTLS' :: MonadIO m => HostName -> Int -> [Cipher] -> Either Text InstanceConfig -> m (Maybe String)
-createAndRunWithTLS' host port ciphers inst = connectWithTLS' host port ciphers >>= flip runWith inst
+createAndRunWithTLS :: MonadIO m => ByteString -> Int -> NominalDiffTime -> Either Text InstanceConfig -> m ()
+createAndRunWithTLS host port flood inst = connectWithTLS host port flood >>= flip runWith inst
 
 -- |Create and run a bot with the given connection configuration
-runWith :: MonadIO m => Either String ConnectionConfig -> Either Text InstanceConfig -> m (Maybe String)
-runWith (Left str) _                = return $ Just str
-runWith (Right cconf) (Left nick)   = start cconf (defaultIRCConf nick) >> return Nothing
-runWith (Right cconf) (Right iconf) = start cconf iconf >> return Nothing
+runWith :: MonadIO m => ConnectionConfig -> Either Text InstanceConfig -> m ()
+runWith cconf (Left nick)   = start cconf $ defaultIRCConf nick
+runWith cconf (Right iconf) = start cconf iconf
 
 -- *Running bots
 
@@ -102,7 +95,7 @@ addNetwork cconf iconf = do
 -- *Handlers
 
 -- |Remove the named network from the list
-asakuraDisconnectHandler :: HostName -> TVar [(HostName, a)] -> IO ()
+asakuraDisconnectHandler :: ByteString -> TVar [(ByteString, a)] -> IO ()
 asakuraDisconnectHandler host tvar = atomically $ do
   networks <- readTVar tvar
   writeTVar tvar $ filter ((/=host) . fst) networks

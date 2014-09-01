@@ -55,7 +55,7 @@ main = do
 -- |Run the bot with a given state.
 runWithState :: FilePath -> YukibotState -> IO ()
 runWithState fp ys = do
-  cconf <- connect "irc.freenode.net" 6667
+  cconf <- connectWithTLS "irc.freenode.net" 7000 1
   state <- newBotState
 
   let cs  = _commandState   ys
@@ -91,16 +91,12 @@ runWithState fp ys = do
   addGlobalEventHandler' state $ BL.wraps bs "triggers" $ T.eventHandler ts
 
   -- Start
-  case cconf of
-    Right cconf' -> do
-      void $ run cconf' (defaultIRCConf "yukibot") state
-      save fp ys
-
-    Left err -> putStrLn err >> exitFailure
+  void $ run cconf (defaultIRCConf "yukibot") state
+  save fp ys
 
 -- |Handle a signal by disconnecting from every IRC network.
 handler :: BotState -> IO ()
 handler botstate = (atomically . readTVar . _connections $ botstate) >>= mapM_ (runReaderT dc . snd)
     where dc = do
-            send . quit $ Just "Process interrupted."
+            send . Quit $ Just "Process interrupted."
             disconnect

@@ -20,20 +20,19 @@ module Network.IRC.Asakura.Commands
 
 import Control.Concurrent.STM     (atomically, readTVar, writeTVar)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
+import Data.ByteString            (ByteString)
 import Data.Maybe                 (fromMaybe)
 import Data.Monoid                ((<>))
 import Data.Text                  (Text, isPrefixOf, splitOn)
-import Network                    (HostName)
 import Network.IRC.Asakura.Commands.State
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Permissions (PermissionLevel, PermissionState, hasPermission)
 import Network.IRC.Asakura.Types
 import Network.IRC.IDTE           (send)
-import Network.IRC.IDTE.Messages  (privmsg, query)
 import Network.IRC.IDTE.Types     ( ConnectionConfig(..)
-                                  , Event(..), EventType(..)
-                                  , InstanceConfig(..), IRC, IrcMessage(..), IRCState
-                                  , Source(..)
+                                  , Event(..), UnicodeEvent, EventType(..)
+                                  , InstanceConfig(..), IRC, IRCState
+                                  , Message(..), Source(..)
                                   , getConnectionConfig, getInstanceConfig)
 
 import qualified Data.Text as T
@@ -53,13 +52,13 @@ eventRunner state = AsakuraEventHandler
 
 -- |Check if a PRIVMSG is calling a known command and, if so, run it i
 -- the user has appropriate permissions.
-runCmd :: CommandState -> IRCState -> Event -> Bot (IRC ())
+runCmd :: CommandState -> IRCState -> UnicodeEvent -> Bot (IRC ())
 runCmd state ircstate ev = do
   -- Extract the channel name, if there is one, so we can use the
   -- channel-specific prefix.
   let host = _server $ getConnectionConfig ircstate
   let chan = case _source ev of
-               Channel _ c -> Just c
+               Channel c _ -> Just c
                _           -> Nothing
 
   -- Read the state
@@ -83,7 +82,7 @@ runCmd state ircstate ev = do
                            -- Check the permissions, and don't run the
                            -- command if the user isn't allowed.
                            allowed <- case _source ev of
-                                       Channel n _ -> isAllowed cdef n (_pstate state) host chan
+                                       Channel _ n -> isAllowed cdef n (_pstate state) host chan
                                        User    n   -> isAllowed cdef n (_pstate state) host chan
                                        _ -> return False
 
@@ -96,7 +95,7 @@ runCmd state ircstate ev = do
     Nothing -> return $ return ()
 
 -- |Strip a command prefix and split it up into parts
-splitCommand :: Text -> Event -> Text -> Maybe (Text, [Text])
+splitCommand :: Text -> UnicodeEvent -> Text -> Maybe (Text, [Text])
 splitCommand nick ev prefix = case _source ev of
                                 Channel _ _ -> mapFirst stripPrefix $ prefixes prefix nick
 
@@ -105,7 +104,7 @@ splitCommand nick ev prefix = case _source ev of
 
                                 _  -> Nothing
 
-    where Privmsg msg = _message ev
+    where Privmsg _ (Right msg) = _message ev
 
           -- Map a Maybe-producing function over a list, returning the
           -- first Just.
@@ -134,7 +133,7 @@ splitCommand nick ev prefix = case _source ev of
                               ]
 
 -- |Check if a user is allowed to run a command
-isAllowed :: MonadIO m => CommandDef -> Text -> PermissionState -> HostName -> Maybe Text -> m Bool
+isAllowed :: MonadIO m => CommandDef -> Text -> PermissionState -> ByteString -> Maybe Text -> m Bool
 isAllowed cdef nick pstate host chan = case _permission cdef of
                                          Just req -> hasPermission pstate nick host chan req
                                          Nothing  -> return True
@@ -142,10 +141,10 @@ isAllowed cdef nick pstate host chan = case _permission cdef of
 -- |Tell a user off for not having permissions.
 --
 -- TODO: Make the response configurable.
-berate :: Event -> IRC ()
+berate :: UnicodeEvent -> IRC ()
 berate ev = case _source ev of
-              Channel n c -> send . privmsg c $ "I'm sorry " <> n <> ", I'm afraid I can't do that."
-              User    n   -> send . query   n $ "I'm sorry " <> n <> ", I'm afraid I can't do that."
+              Channel c n -> send . Privmsg c . Right $ "I'm sorry " <> n <> ", I'm afraid I can't do that."
+              User    n   -> send . Privmsg n . Right $ "I'm sorry " <> n <> ", I'm afraid I can't do that."
               _ -> return ()
 
 -- *Registering commands
@@ -163,7 +162,7 @@ registerCommand :: MonadIO m
                 -- ^The command name
                 -> Maybe PermissionLevel
                 -- ^The minimum required permission level
-                -> ([Text] -> IRCState -> Event -> Bot (IRC ()))
+                -> ([Text] -> IRCState -> UnicodeEvent -> Bot (IRC ()))
                 -- ^The command handler
                 -> m ()
 registerCommand state cmd perm f = registerCommand' state cmd CommandDef
@@ -186,7 +185,7 @@ setPrefix :: MonadIO m => CommandState -> Text -> m ()
 setPrefix state prefix = liftIO . atomically $ writeTVar (_commandPrefix state) prefix
 
 -- |Change the command prefix for a specific channel.
-setChannelPrefix :: MonadIO m => CommandState -> HostName -> Text -> Text -> m ()
+setChannelPrefix :: MonadIO m => CommandState -> ByteString -> Text -> Text -> m ()
 setChannelPrefix state network channel prefix = liftIO . atomically $ do
   let tvarCP = _channelPrefixes state
 
@@ -194,7 +193,7 @@ setChannelPrefix state network channel prefix = liftIO . atomically $ do
   writeTVar tvarCP $ ((network, channel), prefix) : filter ((/=(network, channel)) . fst) prefixes
 
 -- |Remove the command prefix for a specific channel.
-unsetChannelPrefix :: MonadIO m => CommandState -> HostName -> Text -> m ()
+unsetChannelPrefix :: MonadIO m => CommandState -> ByteString -> Text -> m ()
 unsetChannelPrefix state network channel = liftIO . atomically $ do
   let tvarCP = _channelPrefixes state
 

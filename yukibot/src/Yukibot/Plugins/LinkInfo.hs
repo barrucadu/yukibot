@@ -21,7 +21,7 @@ import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
 import Network.IRC.IDTE           (reply)
 import Network.URI                (URI, parseURI)
-import Network.IRC.IDTE.Types     (Event(..), EventType(EPrivmsg), IRC, IrcMessage(..), IRCState)
+import Network.IRC.IDTE.Types     (Event(..), EventType(EPrivmsg), IRC, Message(..), UnicodeEvent, IRCState)
 import Yukibot.Plugins.LinkInfo.Common
 import Yukibot.Utils              (showUri)
 
@@ -44,9 +44,9 @@ eventHandler cfg = AsakuraEventHandler
 -- TODO: Don't show titles where URL is too similar.
 --
 -- TODO: Steal special titles from Mathison.
-eventFunc :: LinkInfoCfg -> IRCState -> Event -> Bot (IRC ())
+eventFunc :: LinkInfoCfg -> IRCState -> UnicodeEvent -> Bot (IRC ())
 eventFunc cfg _ ev = return $ do
-  let Privmsg msg = _message ev
+  let Privmsg _ (Right msg) = _message ev
   let urls = mapMaybe toUri . T.words $ msg
 
   responses <- take (_numLinks cfg) . catMaybes . zipWith showTitle urls <$> mapM (fetchLinkInfo cfg) urls

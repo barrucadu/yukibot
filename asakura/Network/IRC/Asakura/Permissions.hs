@@ -18,10 +18,10 @@ module Network.IRC.Asakura.Permissions
 import Control.Applicative    ((<$>))
 import Control.Concurrent.STM (STM, atomically, readTVar, writeTVar)
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.ByteString        (ByteString)
 import Data.List              (sort)
 import Data.Maybe             (catMaybes, listToMaybe)
 import Data.Text              (Text)
-import Network                (HostName)
 import Network.IRC.Asakura.Permissions.State
 
 -- *Checking permissions
@@ -32,7 +32,7 @@ getPermission :: MonadIO m
               -- ^The state
               -> Text
               -- ^The nick
-              -> HostName
+              -> ByteString
               -- ^The network
               -> Maybe Text
               -- ^The channel (if relevent)
@@ -46,7 +46,7 @@ hasPermission :: MonadIO m
               -- ^The state
               -> Text
               -- ^The nick
-              -> HostName
+              -> ByteString
               -- ^The network
               -> Maybe Text
               -- ^The channel (if relevent)
@@ -58,7 +58,7 @@ hasPermission state nick network channel req = liftIO . atomically $ do
   return . maybe False (>=req) $ perm
   
 -- |Get the permission level of a user.
-getPermissionByUser :: PermissionState -> Text -> HostName -> Maybe Text -> STM (Maybe PermissionLevel)
+getPermissionByUser :: PermissionState -> Text -> ByteString -> Maybe Text -> STM (Maybe PermissionLevel)
 getPermissionByUser state nick net Nothing     = getPermissionByDef state $ PNet nick net
 getPermissionByUser state nick net (Just chan) = do
   chanperm <- getPermissionByDef state $ PChan nick net chan
@@ -79,7 +79,7 @@ setNetworkPermission :: MonadIO m
                      -- ^The state
                      -> Text
                      -- ^The nick
-                     -> HostName
+                     -> ByteString
                      -- ^The network
                      -> PermissionLevel
                      -- ^The new permission level
@@ -93,7 +93,7 @@ setChannelPermission :: MonadIO m
                      -- ^The state
                      -> Text
                      -- ^The nick
-                     -> HostName
+                     -> ByteString
                      -- ^The network
                      -> Text
                      -- ^The channel name
@@ -109,7 +109,7 @@ delNetworkPermission :: MonadIO m
                      -- ^The state
                      -> Text
                      -- ^The nick
-                     -> HostName
+                     -> ByteString
                      -- ^The network
                      -> m ()
 delNetworkPermission state nick network = liftIO . atomically $ rmPermission state (PNet nick network)
@@ -121,7 +121,7 @@ delChannelPermission :: MonadIO m
                      -- ^The state
                      -> Text
                      -- ^The nick
-                     -> HostName
+                     -> ByteString
                      -- ^The network
                      -> Text
                      -- ^The channel name

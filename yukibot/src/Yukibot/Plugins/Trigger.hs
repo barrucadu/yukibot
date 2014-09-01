@@ -23,6 +23,8 @@ import Control.Lens               ((&), (^.), (.~), (%~), at, non)
 import Control.Monad              (liftM, when)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Data.Aeson                 (FromJSON(..), ToJSON(..), Value(..), (.=), (.:), (.:?), (.!=), object)
+import Data.ByteString            (ByteString)
+import Data.ByteString.Char8      (unpack)
 import Data.Default.Class         (Default(..))
 import Data.Map                   (Map)
 import Data.Maybe                 (fromMaybe)
@@ -31,7 +33,13 @@ import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
 import Network.IRC.Asakura.State  (Snapshot(..), Rollback(..))
 import Network.IRC.IDTE           (reply)
-import Network.IRC.IDTE.Types     (ConnectionConfig(..), Event(..), EventType(EPrivmsg), IRC, IrcMessage(Privmsg), IRCState, Source(..), connectionConfig)
+import Network.IRC.IDTE.Types     ( ConnectionConfig(..)
+                                  , Event(..), EventType(EPrivmsg)
+                                  , IRC, IRCState
+                                  , Message(Privmsg)
+                                  , UnicodeEvent
+                                  , Source(..)
+                                  , connectionConfig)
 import System.Random              (randomIO)
 
 import qualified Data.Map  as M
@@ -100,12 +108,12 @@ eventHandler ts = AsakuraEventHandler
                     , _appliesDef  = runAlways
                     }
 
-eventFunc :: TriggerState -> IRCState -> Event -> Bot (IRC ())
+eventFunc :: TriggerState -> IRCState -> UnicodeEvent -> Bot (IRC ())
 eventFunc ts _ ev = return $ do
-  let Privmsg msg = _message ev
+  let Privmsg _ (Right msg) = _message ev
   network <- _server <$> connectionConfig
   let channel = case _source ev of
-                  Channel _ c -> Just c
+                  Channel c _ -> Just c
                   _           -> Nothing
 
   triggers <- liftIO . atomically . readTVar . _triggers $ ts
@@ -116,10 +124,10 @@ eventFunc ts _ ev = return $ do
     Just resp -> respond ev resp network channel
     Nothing   -> return ()
 
-respond :: Event -> Response -> String -> Maybe Text -> IRC ()
+respond :: UnicodeEvent -> Response -> ByteString -> Maybe Text -> IRC ()
 respond ev r network channel = do
   let blacklisted = case channel of
-                      Just chan -> chan `elem` (_blacklist r ^. at network . non [])
+                      Just chan -> chan `elem` (_blacklist r ^. at (unpack network) . non [])
                       Nothing   -> False
 
   roll <- liftIO randomIO
@@ -148,7 +156,7 @@ removeTrigger ts trig = liftIO . atomically $ do
   writeTVar tvarT triggers'
 
 -- |Blacklist a trigger in a given channel
-blacklist :: MonadIO m => TriggerState -> Text -> String -> Text -> m ()
+blacklist :: MonadIO m => TriggerState -> Text -> ByteString -> Text -> m ()
 blacklist ts trig network channel = liftIO . atomically $ do
   let tvarT = _triggers ts
   triggers <- readTVar tvarT
@@ -157,12 +165,12 @@ blacklist ts trig network channel = liftIO . atomically $ do
   writeTVar tvarT triggers'
 
   where addBL r = TR { _response    = _response r
-                     , _blacklist   = _blacklist r & at network . non [] %~ (channel:)
+                     , _blacklist   = _blacklist r & at (unpack network) . non [] %~ (channel:)
                      , _probability = _probability r
                      }
 
 -- |Remove a channel from a trigger's blacklist
-whitelist :: MonadIO m => TriggerState -> Text -> String -> Text -> m ()
+whitelist :: MonadIO m => TriggerState -> Text -> ByteString -> Text -> m ()
 whitelist ts trig network channel = liftIO . atomically $ do
   let tvarT = _triggers ts
   triggers <- readTVar tvarT
@@ -171,7 +179,7 @@ whitelist ts trig network channel = liftIO . atomically $ do
   writeTVar tvarT triggers'
 
   where delBL r = TR { _response    = _response r
-                     , _blacklist   = _blacklist r & at network %~ unblack
+                     , _blacklist   = _blacklist r & at (unpack network) %~ unblack
                      , _probability = _probability r
                      }
         unblack chans = case filter (/=channel) $ fromMaybe [] chans of

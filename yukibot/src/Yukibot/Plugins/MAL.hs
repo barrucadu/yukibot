@@ -20,7 +20,7 @@ import Data.Monoid               ((<>))
 import Data.Text                 (Text, pack, unpack, intercalate)
 import Network.IRC.Asakura.Types (Bot)
 import Network.IRC.IDTE          (reply)
-import Network.IRC.IDTE.Types    (IRC, IRCState, Event(..))
+import Network.IRC.IDTE.Types    (IRC, IRCState, UnicodeEvent)
 import Text.XML.HXT.Core
 import Network.URI               (escapeURIString, isAllowedInURI)
 import Yukibot.Utils             (fetchHtmlWithCreds, makeUri)
@@ -55,7 +55,7 @@ instance Default MALCfg where
 
 -- |Interpret everything after the command as an anime search term,
 -- and query MAL for it.
-malCommand :: MALCfg -> [Text] -> IRCState -> Event -> Bot (IRC ())
+malCommand :: MALCfg -> [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
 malCommand mc args _ ev = return $ do
   let term = intercalate "+" args
   res <- malQuery mc term

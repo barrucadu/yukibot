@@ -16,8 +16,10 @@ import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
 import Network.IRC.IDTE           (reply)
 import Network.IRC.IDTE.Types     ( ConnectionConfig(_server)
                                   , Event(..), EventType(EPrivmsg)
-                                  , IRC, IrcMessage(..), IRCState
+                                  , IRC, IRCState
+                                  , Message(..)
                                   , Source(Channel)
+                                  , UnicodeEvent
                                   , connectionConfig)
 import Yukibot.Plugins.Memory     (MemoryState, getFactValue, setFactValues)
 
@@ -32,10 +34,10 @@ eventHandler ms = AsakuraEventHandler
                     , _appliesDef  = const $ return False
                     }
 
-eventFunc :: MemoryState -> IRCState -> Event -> Bot (IRC ())
+eventFunc :: MemoryState -> IRCState -> UnicodeEvent -> Bot (IRC ())
 eventFunc ms _ ev = return $ do
-  let Channel nick channel = _source ev
-  let Privmsg msg          = _message ev
+  let Channel channel nick  = _source ev
+  let Privmsg _ (Right msg) = _message ev
 
   network <- _server <$> connectionConfig
 
@@ -43,10 +45,10 @@ eventFunc ms _ ev = return $ do
 
 -- *Command
 
-command :: MemoryState -> [Text] -> IRCState -> Event -> Bot (IRC ())
+command :: MemoryState -> [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
 command ms (nick:_) _ ev = return $ do
   let channel = case _source ev of
-                  Channel _ c -> Just c
+                  Channel c _ -> Just c
                   _           -> Nothing
 
   network <- _server <$> connectionConfig

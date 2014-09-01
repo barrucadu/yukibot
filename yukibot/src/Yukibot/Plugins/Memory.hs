@@ -22,12 +22,15 @@ module Yukibot.Plugins.Memory
     , simpleGetCommand
     ) where
 
+import Control.Arrow             (first)
 import Control.Applicative       ((<$>))
 import Control.Concurrent.STM    (TVar, atomically, newTVar, readTVar, writeTVar)
 import Control.Lens              ((&), (^.), (%~), at, non)
 import Control.Monad             (liftM)
 import Control.Monad.IO.Class    (MonadIO, liftIO)
 import Data.Aeson                (FromJSON(..), ToJSON(..))
+import Data.ByteString           (ByteString)
+import Data.ByteString.Char8     (pack, unpack)
 import Data.Default.Class        (Default(..))
 import Data.Map                  (Map)
 import Data.Maybe                (fromMaybe, listToMaybe)
@@ -36,7 +39,7 @@ import Data.Text                 (Text)
 import Network.IRC.Asakura.State (Snapshot(..), Rollback(..))
 import Network.IRC.Asakura.Types (Bot)
 import Network.IRC.IDTE          (reply)
-import Network.IRC.IDTE.Types    (ConnectionConfig(..), Event(..), Source(..), IRCState, IRC, connectionConfig)
+import Network.IRC.IDTE.Types    (ConnectionConfig(..), Event(..), Source(..), UnicodeEvent, IRCState, IRC, connectionConfig)
 
 import qualified Data.Map  as M
 import qualified Data.Text as T
@@ -45,13 +48,13 @@ import qualified Data.Text as T
 
 -- |Facts about users. A fact belongs to a (network, nick), has a
 -- name, and may have a number of values.
-type FactStore = Map String (Map Text (Map Text [Text]))
+type FactStore a = Map a (Map Text (Map Text [Text]))
 
-newtype MemoryState = MS { _facts :: TVar FactStore }
+newtype MemoryState = MS { _facts :: TVar (FactStore ByteString) }
 
 -- *Snapshotting
 
-newtype MemoryStateSnapshot = MSS { _msFacts :: FactStore }
+newtype MemoryStateSnapshot = MSS { _msFacts :: FactStore String }
 
 instance Default MemoryStateSnapshot where
     def = MSS M.empty
@@ -63,20 +66,22 @@ instance FromJSON MemoryStateSnapshot where
     parseJSON v = MSS <$> parseJSON v
 
 instance Snapshot MemoryState MemoryStateSnapshot where
-    snapshotSTM ms = MSS <$> readTVar (_facts ms)
+    snapshotSTM ms = MSS . toStr <$> readTVar (_facts ms)
+        where toStr = M.fromList . map (first unpack) . M.toList
 
 instance Rollback MemoryStateSnapshot MemoryState where
-    rollbackSTM mss = MS <$> newTVar (_msFacts mss)
+    rollbackSTM mss = MS <$> newTVar (fromStr $ _msFacts mss)
+        where fromStr = M.fromList . map (first pack) . M.toList
 
 -- *Querying
 
 -- |Get the first value for a fact associated with a user.
-getFactValue :: MonadIO m => MemoryState -> String -> Text -> Text -> m (Maybe Text)
+getFactValue :: MonadIO m => MemoryState -> ByteString -> Text -> Text -> m (Maybe Text)
 getFactValue ms network nick fact = liftM listToMaybe facts
     where facts = getFactValues ms network nick fact
 
 -- |Get all values for a fact associated with a nick.
-getFactValues :: MonadIO m => MemoryState -> String -> Text -> Text -> m [Text]
+getFactValues :: MonadIO m => MemoryState -> ByteString -> Text -> Text -> m [Text]
 getFactValues ms network nick fact = liftM (concatMap snd . filter relevent) facts
     where facts    = getFacts ms network nick
           relevent = (==fact) . fst
@@ -84,7 +89,7 @@ getFactValues ms network nick fact = liftM (concatMap snd . filter relevent) fac
 -- |Get all facts associated with a nick. There is no meaningful
 -- distinction between a user not having any facts, and a user having
 -- an empty list of facts, so this doesn't return a Maybe.
-getFacts :: MonadIO m => MemoryState -> String -> Text -> m [(Text, [Text])]
+getFacts :: MonadIO m => MemoryState -> ByteString -> Text -> m [(Text, [Text])]
 getFacts ms network nick = liftIO . atomically $ do
   facts <- readTVar $ _facts ms
   return . M.toList $ facts ^. at network . non M.empty . at nick . non M.empty
@@ -93,26 +98,26 @@ getFacts ms network nick = liftIO . atomically $ do
 
 -- |Add a fact value to a user. If the fact did not exist, it will be
 -- created.
-addFactValue :: MonadIO m => MemoryState -> String -> Text -> Text -> Text -> m ()
+addFactValue :: MonadIO m => MemoryState -> ByteString -> Text -> Text -> Text -> m ()
 addFactValue ms network nick fact value = alterFacts ms (Just . (value:)) network nick fact
 
 -- |Replace the fact values associated with a user. If the fact did
 -- not exist, it will be created.
-setFactValues :: MonadIO m => MemoryState -> String -> Text -> Text -> [Text] -> m ()
+setFactValues :: MonadIO m => MemoryState -> ByteString -> Text -> Text -> [Text] -> m ()
 setFactValues ms network nick fact values = alterFacts ms (Just . const values) network nick fact
 
 -- |Delete a fact associated with a user. If the fact did not exist,
 -- this is a no-op.
-delFact :: MonadIO m => MemoryState -> String -> Text -> Text -> m ()
+delFact :: MonadIO m => MemoryState -> ByteString -> Text -> Text -> m ()
 delFact ms = alterFacts ms $ const Nothing
 
 -- |Alter the fact values of a user by a function.
-alterFacts :: MonadIO m => MemoryState -> ([Text] -> Maybe [Text]) -> String -> Text -> Text -> m ()
+alterFacts :: MonadIO m => MemoryState -> ([Text] -> Maybe [Text]) -> ByteString -> Text -> Text -> m ()
 alterFacts ms f network nick fact = liftIO . atomically $ do
   facts <- readTVar $ _facts ms
   writeTVar (_facts ms) $ alterFacts' facts f network nick fact
 
-alterFacts' :: FactStore -> ([Text] -> Maybe [Text]) -> String -> Text -> Text -> FactStore
+alterFacts' :: Ord a => FactStore a -> ([Text] -> Maybe [Text]) -> a -> Text -> Text -> FactStore a
 alterFacts' fs f network nick fact = fs & at network . non M.empty . at nick . non M.empty . at fact %~ f'
     where f' = f . fromMaybe []
 
@@ -120,9 +125,9 @@ alterFacts' fs f network nick fact = fs & at network . non M.empty . at nick . n
 
 -- |A fact store tied to one particular fact.
 data SimpleFactStore = SimpleFactStore
-    { getSimpleValue :: String -> Text -> IO (Maybe Text)
+    { getSimpleValue :: ByteString -> Text -> IO (Maybe Text)
     -- ^Get the value of the fact
-    , setSimpleValue :: String -> Text -> Text -> IO ()
+    , setSimpleValue :: ByteString -> Text -> Text -> IO ()
     -- ^Set the value of the fact
     }
 
@@ -137,12 +142,12 @@ simpleFactStore ms fact = SimpleFactStore
 -- the named user (or the suer themselves, if no nick was given).
 --
 -- syntax: <prefix><command name> [nick]
-simpleGetCommand :: SimpleFactStore -> [Text] -> IRCState -> Event -> Bot (IRC ())
+simpleGetCommand :: SimpleFactStore -> [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
 simpleGetCommand sfs args _ ev = return $ do
   let nick = case args of
                (n:_) -> n
                _ -> case _source ev of
-                     Channel n _ -> n
+                     Channel _ n -> n
                      User n      -> n
                      _           -> "" -- Should never get here
 
@@ -155,10 +160,10 @@ simpleGetCommand sfs args _ ev = return $ do
 -- |Allow users to set the fact value on themselves.
 --
 -- Syntax: <prefix><command name> value
-simpleSetCommand :: SimpleFactStore -> [Text] -> IRCState -> Event -> Bot (IRC ())
+simpleSetCommand :: SimpleFactStore -> [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
 simpleSetCommand sfs args _ ev = return $ do
   let nick = case _source ev of
-               Channel n _ -> n
+               Channel _ n -> n
                User n      -> n
                _           -> "" -- Should never get here
 

@@ -8,11 +8,12 @@ module Network.IRC.Asakura.Commands.State where
 import Control.Applicative             ((<$>), (<*>))
 import Control.Concurrent.STM          (TVar, newTVar, readTVar)
 import Data.Aeson                      (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
+import Data.ByteString                 (ByteString)
+import Data.ByteString.Char8           (pack, unpack)
 import Data.Default.Class              (Default(..))
 import Data.Map                        (Map)
 import Data.Text                       (Text)
-import Network                         (HostName)
-import Network.IRC.IDTE                (Event, IRC, IRCState)
+import Network.IRC.IDTE                (UnicodeEvent, IRC, IRCState)
 import Network.IRC.Asakura.Permissions (PermissionLevel, PermissionState)
 import Network.IRC.Asakura.State
 import Network.IRC.Asakura.Utils       (collect)
@@ -29,7 +30,7 @@ data CommandState = CommandState
     -- ^ A substring which must, if the bot was not addressed
     -- directly, preceed the command name in order for it to be a
     -- match.
-    , _channelPrefixes :: TVar [((HostName, Text), Text)]
+    , _channelPrefixes :: TVar [((ByteString, Text), Text)]
     -- ^Channel-specific command prefixes, which will be used instead
     -- of the generic prefix if present.
     , _commandList     :: TVar [(Text, CommandDef)]
@@ -42,7 +43,7 @@ data CommandState = CommandState
 data CommandDef = CommandDef
     { _permission :: Maybe PermissionLevel
     -- ^The minimum required permission level, if set
-    , _action     :: [Text] -> IRCState -> Event -> Bot (IRC ())
+    , _action     :: [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
     -- ^The function to run on a match. This is like a regular event
     -- handler, except it takes the space-separated list of arguments
     -- to the command as the first parameter.
@@ -54,7 +55,7 @@ data CommandDef = CommandDef
 -- prefixes.
 data CommandStateSnapshot = CommandStateSnapshot
     { _ssDefPrefix    :: Text
-    , _ssChanPrefixes :: Map HostName (Map Text Text)
+    , _ssChanPrefixes :: Map String (Map Text Text)
     }
 
 instance Default CommandStateSnapshot where
@@ -87,7 +88,7 @@ instance Snapshot CommandState CommandStateSnapshot where
 
       where toPrefixTree = fmap M.fromList . M.fromList . collect . map flipTuple
 
-            flipTuple ((host, chan), pref) = (host, (chan, pref))
+            flipTuple ((host, chan), pref) = (unpack host, (chan, pref))
 
 instance Rollback CommandStateSnapshot (PermissionState -> CommandState) where
     rollbackSTM ss = do
@@ -104,4 +105,4 @@ instance Rollback CommandStateSnapshot (PermissionState -> CommandState) where
 
             fromNets (host, chans) = map (fromChans host) chans
 
-            fromChans host (chan, pref) = ((host, chan), pref)
+            fromChans host (chan, pref) = ((pack host, chan), pref)
