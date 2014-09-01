@@ -1,115 +1,69 @@
 # Yukibot
 
-Yukibot is an IRC bot for the ##compsoc-uk-anime channel on Freenode,
-developed as three components:
-
-## Components
-
-### IRC Client Library: Integrated Data Thought Entity (IDTE)
-
-Manages a connection to a single IRC network. We want to keep this
-simple and have nothing included simply because we intend to make a
-bot. This should be able to stand on its own.
-
- - Handles connecting to a server, optionally with SSL.
- - Handles decoding messages into a nice sum type.
- - Users can register "event handlers" which are fired on receipt of
-   messages.
- - Event handlers get a record containing all the IRC state +
-   event-specific state.
- - Provides primitives for sending messages (both raw and sum-typey).
- - Handles things like CTCPs and flood prevention behind-the-scenes.
-
-### IRC Bot Library: Asakura
-
-This brings in the core functionality of an IRC bot, but as yet
-doesn't include anything specific to *our* bot. Furthermore, we want
-to implement as few as possible new 'primitives', keeping this layer
-simple and flexible.
-
-We may also want to include a few simple commands as examples. Perhaps
-a !seen (as it demonstrates state), and an !echo (as a minimal working
-example).
-
- - Abstracts over connecting to multiple networks.
-   - Provide a new "register global event handler" function.
-   - Provide a list of event handlers which get registered per-network
-     upon connection.
-
- - Manages per-network and per-channel configuration.
-   - Channel/Network admins [see permissions plugin].
-   - Per-network nick.
-   - Per-channel event handlers.
-
- - A "Command Runner" module
-   - Provides a event handler for PRIVMSG which matches the command
-     prefix and runs the registered command.
-   - In a /query, no command prefix is needed.
-   - Addressing the bot by nick is the same as using a command prefix.
-   - Provides a "register command" function.
-
- - A "Permisions" module
-   - Users are divided into classes: Trusted, Admin, and God.
-   - A user+channel+network can be queried, and resolved to a
-     permission.
-   - Provides a "grant permission" function.
-
- - Adds "commands".
-   - Are event handlers associated with a verb.
-   - Register themselves with the Command Runner.
-   - May specify a minimum permission required to execute the command.
-
- - Abstract over saving and restoring state.
-   - We want shared mutable state, but also to be able to easily save
-     and restore bits of it.
-   - Provide methods to "snapshot" and "rollback" the live state.
-   - Allow "snapshots" to be serialised.
-
-### Yukibot
-
-If we've done Asakura right, this will just be a collection of commands
-and event handlers we register, along with some default configuration.
-
-Things we probably want:
-
- - !summon (to another channel on the same network, and to a new
-   network).
-   - Summoning is refused if to a network where there are no known
-     network admins.
- - !banish (leave a channel, or network).
-   - Banishment is refused if it would result in disconnecting from
-     the last network.
- - Link title expander.
- - 4chan/lainchan/whatever thread finder.
- - MAL / Anime-Planet search.
- - Responding to trigger words with some pre-defined phrase.
- - Markov chain.
- - Anime suggester (boku no pico, anyone?)
- - RSS feed watcher (for fansub releases)
- - Currently airing schedule + groups covering each show
- - Quotes.
-
-When implementing all this stuff, we should try to avoid importing
-things from IDTE (except types, obviously) and just use Boota, to
-reduce coupling and make future change easier.
+Yukibot is ostensibly the IRC bot for the ##compsoc-uk-anime channel
+on Freenode, but is basically my pet project to play with IRC in
+Haskell.
 
 ## Building
 
-This assumes you have a version of Cabal new enough to have
-sandboxes. If you don't, may God have mercy on your soul.
-
-    cabal sandbox init
-    cp cabal.sandbox.config irc-ctcp idte asakura yukibot
-
-You can now build and install individual components by `cd`ing to
-their directory and using `cabal install`, assuming you have installed
-any components they depend upon.
-
-Alternatively, to build the bot and its dependencies in one fell
-swoop,
-
     cd yukibot
     cabal sandbox init
-    cabal sandbox add-source ../asakura ../idte ../irc-ctcp
+    cabal sandbox add-source ../asakura ../idte ../irc-conduit ../irc-ctcp
     cabal install --only-dependencies
     cabal build
+
+## Components
+
+### [irc-ctcp]: CTCP encoding and decoding
+
+ - Follows [this specification][ctcpspec].
+
+ - Doesn't implement "CTCP-level quoting", allowing multiple CTCPs to
+   be embedded in a single PRIVMSG/NOTICE, as no current clients
+   appear to support that.
+
+[irc-ctcp]: https://hackage.haskell.org/package/irc-ctcp
+[ctcpspec]: http://www.irchelp.org/irchelp/rfc/ctcpspec.html
+
+### irc-conduit: IRC message encoding and decoding + networking
+
+ - Provides [conduits][conduit] for translating bytestrings into
+   "events", and "messages" into bytestrings.
+
+ - Provides a sum type for all IRC messages you're likely to want to
+   deal with in a client.
+
+ - Provides two helper functions for connecting to IRC servers
+   directly.
+
+ - Manages flood protection when connecting to a server directly.
+
+[conduit]: https://hackage.haskell.org/package/conduit
+
+### idte: IRC client library
+
+ - Handles a connection to a single IRC server.
+
+ - Manages "event handlers", calling them as appropriate on receipt of
+   messages.
+
+ - Provides default event handlers for some common messages (e.g.,
+   server PINGs).
+
+ - Executes each event handler in its own thread, and uses a message
+   queue to guarantee thread-safe message delivery.
+
+ - Provides a few helper functions for common operations.
+
+### asakura: IRC bot library
+
+ - Handles connecting to a collection of IRC servers.
+
+ - Basic command and permission modules, upon which more complicated
+   constructs can be built.
+
+ - Provides typeclasses for serialisable shared state.
+
+### yukibot: IRC bot
+
+ - See `Yukibot.Plugins` for current functionality.
