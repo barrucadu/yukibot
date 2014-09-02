@@ -1,12 +1,9 @@
 -- |Functions for dealing with a client connected to multiple IRC
 -- networks.
 module Network.IRC.Asakura
-    ( -- *Initialisation
-      createAndRun
-    , createAndRunWithTLS
-    -- *Running bots
-    , start
-    , run
+    ( -- *Blocking
+      block
+    , blockWithState
     -- *Networks
     , addNetwork
     -- *Events
@@ -27,44 +24,22 @@ import Data.Time.Clock            (NominalDiffTime)
 import Network.IRC.Asakura.Events (addDefaultHandlers, addGlobalEventHandler, addGlobalEventHandler', runEverywhere, runAlways)
 import Network.IRC.Asakura.Types
 import Network.IRC.IDTE           (connect, connectWithTLS, defaultIRCConf, start')
-import Network.IRC.IDTE.Types     (ConnectionConfig(..), InstanceConfig(..), newIRCState)
+import Network.IRC.IDTE.Types     (ConnectionConfig(..), InstanceConfig(..), IRCState, newIRCState)
 
--- *Initialisation
-
--- |Create a new bot, connecting to the given initial network. This
--- blocks until all networks are disconnected from.
-createAndRun :: MonadIO m => ByteString -> Int -> NominalDiffTime -> Either Text InstanceConfig -> m ()
-createAndRun host port flood inst = connect host port flood >>= flip runWith inst
-
--- |Like 'createAndRun', but connect with the default TLS configuration
-createAndRunWithTLS :: MonadIO m => ByteString -> Int -> NominalDiffTime -> Either Text InstanceConfig -> m ()
-createAndRunWithTLS host port flood inst = connectWithTLS host port flood >>= flip runWith inst
-
--- |Create and run a bot with the given connection configuration
-runWith :: MonadIO m => ConnectionConfig -> Either Text InstanceConfig -> m ()
-runWith cconf (Left nick)   = start cconf $ defaultIRCConf nick
-runWith cconf (Right iconf) = start cconf iconf
-
--- *Running bots
+-- *Blocking
 
 -- |Start the bot with an initial configuration
-start :: MonadIO m => ConnectionConfig -> InstanceConfig -> m ()
-start cconf iconf = newBotState >>= run cconf iconf
+block :: MonadIO m => m ()
+block = newBotState >>= blockWithState
 
 -- |Run the supplied bot configuration
-run :: MonadIO m => ConnectionConfig -> InstanceConfig -> BotState -> m ()
-run cconf iconf state = liftIO $ runReaderT (runner cconf iconf) state
+blockWithState :: MonadIO m => BotState -> m ()
+blockWithState = liftIO . runReaderT block'
 
--- *Event loop
-
--- |The main event loop of the bot, starting out with connecting to a
--- network.
-runner :: ConnectionConfig -> InstanceConfig -> Bot ()
-runner cconf iconf = do
+-- |Block until all networks have been disconnected from
+block' :: Bot ()
+block' = do
   state <- ask
-
-  -- Add the initial network
-  addNetwork cconf iconf
 
   -- Block until there are no more networks.
   liftIO . atomically $ do
@@ -75,7 +50,7 @@ runner cconf iconf = do
 
 -- |Add an initialised network to the bot: give it the default event
 -- handlers and set up the disconnect handler.
-addNetwork :: ConnectionConfig -> InstanceConfig -> Bot ()
+addNetwork :: ConnectionConfig -> InstanceConfig -> Bot IRCState
 addNetwork cconf iconf = do
   let network = _server cconf
 
@@ -91,6 +66,9 @@ addNetwork cconf iconf = do
 
   -- And add to the list
   liftIO . atomically $ writeTVar (_connections state) [(network, ircstate)]
+
+-- Finally, return the new state
+  return ircstate
 
 -- *Handlers
 

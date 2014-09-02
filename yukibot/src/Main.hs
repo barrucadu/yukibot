@@ -4,7 +4,6 @@ module Main where
 
 import Control.Applicative    ((<$>))
 import Control.Concurrent.STM (atomically, readTVar)
-import Control.Monad          (void)
 import Control.Monad.Trans.Reader (runReaderT)
 import Data.Default.Class     (def)
 import Network.IRC.Asakura
@@ -22,6 +21,7 @@ import qualified Network.IRC.Asakura.Permissions as P
 import qualified Yukibot.Plugins.Blacklist       as BL
 import qualified Yukibot.Plugins.Channels        as CH
 import qualified Yukibot.Plugins.ImgurLinks      as I
+import qualified Yukibot.Plugins.Initialise      as I
 import qualified Yukibot.Plugins.LinkInfo        as L
 import qualified Yukibot.Plugins.LinkInfo.Common as LC
 import qualified Yukibot.Plugins.MAL             as M
@@ -55,7 +55,6 @@ main = do
 -- |Run the bot with a given state.
 runWithState :: FilePath -> YukibotState -> IO ()
 runWithState fp ys = do
-  cconf <- connectWithTLS "irc.freenode.net" 7000 1
   state <- newBotState
 
   let cs  = _commandState   ys
@@ -90,8 +89,14 @@ runWithState fp ys = do
   addGlobalEventHandler' state $ BL.wraps bs "linkinfo" $ L.eventHandler lis
   addGlobalEventHandler' state $ BL.wraps bs "triggers" $ T.eventHandler ts
 
-  -- Start
-  void $ run cconf (defaultIRCConf "yukibot") state
+  -- Connect to networks
+  let is = _initialState ys
+  I.initialiseWithState state is
+
+  -- Block until all networks have been disconnected from
+  blockWithState state
+
+  -- Save the state
   save fp ys
 
 -- |Handle a signal by disconnecting from every IRC network.

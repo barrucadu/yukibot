@@ -18,6 +18,7 @@ import qualified Data.ByteString.Lazy            as B
 import qualified Network.IRC.Asakura.Commands    as C
 import qualified Network.IRC.Asakura.Permissions as P
 import qualified Yukibot.Plugins.Blacklist       as BL
+import qualified Yukibot.Plugins.Initialise      as I
 import qualified Yukibot.Plugins.LinkInfo        as L
 import qualified Yukibot.Plugins.MAL             as M
 import qualified Yukibot.Plugins.Memory          as Me
@@ -34,6 +35,7 @@ data YukibotState = YS
     , _memoryState     :: Me.MemoryState
     , _triggerState    :: T.TriggerState
     , _blacklistState  :: BL.BlacklistState
+    , _initialState    :: I.InitialCfg
     }
 
 -- *Snapshotting
@@ -47,10 +49,11 @@ data YukibotStateSnapshot = YSS
     , _memorySnapshot     :: Me.MemoryStateSnapshot
     , _triggerSnapshot    :: T.TriggerStateSnapshot
     , _blacklistSnapshot  :: BL.BlacklistStateSnapshot
+    , _initialSnapshot    :: I.InitialCfg
     }
 
 instance Default YukibotStateSnapshot where
-    def = YSS def def def def def def def
+    def = YSS def def def def def def def def
 
 instance Snapshot YukibotState YukibotStateSnapshot where
     snapshotSTM ys = do
@@ -67,6 +70,7 @@ instance Snapshot YukibotState YukibotStateSnapshot where
                  , _memorySnapshot     = mss
                  , _triggerSnapshot    = tss
                  , _blacklistSnapshot  = bss
+                 , _initialSnapshot    = _initialState ys
                  }
 
 instance Rollback YukibotStateSnapshot YukibotState where
@@ -84,6 +88,7 @@ instance Rollback YukibotStateSnapshot YukibotState where
                 , _memoryState     = ms
                 , _triggerState    = ts
                 , _blacklistState  = bs
+                , _initialState    = _initialSnapshot yss
                 }
 
 instance ToJSON YukibotStateSnapshot where
@@ -94,6 +99,7 @@ instance ToJSON YukibotStateSnapshot where
                         , "memory"      .= toJSON (_memorySnapshot     yss)
                         , "triggers"    .= toJSON (_triggerSnapshot    yss)
                         , "blacklist"   .= toJSON (_blacklistSnapshot  yss)
+                        , "initial"     .= toJSON (_initialSnapshot    yss)
                         ]
 
 instance FromJSON YukibotStateSnapshot where
@@ -104,6 +110,7 @@ instance FromJSON YukibotStateSnapshot where
                                <*> v .:? "memory"      .!= def
                                <*> v .:? "triggers"    .!= def
                                <*> v .:? "blacklist"   .!= def
+                               <*> v .:? "initial"     .!= def
     parseJSON _ = fail "Expected object"
 
 -- *Initialisation
