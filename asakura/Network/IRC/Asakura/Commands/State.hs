@@ -33,7 +33,7 @@ data CommandState = CommandState
     , _channelPrefixes :: TVar [((ByteString, Text), Text)]
     -- ^Channel-specific command prefixes, which will be used instead
     -- of the generic prefix if present.
-    , _commandList     :: TVar [(Text, CommandDef)]
+    , _commandList     :: TVar [([Text], CommandDef)]
     -- ^List of commands
     , _pstate          :: PermissionState
     -- ^State of the permission system.

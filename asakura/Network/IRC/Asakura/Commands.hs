@@ -12,17 +12,21 @@ module Network.IRC.Asakura.Commands
     -- *Registering commands
     , registerCommand
     , registerCommand'
+    , registerLongCommand
+    , registerLongCommand'
     -- *Miscellaneous
     , setPrefix
     , setChannelPrefix
     , unsetChannelPrefix
     ) where
 
+import Control.Applicative        ((<$>))
 import Control.Concurrent.STM     (atomically, readTVar, writeTVar)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Data.ByteString            (ByteString)
-import Data.Maybe                 (fromMaybe)
+import Data.Maybe                 (fromMaybe, mapMaybe)
 import Data.Monoid                ((<>))
+import Data.List                  (stripPrefix)
 import Data.Text                  (Text, isPrefixOf, splitOn)
 import Network.IRC.Asakura.Commands.State
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
@@ -77,25 +81,27 @@ runCmd state ircstate ev = do
 
   -- Try to find a matching command
   case splitCommand nick ev prefix of
-    Just (cmd, args) -> case lookup cmd commands of
-                         Just cdef -> do
-                           -- Check the permissions, and don't run the
-                           -- command if the user isn't allowed.
-                           allowed <- case _source ev of
-                                       Channel _ n -> isAllowed cdef n (_pstate state) host chan
-                                       User    n   -> isAllowed cdef n (_pstate state) host chan
-                                       _ -> return False
+    Just bits -> case findCommand bits commands of
+                  [(_, args, cdef)] -> do
+                    -- Check the permissions, and don't run the
+                    -- command if the user isn't allowed.
+                    allowed <- case _source ev of
+                                Channel _ n -> isAllowed cdef n (_pstate state) host chan
+                                User    n   -> isAllowed cdef n (_pstate state) host chan
+                                _ -> return False
 
-                           if allowed
-                           then _action cdef args ircstate ev
-                           else return $ berate ev
+                    if allowed
+                    then _action cdef args ircstate ev
+                    else return $ berate ev
 
-                         Nothing -> return $ return ()
+                  [] -> return $ return ()
+
+                  _ -> return $ ambiguous ev
 
     Nothing -> return $ return ()
 
 -- |Strip a command prefix and split it up into parts
-splitCommand :: Text -> UnicodeEvent -> Text -> Maybe (Text, [Text])
+splitCommand :: Text -> UnicodeEvent -> Text -> Maybe [Text]
 splitCommand nick ev prefix = case _source ev of
                                 Channel _ _ -> mapFirst stripPrefix $ prefixes prefix nick
 
@@ -114,15 +120,9 @@ splitCommand nick ev prefix = case _source ev of
           mapFirst _ []     = Nothing
 
           -- Check if the command has a given prefix and, if so, strip
-          -- it off. If the prefix *is* the command, the next argument
-          -- (if present) is the actual command.
-          stripPrefix pref | pref `isPrefixOf` msg = Just . splitCmd . T.strip . T.drop (T.length pref) $ msg
+          -- it off.
+          stripPrefix pref | pref `isPrefixOf` msg = Just . splitOn " " . T.strip . T.drop (T.length pref) $ msg
                            | otherwise = Nothing
-
-          -- Split a trimmed message into (command, args)
-          splitCmd msg' = case splitOn " " msg' of
-                            (cmd:args) -> (cmd, args)
-                            _          -> (msg, [])
 
           -- List of accepted command prefixes.
           prefixes pref nck = [ nck <> ":"
@@ -131,6 +131,11 @@ splitCommand nick ev prefix = case _source ev of
                               , nck
                               , pref
                               ]
+
+-- |Find all commands which could match this instruction.
+findCommand :: [Text] -> [([Text], CommandDef)] -> [([Text], [Text], CommandDef)]
+findCommand msg = mapMaybe matchCmd
+    where matchCmd (cmd, cdef) = flip ((,,) cmd) cdef <$> stripPrefix cmd msg
 
 -- |Check if a user is allowed to run a command
 isAllowed :: MonadIO m => CommandDef -> Text -> PermissionState -> ByteString -> Maybe Text -> m Bool
@@ -146,6 +151,15 @@ berate ev = case _source ev of
               Channel c n -> send . Privmsg c . Right $ "I'm sorry " <> n <> ", I'm afraid I can't do that."
               User    n   -> send . Privmsg n . Right $ "I'm sorry " <> n <> ", I'm afraid I can't do that."
               _ -> return ()
+
+-- |Complain about a command being ambigious.
+--
+-- TODO: Make the response configurable.
+ambiguous :: UnicodeEvent -> IRC ()
+ambiguous ev = case _source ev of
+                 Channel c _ -> send . Privmsg c . Right $ "Ambiguous command: tell off my master."
+                 User    n   -> send . Privmsg n . Right $ "Ambiguous command: tell off my master."
+                 _ -> return ()
 
 -- *Registering commands
 
@@ -165,14 +179,22 @@ registerCommand :: MonadIO m
                 -> ([Text] -> IRCState -> UnicodeEvent -> Bot (IRC ()))
                 -- ^The command handler
                 -> m ()
-registerCommand state cmd perm f = registerCommand' state cmd CommandDef
-                                   { _permission = perm
-                                   , _action     = f
-                                   }
+registerCommand state cmd = registerLongCommand state [cmd]
 
 -- |Register a 'CommandDef' as a command.
 registerCommand' :: MonadIO m => CommandState -> Text -> CommandDef -> m ()
-registerCommand' state cmd cdef = liftIO . atomically $ do
+registerCommand' state cmd = registerLongCommand' state [cmd]
+
+-- |Register a multi-word command.
+registerLongCommand :: MonadIO m => CommandState -> [Text] -> Maybe PermissionLevel -> ([Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())) -> m ()
+registerLongCommand state cmd perm f = registerLongCommand' state cmd CommandDef
+                                         { _permission = perm
+                                         , _action     = f
+                                         }
+
+-- |Register a 'CommandDef' as a multi-word command.
+registerLongCommand' :: MonadIO m => CommandState -> [Text] -> CommandDef -> m ()
+registerLongCommand' state cmd cdef = liftIO . atomically $ do
   let tvarL = _commandList state
 
   commands <- readTVar tvarL

@@ -71,17 +71,17 @@ runWithState fp ys = do
   installHandler sigTERM (Catch $ handler state) Nothing
 
   -- Register commands
-  C.registerCommand cs "join"         (Just $ P.Admin 0) CH.joinCmd
-  C.registerCommand cs "part"         (Just $ P.Admin 0) CH.partCmd
-  C.registerCommand cs "prefix"       (Just $ P.Admin 0) $ CH.setChanPrefix   cs
-  C.registerCommand cs "prefix.unset" (Just $ P.Admin 0) $ CH.unsetChanPrefix cs
-  C.registerCommand cs "blacklist"    (Just $ P.Admin 0) $ BL.blacklistCmd bs
-  C.registerCommand cs "whitelist"    (Just $ P.Admin 0) $ BL.whitelistCmd bs
+  C.registerCommand     cs "join"              (Just $ P.Admin 0) CH.joinCmd
+  C.registerCommand     cs "part"              (Just $ P.Admin 0) CH.partCmd
+  C.registerLongCommand cs ["set",   "prefix"] (Just $ P.Admin 0) $ CH.setChanPrefix   cs
+  C.registerLongCommand cs ["unset", "prefix"] (Just $ P.Admin 0) $ CH.unsetChanPrefix cs
+  C.registerCommand     cs "blacklist"         (Just $ P.Admin 0) $ BL.blacklistCmd bs
+  C.registerCommand     cs "whitelist"         (Just $ P.Admin 0) $ BL.whitelistCmd bs
 
-  C.registerCommand cs "mal"          Nothing $ M.malCommand (_malState ys)
-  C.registerCommand cs "watching"     Nothing $ BL.wrapsCmd bs "watching" $ Me.simpleGetCommand wfs
-  C.registerCommand cs "watching.set" Nothing $ BL.wrapsCmd bs "watching" $ Me.simpleSetCommand wfs
-  C.registerCommand cs "seen"         Nothing $ BL.wrapsCmd bs "seen"     $ S.command ms
+  C.registerCommand     cs "mal"               Nothing $ BL.wrapsCmd bs "mal"      $ M.malCommand (_malState ys)
+  C.registerCommand     cs "watching"          Nothing $ BL.wrapsCmd bs "watching" $ Me.simpleGetCommand wfs
+  C.registerLongCommand cs ["set", "watching"] Nothing $ BL.wrapsCmd bs "watching" $ Me.simpleSetCommand wfs
+  C.registerCommand     cs "seen"              Nothing $ BL.wrapsCmd bs "seen"     $ S.command ms
 
   -- Register event handlers
   addGlobalEventHandler' state $ C.eventRunner cs
