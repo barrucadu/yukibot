@@ -8,22 +8,11 @@ Haskell.
 
     cd yukibot
     cabal sandbox init
-    cabal sandbox add-source ../asakura ../idte ../irc-conduit ../irc-ctcp
+    cabal sandbox add-source ../asakura ../idte ../irc-conduit
     cabal install --only-dependencies
     cabal build
 
 ## Components
-
-### [irc-ctcp]: CTCP encoding and decoding
-
- - Follows [this specification][ctcpspec].
-
- - Doesn't implement "CTCP-level quoting", allowing multiple CTCPs to
-   be embedded in a single PRIVMSG/NOTICE, as no current clients
-   appear to support that.
-
-[irc-ctcp]: https://hackage.haskell.org/package/irc-ctcp
-[ctcpspec]: http://www.irchelp.org/irchelp/rfc/ctcpspec.html
 
 ### irc-conduit: IRC message encoding and decoding + networking
 
