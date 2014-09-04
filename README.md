@@ -4,6 +4,11 @@ Yukibot is ostensibly the IRC bot for the ##compsoc-uk-anime channel
 on Freenode, but is basically my pet project to play with IRC in
 Haskell.
 
+Note: this relies on the currently un-hackaged [irc-conduit][], which
+is pulled in at the moment as a git submodule.
+
+[irc-conduit]: https://github.com/barrucadu/irc-conduit
+
 ## Building
 
     cd yukibot
@@ -13,21 +18,6 @@ Haskell.
     cabal build
 
 ## Components
-
-### irc-conduit: IRC message encoding and decoding + networking
-
- - Provides [conduits][conduit] for translating bytestrings into
-   "events", and "messages" into bytestrings.
-
- - Provides a sum type for all IRC messages you're likely to want to
-   deal with in a client.
-
- - Provides two helper functions for connecting to IRC servers
-   directly.
-
- - Manages flood protection when connecting to a server directly.
-
-[conduit]: https://hackage.haskell.org/package/conduit
 
 ### idte: IRC client library
 
