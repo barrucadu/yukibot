@@ -33,8 +33,8 @@ import Data.Maybe                (fromMaybe)
 import Data.Text                 (Text, isPrefixOf)
 import Network.IRC.Asakura.State (Snapshot(..), Rollback(..))
 import Network.IRC.Asakura.Types (AsakuraEventHandler(..), Bot)
-import Network.IRC.IDTE          (reply)
-import Network.IRC.IDTE.Types    (ConnectionConfig(_server), Event(..), IRC, IRCState, Source(..), UnicodeEvent, connectionConfig, getConnectionConfig)
+import Network.IRC.Client        (reply)
+import Network.IRC.Client.Types  (ConnectionConfig(_server), Event(..), IRC, IRCState, Source(..), UnicodeEvent, connectionConfig, getConnectionConfig)
 
 import qualified Data.Map as M
 

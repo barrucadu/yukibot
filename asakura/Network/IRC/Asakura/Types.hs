@@ -6,7 +6,7 @@ import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.ByteString            (ByteString)
 import Data.Text                  (Text)
-import Network.IRC.IDTE.Types     (EventType, IRC, IRCState, UnicodeEvent)
+import Network.IRC.Client.Types   (EventType, IRC, IRCState, UnicodeEvent)
 
 -- *State
 
@@ -36,8 +36,8 @@ newBotState = do
 
 -- *Events
 
--- |An IDTE event handler, lifted to run in the Asakura
--- context. Fields are as in IDTE.
+-- |An irc-client event handler, lifted to run in the Asakura
+-- context. Fields are as in irc-client.
 data AsakuraEventHandler = AsakuraEventHandler
     { _description :: Text
     , _matchType   :: EventType

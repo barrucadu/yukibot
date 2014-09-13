@@ -38,8 +38,8 @@ import Data.Monoid               ((<>))
 import Data.Text                 (Text)
 import Network.IRC.Asakura.State (Snapshot(..), Rollback(..))
 import Network.IRC.Asakura.Types (Bot)
-import Network.IRC.IDTE          (reply)
-import Network.IRC.IDTE.Types    (ConnectionConfig(..), Event(..), Source(..), UnicodeEvent, IRCState, IRC, connectionConfig)
+import Network.IRC.Client        (reply)
+import Network.IRC.Client.Types  (ConnectionConfig(..), Event(..), Source(..), UnicodeEvent, IRCState, IRC, connectionConfig)
 
 import qualified Data.Map  as M
 import qualified Data.Text as T

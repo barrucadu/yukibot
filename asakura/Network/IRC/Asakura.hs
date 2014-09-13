@@ -23,8 +23,8 @@ import Data.Text                  (Text)
 import Data.Time.Clock            (NominalDiffTime)
 import Network.IRC.Asakura.Events (addDefaultHandlers, addGlobalEventHandler, addGlobalEventHandler', runEverywhere, runAlways)
 import Network.IRC.Asakura.Types
-import Network.IRC.IDTE           (connect, connectWithTLS, defaultIRCConf, start')
-import Network.IRC.IDTE.Types     (ConnectionConfig(..), InstanceConfig(..), IRCState, newIRCState)
+import Network.IRC.Client         (connect, connectWithTLS, defaultIRCConf, start')
+import Network.IRC.Client.Types   (ConnectionConfig(..), InstanceConfig(..), IRCState, newIRCState)
 
 -- *Blocking
 

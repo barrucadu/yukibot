@@ -13,7 +13,7 @@ import Data.ByteString.Char8           (pack, unpack)
 import Data.Default.Class              (Default(..))
 import Data.Map                        (Map)
 import Data.Text                       (Text)
-import Network.IRC.IDTE                (UnicodeEvent, IRC, IRCState)
+import Network.IRC.Client              (UnicodeEvent, IRC, IRCState)
 import Network.IRC.Asakura.Permissions (PermissionLevel, PermissionState)
 import Network.IRC.Asakura.State
 import Network.IRC.Asakura.Utils       (collect)

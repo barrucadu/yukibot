@@ -21,8 +21,8 @@ import Data.Monoid                ((<>))
 import Data.Text                  (Text)
 import Network.IRC.Asakura        (addNetwork)
 import Network.IRC.Asakura.Types  (Bot, BotState)
-import Network.IRC.IDTE           (Message(Numeric, Privmsg, Join), connect, connectWithTLS, defaultIRCConf, send)
-import Network.IRC.IDTE.Types     (EventType(ENumeric), Event(_message), EventHandler(..), InstanceConfig(_eventHandlers))
+import Network.IRC.Client         (Message(Numeric, Privmsg, Join), connect, connectWithTLS, defaultIRCConf, send)
+import Network.IRC.Client.Types   (EventType(ENumeric), Event(_message), EventHandler(..), InstanceConfig(_eventHandlers))
 
 import qualified Data.Map as M
 

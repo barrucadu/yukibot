@@ -9,7 +9,7 @@ import Data.Default.Class     (def)
 import Network.IRC.Asakura
 import Network.IRC.Asakura.State (rollback)
 import Network.IRC.Asakura.Types
-import Network.IRC.IDTE
+import Network.IRC.Client
 import System.Directory       (doesFileExist)
 import System.Environment     (getArgs)
 import System.Exit            (exitFailure)

@@ -16,9 +16,9 @@ import Control.Monad.Trans.Reader (ask, runReaderT)
 import Data.ByteString            (ByteString)
 import Data.Text                  (Text)
 import Network.IRC.Asakura.Types
-import Network.IRC.IDTE.Types     (Event(..), EventHandler, ConnectionConfig(..), InstanceConfig(..), IRCState, Source(..))
+import Network.IRC.Client.Types   (Event(..), EventHandler, ConnectionConfig(..), InstanceConfig(..), IRCState, Source(..))
 
-import qualified Network.IRC.IDTE.Types as IT
+import qualified Network.IRC.Client.Types as IT
 
 -- *Adding event handlers
 
@@ -65,7 +65,7 @@ addLocalEventHandler h state = do
   let iconf' = iconf { _eventHandlers = h state : _eventHandlers iconf }
   writeTVar tvarIC iconf'
 
--- |Demote an Asakura event handler to an IDTE event handler.
+-- |Demote an Asakura event handler to an irc-client event handler.
 demote :: BotState -> AsakuraEventHandler -> IRCState -> EventHandler
 demote state h ircstate = IT.EventHandler
                             { IT._description = _description h

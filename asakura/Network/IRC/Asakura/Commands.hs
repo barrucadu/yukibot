@@ -32,8 +32,8 @@ import Network.IRC.Asakura.Commands.State
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Permissions (PermissionLevel, PermissionState, hasPermission)
 import Network.IRC.Asakura.Types
-import Network.IRC.IDTE           (send)
-import Network.IRC.IDTE.Types     ( ConnectionConfig(..)
+import Network.IRC.Client         (send)
+import Network.IRC.Client.Types   ( ConnectionConfig(..)
                                   , Event(..), UnicodeEvent, EventType(..)
                                   , InstanceConfig(..), IRC, IRCState
                                   , Message(..), Source(..)

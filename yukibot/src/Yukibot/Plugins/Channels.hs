@@ -16,8 +16,8 @@ import Control.Applicative          ((<$>))
 import Data.Text                    (Text)
 import Network.IRC.Asakura.Commands (CommandState, setChannelPrefix, unsetChannelPrefix)
 import Network.IRC.Asakura.Types    (Bot)
-import Network.IRC.IDTE             (send, reply)
-import Network.IRC.IDTE.Types       (ConnectionConfig(_server), Event(..), Message(..), IRCState, IRC, Source(..), UnicodeEvent, connectionConfig)
+import Network.IRC.Client           (send, reply)
+import Network.IRC.Client.Types     (ConnectionConfig(_server), Event(..), Message(..), IRCState, IRC, Source(..), UnicodeEvent, connectionConfig)
 
 -- |Join a channel. The first argument is the name of the channel to
 -- join.

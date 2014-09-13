@@ -19,9 +19,9 @@ import Data.Monoid                ((<>))
 import Data.Text                  (Text, pack, unpack, isPrefixOf)
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
-import Network.IRC.IDTE           (reply)
+import Network.IRC.Client         (reply)
+import Network.IRC.Client.Types   (Event(..), EventType(EPrivmsg), IRC, Message(..), UnicodeEvent, IRCState)
 import Network.URI                (URI, parseURI)
-import Network.IRC.IDTE.Types     (Event(..), EventType(EPrivmsg), IRC, Message(..), UnicodeEvent, IRCState)
 import Yukibot.Plugins.LinkInfo.Common
 import Yukibot.Utils              (showUri)
 
