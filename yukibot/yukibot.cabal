@@ -58,6 +58,7 @@ executable yukibot
 
   -- Modules included in this executable, other than Main.
   other-modules:       Yukibot.Plugins.Blacklist
+                     , Yukibot.Plugins.Cellular
                      , Yukibot.Plugins.Channels
                      , Yukibot.Plugins.ImgurLinks
                      , Yukibot.Plugins.Initialise
@@ -79,6 +80,7 @@ executable yukibot
                      , aeson-pretty >=0.7
                      , asakura      >=0.2
                      , bytestring   >=0.10
+                     , comonad      >=4.2
                      , containers   >=0.5
                      , data-default-class >=0.0.1
                      , directory    >=1.2

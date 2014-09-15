@@ -19,6 +19,7 @@ import Yukibot.State
 import qualified Network.IRC.Asakura.Commands    as C
 import qualified Network.IRC.Asakura.Permissions as P
 import qualified Yukibot.Plugins.Blacklist       as BL
+import qualified Yukibot.Plugins.Cellular        as CA
 import qualified Yukibot.Plugins.Channels        as CH
 import qualified Yukibot.Plugins.ImgurLinks      as I
 import qualified Yukibot.Plugins.Initialise      as I
@@ -81,6 +82,7 @@ runWithState fp ys = do
   C.registerCommand     cs "watching"          Nothing $ BL.wrapsCmd bs "watching" $ Me.simpleGetCommand wfs
   C.registerLongCommand cs ["set", "watching"] Nothing $ BL.wrapsCmd bs "watching" $ Me.simpleSetCommand wfs
   C.registerCommand     cs "seen"              Nothing $ BL.wrapsCmd bs "seen"     $ S.command ms
+  C.registerCommand     cs "rule"              Nothing $ BL.wrapsCmd bs "cellular" CA.command
 
   -- Register event handlers
   addGlobalEventHandler' state $ C.eventRunner cs
