@@ -78,7 +78,7 @@ executable yukibot
   build-depends:       base         >=4.7 && <5
                      , aeson        >=0.8
                      , aeson-pretty >=0.7
-                     , asakura      >=0.2
+                     , asakura      >=0.2.5
                      , bytestring   >=0.10
                      , comonad      >=4.2
                      , containers   >=0.5

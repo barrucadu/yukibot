@@ -30,7 +30,6 @@ import Data.List                  (stripPrefix)
 import Data.Text                  (Text, isPrefixOf, splitOn)
 import Network.IRC.Asakura.Commands.State
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
-import Network.IRC.Asakura.Permissions (PermissionLevel, PermissionState, hasPermission)
 import Network.IRC.Asakura.Types
 import Network.IRC.Client         (send)
 import Network.IRC.Client.Types   ( ConnectionConfig(..)
@@ -82,20 +81,8 @@ runCmd state ircstate ev = do
   -- Try to find a matching command
   case splitCommand nick ev prefix of
     Just bits -> case findCommand bits commands of
-                  [(_, args, cdef)] -> do
-                    -- Check the permissions, and don't run the
-                    -- command if the user isn't allowed.
-                    allowed <- case _source ev of
-                                Channel _ n -> isAllowed cdef n (_pstate state) host chan
-                                User    n   -> isAllowed cdef n (_pstate state) host chan
-                                _ -> return False
-
-                    if allowed
-                    then _action cdef args ircstate ev
-                    else return $ berate ev
-
+                  [(_, args, cdef)] -> _action cdef args ircstate ev
                   [] -> return $ return ()
-
                   _ -> return $ ambiguous ev
 
     Nothing -> return $ return ()
@@ -137,21 +124,6 @@ findCommand :: [Text] -> [([Text], CommandDef)] -> [([Text], [Text], CommandDef)
 findCommand msg = mapMaybe matchCmd
     where matchCmd (cmd, cdef) = flip ((,,) cmd) cdef <$> stripPrefix cmd msg
 
--- |Check if a user is allowed to run a command
-isAllowed :: MonadIO m => CommandDef -> Text -> PermissionState -> ByteString -> Maybe Text -> m Bool
-isAllowed cdef nick pstate host chan = case _permission cdef of
-                                         Just req -> hasPermission pstate nick host chan req
-                                         Nothing  -> return True
-
--- |Tell a user off for not having permissions.
---
--- TODO: Make the response configurable.
-berate :: UnicodeEvent -> IRC ()
-berate ev = case _source ev of
-              Channel c n -> send . Privmsg c . Right $ "I'm sorry " <> n <> ", I'm afraid I can't do that."
-              User    n   -> send . Privmsg n . Right $ "I'm sorry " <> n <> ", I'm afraid I can't do that."
-              _ -> return ()
-
 -- |Complain about a command being ambigious.
 --
 -- TODO: Make the response configurable.
@@ -174,8 +146,6 @@ registerCommand :: MonadIO m
                 -- ^The initialised state
                 -> Text
                 -- ^The command name
-                -> Maybe PermissionLevel
-                -- ^The minimum required permission level
                 -> ([Text] -> IRCState -> UnicodeEvent -> Bot (IRC ()))
                 -- ^The command handler
                 -> m ()
@@ -186,11 +156,10 @@ registerCommand' :: MonadIO m => CommandState -> Text -> CommandDef -> m ()
 registerCommand' state cmd = registerLongCommand' state [cmd]
 
 -- |Register a multi-word command.
-registerLongCommand :: MonadIO m => CommandState -> [Text] -> Maybe PermissionLevel -> ([Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())) -> m ()
-registerLongCommand state cmd perm f = registerLongCommand' state cmd CommandDef
-                                         { _permission = perm
-                                         , _action     = f
-                                         }
+registerLongCommand :: MonadIO m => CommandState -> [Text] -> ([Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())) -> m ()
+registerLongCommand state cmd f = registerLongCommand' state cmd CommandDef
+                                  { _action     = f
+                                  }
 
 -- |Register a 'CommandDef' as a multi-word command.
 registerLongCommand' :: MonadIO m => CommandState -> [Text] -> CommandDef -> m ()

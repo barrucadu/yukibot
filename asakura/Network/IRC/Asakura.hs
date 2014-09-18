@@ -19,11 +19,9 @@ import Control.Monad              (unless)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ask, runReaderT)
 import Data.ByteString            (ByteString)
-import Data.Text                  (Text)
-import Data.Time.Clock            (NominalDiffTime)
 import Network.IRC.Asakura.Events (addDefaultHandlers, addGlobalEventHandler, addGlobalEventHandler', runEverywhere, runAlways)
 import Network.IRC.Asakura.Types
-import Network.IRC.Client         (connect, connectWithTLS, defaultIRCConf, start')
+import Network.IRC.Client         (start')
 import Network.IRC.Client.Types   (ConnectionConfig(..), InstanceConfig(..), IRCState, newIRCState)
 
 -- *Blocking

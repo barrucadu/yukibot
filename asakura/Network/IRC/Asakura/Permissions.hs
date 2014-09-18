@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 -- |Per-channel and per-network permission settings.
 module Network.IRC.Asakura.Permissions
     ( -- *Permission levels
@@ -5,6 +7,8 @@ module Network.IRC.Asakura.Permissions
     -- *State
     , PermissionState
     , PermissionStateSnapshot(..)
+    -- *Integration
+    , wrapsCmd
     -- *Checking permissions
     , getPermission
     , hasPermission
@@ -22,7 +26,33 @@ import Data.ByteString        (ByteString)
 import Data.List              (sort)
 import Data.Maybe             (catMaybes, listToMaybe)
 import Data.Text              (Text)
+import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Asakura.Permissions.State
+import Network.IRC.Client     (ConnectionConfig(..), Event(..), Source(..), getConnectionConfig, reply)
+
+-- *Integration
+
+-- |Take as input a command, and produce a new command which will only
+-- run if the user meets the required minimum permission.
+wrapsCmd :: PermissionState -> PermissionLevel -> CommandDef -> CommandDef
+wrapsCmd pstate perm cdef = cdef { _action = wrapped $ _action cdef }
+  where
+    wrapped f args ircstate ev = do
+      allowed <- isAllowed ircstate ev
+
+      if allowed
+      then f args ircstate ev
+      else berate ev
+
+    isAllowed ircstate ev = do
+      let host = _server $ getConnectionConfig ircstate
+
+      case _source ev of
+        Channel c n -> hasPermission pstate n host (Just c) perm
+        User n      -> hasPermission pstate n host Nothing  perm
+        _           -> return False
+
+    berate ev = return . reply ev $ "I'm sorry, I'm afraid I can't do that."
 
 -- *Checking permissions
 

@@ -7,6 +7,7 @@ import Control.Concurrent.STM (atomically, readTVar)
 import Control.Monad.Trans.Reader (runReaderT)
 import Data.Default.Class     (def)
 import Network.IRC.Asakura
+import Network.IRC.Asakura.Commands (CommandDef(..), registerCommand, registerLongCommand, registerCommand', registerLongCommand')
 import Network.IRC.Asakura.State (rollback)
 import Network.IRC.Asakura.Types
 import Network.IRC.Client
@@ -58,10 +59,11 @@ runWithState :: FilePath -> YukibotState -> IO ()
 runWithState fp ys = do
   state <- newBotState
 
-  let cs  = _commandState   ys
-  let bs  = _blacklistState ys
-  let ms  = _memoryState    ys
-  let ts  = _triggerState   ys
+  let ps  = _permissionState ys
+  let cs  = _commandState    ys
+  let bs  = _blacklistState  ys
+  let ms  = _memoryState     ys
+  let ts  = _triggerState    ys
 
   let wfs = Me.simpleFactStore ms "watching"
   let lis = LC.addLinkHandler (_linkinfoState ys) I.licPredicate I.licHandler
@@ -71,18 +73,18 @@ runWithState fp ys = do
   installHandler sigTERM (Catch $ handler state) Nothing
 
   -- Register commands
-  C.registerCommand     cs "join"              (Just $ P.Admin 0) CH.joinCmd
-  C.registerCommand     cs "part"              (Just $ P.Admin 0) CH.partCmd
-  C.registerLongCommand cs ["set",   "prefix"] (Just $ P.Admin 0) $ CH.setChanPrefix   cs
-  C.registerLongCommand cs ["unset", "prefix"] (Just $ P.Admin 0) $ CH.unsetChanPrefix cs
-  C.registerCommand     cs "blacklist"         (Just $ P.Admin 0) $ BL.blacklistCmd bs
-  C.registerCommand     cs "whitelist"         (Just $ P.Admin 0) $ BL.whitelistCmd bs
+  registerCommand'     cs "join"              $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = CH.joinCmd }
+  registerCommand'     cs "part"              $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = CH.partCmd  }
+  registerLongCommand' cs ["set",   "prefix"] $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = CH.setChanPrefix   cs }
+  registerLongCommand' cs ["unset", "prefix"] $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = CH.unsetChanPrefix cs }
+  registerCommand'     cs "blacklist"         $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = BL.blacklistCmd bs }
+  registerCommand'     cs "whitelist"         $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = BL.whitelistCmd bs }
 
-  C.registerCommand     cs "mal"               Nothing $ BL.wrapsCmd bs "mal"      $ M.malCommand (_malState ys)
-  C.registerCommand     cs "watching"          Nothing $ BL.wrapsCmd bs "watching" $ Me.simpleGetCommand wfs
-  C.registerLongCommand cs ["set", "watching"] Nothing $ BL.wrapsCmd bs "watching" $ Me.simpleSetCommand wfs
-  C.registerCommand     cs "seen"              Nothing $ BL.wrapsCmd bs "seen"     $ S.command ms
-  C.registerCommand     cs "rule"              Nothing $ BL.wrapsCmd bs "cellular" CA.command
+  registerCommand     cs "mal"               $ BL.wrapsCmd bs "mal"      $ M.malCommand (_malState ys)
+  registerCommand     cs "watching"          $ BL.wrapsCmd bs "watching" $ Me.simpleGetCommand wfs
+  registerLongCommand cs ["set", "watching"] $ BL.wrapsCmd bs "watching" $ Me.simpleSetCommand wfs
+  registerCommand     cs "seen"              $ BL.wrapsCmd bs "seen"     $ S.command ms
+  registerCommand     cs "rule"              $ BL.wrapsCmd bs "cellular" CA.command
 
   -- Register event handlers
   addGlobalEventHandler' state $ C.eventRunner cs

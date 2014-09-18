@@ -81,7 +81,7 @@ instance Rollback YukibotStateSnapshot YukibotState where
       ts <- rollbackSTM . _triggerSnapshot    $ yss
       bs <- rollbackSTM . _blacklistSnapshot  $ yss
 
-      return YS { _commandState    = cs ps
+      return YS { _commandState    = cs
                 , _permissionState = ps
                 , _linkinfoState   = _linkinfoSnapshot yss
                 , _malState        = _malSnapshot yss
