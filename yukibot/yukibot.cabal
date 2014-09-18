@@ -57,8 +57,7 @@ executable yukibot
                        -fno-warn-unused-do-bind
 
   -- Modules included in this executable, other than Main.
-  other-modules:       Yukibot.Plugins.Blacklist
-                     , Yukibot.Plugins.Cellular
+  other-modules:       Yukibot.Plugins.Cellular
                      , Yukibot.Plugins.Channels
                      , Yukibot.Plugins.ImgurLinks
                      , Yukibot.Plugins.Initialise

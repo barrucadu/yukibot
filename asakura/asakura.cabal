@@ -52,6 +52,7 @@ cabal-version:       >=1.10
 library
   -- Modules exported by the library.
   exposed-modules:     Network.IRC.Asakura
+                     , Network.IRC.Asakura.Blacklist
                      , Network.IRC.Asakura.Commands
                      , Network.IRC.Asakura.Events
                      , Network.IRC.Asakura.Permissions
@@ -62,7 +63,8 @@ library
                      -fno-warn-unused-do-bind
   
   -- Modules included in this library but not exported.
-  other-modules:       Network.IRC.Asakura.Commands.State
+  other-modules:       Network.IRC.Asakura.Blacklist.State
+                     , Network.IRC.Asakura.Commands.State
                      , Network.IRC.Asakura.Permissions.State
                      , Network.IRC.Asakura.Utils
   

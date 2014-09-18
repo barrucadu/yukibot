@@ -7,7 +7,7 @@ import Control.Concurrent.STM (atomically, readTVar)
 import Control.Monad.Trans.Reader (runReaderT)
 import Data.Default.Class     (def)
 import Network.IRC.Asakura
-import Network.IRC.Asakura.Commands (CommandDef(..), registerCommand, registerLongCommand, registerCommand', registerLongCommand')
+import Network.IRC.Asakura.Commands (CommandDef(..), registerCommand', registerLongCommand')
 import Network.IRC.Asakura.State (rollback)
 import Network.IRC.Asakura.Types
 import Network.IRC.Client
@@ -19,7 +19,7 @@ import Yukibot.State
 
 import qualified Network.IRC.Asakura.Commands    as C
 import qualified Network.IRC.Asakura.Permissions as P
-import qualified Yukibot.Plugins.Blacklist       as BL
+import qualified Network.IRC.Asakura.Blacklist   as BL
 import qualified Yukibot.Plugins.Cellular        as CA
 import qualified Yukibot.Plugins.Channels        as CH
 import qualified Yukibot.Plugins.ImgurLinks      as I
@@ -80,11 +80,11 @@ runWithState fp ys = do
   registerCommand'     cs "blacklist"         $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = BL.blacklistCmd bs }
   registerCommand'     cs "whitelist"         $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = BL.whitelistCmd bs }
 
-  registerCommand     cs "mal"               $ BL.wrapsCmd bs "mal"      $ M.malCommand (_malState ys)
-  registerCommand     cs "watching"          $ BL.wrapsCmd bs "watching" $ Me.simpleGetCommand wfs
-  registerLongCommand cs ["set", "watching"] $ BL.wrapsCmd bs "watching" $ Me.simpleSetCommand wfs
-  registerCommand     cs "seen"              $ BL.wrapsCmd bs "seen"     $ S.command ms
-  registerCommand     cs "rule"              $ BL.wrapsCmd bs "cellular" CA.command
+  registerCommand'     cs "mal"               $ BL.wrapsCmd bs "mal"      CommandDef { _action = M.malCommand (_malState ys) }
+  registerCommand'     cs "watching"          $ BL.wrapsCmd bs "watching" CommandDef { _action = Me.simpleGetCommand wfs }
+  registerLongCommand' cs ["set", "watching"] $ BL.wrapsCmd bs "watching" CommandDef { _action = Me.simpleSetCommand wfs }
+  registerCommand'     cs "seen"              $ BL.wrapsCmd bs "seen"     CommandDef { _action = S.command ms }
+  registerCommand'     cs "rule"              $ BL.wrapsCmd bs "cellular" CommandDef { _action = CA.command }
 
   -- Register event handlers
   addGlobalEventHandler' state $ C.eventRunner cs

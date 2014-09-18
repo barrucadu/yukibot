@@ -17,7 +17,7 @@ import System.Directory         (doesFileExist)
 import qualified Data.ByteString.Lazy            as B
 import qualified Network.IRC.Asakura.Commands    as C
 import qualified Network.IRC.Asakura.Permissions as P
-import qualified Yukibot.Plugins.Blacklist       as BL
+import qualified Network.IRC.Asakura.Blacklist   as BL
 import qualified Yukibot.Plugins.Initialise      as I
 import qualified Yukibot.Plugins.LinkInfo        as L
 import qualified Yukibot.Plugins.MAL             as M
