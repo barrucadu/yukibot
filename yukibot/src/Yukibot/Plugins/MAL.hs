@@ -55,9 +55,13 @@ instance Default MALCfg where
 -- |Interpret everything after the command as an anime search term,
 -- and query MAL for it.
 malCommand :: MALCfg -> CommandDef
-malCommand = CommandDef ["mal"] . go
+malCommand mc = CommandDef { _verb   = ["mal"]
+                           , _help   = "<term1>... - search MAL with the given query"
+                           , _action = go
+                           }
+
   where
-    go mc args _ ev = return $ do
+    go args _ ev = return $ do
       let term = intercalate "+" args
       res <- malQuery mc term
 

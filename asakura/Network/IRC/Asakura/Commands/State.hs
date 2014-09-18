@@ -41,6 +41,8 @@ data CommandDef = CommandDef
     { _verb   :: [Text]
     -- ^The name of the command, this is what comes between the prefix
     -- and the arguments.
+    , _help :: Text
+    -- ^Help text for the command.
     , _action :: [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
     -- ^The function to run on a match. This is like a regular event
     -- handler, except it takes the space-separated list of arguments

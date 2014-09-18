@@ -43,11 +43,17 @@ import qualified Data.Map as M
 -- |Usage: "<command> <plugin>" in channel, or "<command> <channel>
 -- <plugin>" in query
 blacklistCmd :: BlacklistState -> CommandDef
-blacklistCmd bs = CommandDef ["blacklist"] $ doCmd (blacklist bs)
+blacklistCmd bs = CommandDef { _verb   = ["blacklist"]
+                             , _help   = "Prevent a named entity from running."
+                             , _action = doCmd (blacklist bs)
+                             }
 
 -- |Same usage as 'blacklistCmd'.
 whitelistCmd :: BlacklistState -> CommandDef
-whitelistCmd bs = CommandDef ["whitelist"] $ doCmd (whitelist bs)
+whitelistCmd bs = CommandDef { _verb   = ["whitelist"]
+                             , _help   = "Remove a named entity from the blacklist."
+                             , _action = doCmd (whitelist bs)
+                             }
 
 doCmd :: (ByteString -> Text -> Text -> IRC ()) -> [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
 doCmd f (x:xs) _ ev = return $ do

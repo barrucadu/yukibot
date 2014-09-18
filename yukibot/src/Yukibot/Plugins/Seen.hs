@@ -46,9 +46,13 @@ eventFunc ms _ ev = return $ do
 -- *Command
 
 command :: MemoryState -> CommandDef
-command = CommandDef ["seen"] . go
+command ms = CommandDef { _verb   = ["seen"]
+                        , _help = "<nick> - Get the last thing said by that nick in this channel."
+                        , _action = go
+                        }
+
   where
-    go ms (nick:_) _ ev = return $ do
+    go (nick:_) _ ev = return $ do
       let channel = case _source ev of
                       Channel c _ -> Just c
                       _           -> Nothing
@@ -64,4 +68,4 @@ command = CommandDef ["seen"] . go
 
         Nothing -> return ()
 
-    go _ [] _ ev = return $ reply ev "You need to give me a nick."
+    go [] _ ev = return $ reply ev "You need to give me a nick."

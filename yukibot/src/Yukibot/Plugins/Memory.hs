@@ -143,9 +143,13 @@ simpleFactStore ms fact = SimpleFactStore
 --
 -- syntax: <prefix><command name> [nick]
 simpleGetCommand :: SimpleFactStore -> CommandDef
-simpleGetCommand = CommandDef ["get"] . go
+simpleGetCommand sfs = CommandDef { _verb   = ["get"]
+                                  , _help   = "<nick> - Look up the value associated with the nick."
+                                  , _action = go
+                                  }
+
   where
-    go sfs args _ ev = return $ do
+    go args _ ev = return $ do
       let nick = case args of
                    (n:_) -> n
                    _ -> case _source ev of
@@ -163,9 +167,13 @@ simpleGetCommand = CommandDef ["get"] . go
 --
 -- Syntax: <prefix><command name> value
 simpleSetCommand :: SimpleFactStore -> CommandDef
-simpleSetCommand = CommandDef ["set"] . go
+simpleSetCommand sfs = CommandDef { _verb   = ["set"]
+                                  , _help   = "<value> - Update the value associated with your nick."
+                                  , _action = go
+                                  }
+
   where
-    go sfs args _ ev = return $ do
+    go args _ ev = return $ do
       let nick = case _source ev of
                    Channel _ n -> n
                    User n      -> n

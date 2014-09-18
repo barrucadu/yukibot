@@ -54,7 +54,11 @@ rulebits rnum = reverse [testBit rnum i | i <- [0..7]]
 -- *Command
 
 command :: CommandDef
-command = CommandDef ["rule"] go
+command = CommandDef { _verb   = ["rule"]
+                     , _help   = "<rule> [[<steps>] <initial>] - run the given cellular automaton."
+                     , _action = go
+                     }
+
   where
     go [rnum] _ ev = return . reply ev $ case fmap rulebits . readMaybe $ unpack rnum of
       Just rbits -> "Rule " <> rnum <> " " <> tobits rbits <> " see " <> url
