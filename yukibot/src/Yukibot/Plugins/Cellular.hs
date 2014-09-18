@@ -8,12 +8,11 @@ import Control.Monad      (guard)
 import Data.Bits          (setBit, testBit)
 import Data.Maybe         (fromMaybe)
 import Data.Monoid        ((<>))
-import Data.Text          (Text, pack, unpack)
+import Data.Text          (pack, unpack)
 import Data.Word          (Word8)
 import Text.Read          (readMaybe)
-import Network.IRC.Asakura.Types
+import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Client (reply)
-import Network.IRC.Client.Types
 
 -- *Cellular automata
 
@@ -54,27 +53,29 @@ rulebits rnum = reverse [testBit rnum i | i <- [0..7]]
 
 -- *Command
 
-command :: [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
-command [rnum] _ ev = return . reply ev $ case fmap rulebits . readMaybe $ unpack rnum of
-  Just rbits -> "Rule " <> rnum <> " " <> tobits rbits <> " see " <> url
-  Nothing -> "That's no rule!"
-
+command :: CommandDef
+command = CommandDef ["rule"] go
   where
-    tobits bs = "[" <> pack (map (\x -> if x then '1' else '0') bs) <> "]"
-    url = "http://www.wolframalpha.com/input/?i=rule+" <> rnum
+    go [rnum] _ ev = return . reply ev $ case fmap rulebits . readMaybe $ unpack rnum of
+      Just rbits -> "Rule " <> rnum <> " " <> tobits rbits <> " see " <> url
+      Nothing -> "That's no rule!"
 
-command [rnum, initial] state ev = command [rnum, "1", initial] state ev
-command [rnum, steps, initial] _ ev = return . reply ev $ "You done goofed." `fromMaybe` stepped
+      where
+        tobits bs = "[" <> pack (map (\x -> if x then '1' else '0') bs) <> "]"
+        url = "http://www.wolframalpha.com/input/?i=rule+" <> rnum
 
-  where
-    stepped = do
-      rulenum <- readMaybe $ unpack rnum
-      steps'  <- readMaybe $ unpack steps
-      state   <- readState $ unpack initial
-      guard $ steps' <= 100
-      return . pack . writeState $ iterate (rule rulenum) state !! steps'
+    go [rnum, initial] state ev    = go [rnum, "1", initial] state ev
+    go [rnum, steps, initial] _ ev = return . reply ev $ "You done goofed." `fromMaybe` stepped
 
-command _ _ _ = return $ return ()
+      where
+        stepped = do
+          rulenum <- readMaybe $ unpack rnum
+          steps'  <- readMaybe $ unpack steps
+          state   <- readState $ unpack initial
+          guard $ steps' <= 100
+          return . pack . writeState $ iterate (rule rulenum) state !! steps'
+
+    go _ _ _ = return $ return ()
 
 -- |Read the initial state from a string.
 readState :: String -> Maybe (Zipper Bool)

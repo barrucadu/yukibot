@@ -38,7 +38,10 @@ data CommandState = CommandState
 
 -- |A single command.
 data CommandDef = CommandDef
-    { _action     :: [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
+    { _verb   :: [Text]
+    -- ^The name of the command, this is what comes between the prefix
+    -- and the arguments.
+    , _action :: [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
     -- ^The function to run on a match. This is like a regular event
     -- handler, except it takes the space-separated list of arguments
     -- to the command as the first parameter.

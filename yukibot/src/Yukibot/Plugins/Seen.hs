@@ -10,7 +10,7 @@ module Yukibot.Plugins.Seen
 
 import Control.Applicative        ((<$>))
 import Data.Monoid                ((<>))
-import Data.Text                  (Text)
+import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Asakura.Events (runEverywhere)
 import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
 import Network.IRC.Client         (reply)
@@ -45,21 +45,23 @@ eventFunc ms _ ev = return $ do
 
 -- *Command
 
-command :: MemoryState -> [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
-command ms (nick:_) _ ev = return $ do
-  let channel = case _source ev of
-                  Channel c _ -> Just c
-                  _           -> Nothing
+command :: MemoryState -> CommandDef
+command = CommandDef ["seen"] . go
+  where
+    go ms (nick:_) _ ev = return $ do
+      let channel = case _source ev of
+                      Channel c _ -> Just c
+                      _           -> Nothing
 
-  network <- _server <$> connectionConfig
+      network <- _server <$> connectionConfig
 
-  case channel of
-    Just chan -> do
-      val <- getFactValue ms network nick ("seen-" <> chan)
-      case val of
-        Just msg -> reply ev $ nick <> " was last seen saying: " <> msg
-        Nothing  -> reply ev $ "I haven't seen " <> nick <> " say anything yet."
+      case channel of
+        Just chan -> do
+          val <- getFactValue ms network nick ("seen-" <> chan)
+          case val of
+            Just msg -> reply ev $ nick <> " was last seen saying: " <> msg
+            Nothing  -> reply ev $ "I haven't seen " <> nick <> " say anything yet."
 
-    Nothing -> return ()
+        Nothing -> return ()
 
-command _ [] _ ev = return $ reply ev "You need to give me a nick."
+    go _ [] _ ev = return $ reply ev "You need to give me a nick."

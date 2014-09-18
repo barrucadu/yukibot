@@ -36,10 +36,10 @@ import Data.Map                  (Map)
 import Data.Maybe                (fromMaybe, listToMaybe)
 import Data.Monoid               ((<>))
 import Data.Text                 (Text)
+import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Asakura.State (Snapshot(..), Rollback(..))
-import Network.IRC.Asakura.Types (Bot)
 import Network.IRC.Client        (reply)
-import Network.IRC.Client.Types  (ConnectionConfig(..), Event(..), Source(..), UnicodeEvent, IRCState, IRC, connectionConfig)
+import Network.IRC.Client.Types  (ConnectionConfig(..), Event(..), Source(..), connectionConfig)
 
 import qualified Data.Map  as M
 import qualified Data.Text as T
@@ -142,33 +142,37 @@ simpleFactStore ms fact = SimpleFactStore
 -- the named user (or the suer themselves, if no nick was given).
 --
 -- syntax: <prefix><command name> [nick]
-simpleGetCommand :: SimpleFactStore -> [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
-simpleGetCommand sfs args _ ev = return $ do
-  let nick = case args of
-               (n:_) -> n
-               _ -> case _source ev of
-                     Channel _ n -> n
-                     User n      -> n
-                     _           -> "" -- Should never get here
+simpleGetCommand :: SimpleFactStore -> CommandDef
+simpleGetCommand = CommandDef ["get"] . go
+  where
+    go sfs args _ ev = return $ do
+      let nick = case args of
+                   (n:_) -> n
+                   _ -> case _source ev of
+                         Channel _ n -> n
+                         User n      -> n
+                         _           -> "" -- Should never get here
 
-  network <- _server <$> connectionConfig
+      network <- _server <$> connectionConfig
 
-  value <- liftIO $ getSimpleValue sfs network nick
+      value <- liftIO $ getSimpleValue sfs network nick
 
-  reply ev $ fromMaybe ("Couldn't find anything for " <> nick) value
+      reply ev $ fromMaybe ("Couldn't find anything for " <> nick) value
 
 -- |Allow users to set the fact value on themselves.
 --
 -- Syntax: <prefix><command name> value
-simpleSetCommand :: SimpleFactStore -> [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
-simpleSetCommand sfs args _ ev = return $ do
-  let nick = case _source ev of
-               Channel _ n -> n
-               User n      -> n
-               _           -> "" -- Should never get here
+simpleSetCommand :: SimpleFactStore -> CommandDef
+simpleSetCommand = CommandDef ["set"] . go
+  where
+    go sfs args _ ev = return $ do
+      let nick = case _source ev of
+                   Channel _ n -> n
+                   User n      -> n
+                   _           -> "" -- Should never get here
 
-  network <- _server <$> connectionConfig
+      network <- _server <$> connectionConfig
 
-  case args of
-    []    -> reply ev "You need to specify a value"
-    value -> liftIO $ setSimpleValue sfs network nick $ T.unwords value
+      case args of
+        []    -> reply ev "You need to specify a value"
+        value -> liftIO $ setSimpleValue sfs network nick $ T.unwords value

@@ -18,9 +18,8 @@ import Data.Aeson                (FromJSON(..), ToJSON(..), Value(..), (.=), (.:
 import Data.Default.Class        (Default(..))
 import Data.Monoid               ((<>))
 import Data.Text                 (Text, pack, unpack, intercalate)
-import Network.IRC.Asakura.Types (Bot)
+import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Client        (reply)
-import Network.IRC.Client.Types  (IRC, IRCState, UnicodeEvent)
 import Text.XML.HXT.Core
 import Network.URI               (escapeURIString, isAllowedInURI)
 import Yukibot.Utils             (fetchHtmlWithCreds, makeUri)
@@ -55,14 +54,16 @@ instance Default MALCfg where
 
 -- |Interpret everything after the command as an anime search term,
 -- and query MAL for it.
-malCommand :: MALCfg -> [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
-malCommand mc args _ ev = return $ do
-  let term = intercalate "+" args
-  res <- malQuery mc term
+malCommand :: MALCfg -> CommandDef
+malCommand = CommandDef ["mal"] . go
+  where
+    go mc args _ ev = return $ do
+      let term = intercalate "+" args
+      res <- malQuery mc term
 
-  case res of
-    Just result -> mapM_ (reply ev) result
-    Nothing     -> reply ev $ "Failed to get information on " <> term
+      case res of
+        Just result -> mapM_ (reply ev) result
+        Nothing     -> reply ev $ "Failed to get information on " <> term
 
 -- *External usage
 

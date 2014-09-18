@@ -42,15 +42,15 @@ import qualified Data.Map as M
 
 -- |Usage: "<command> <plugin>" in channel, or "<command> <channel>
 -- <plugin>" in query
-blacklistCmd :: BlacklistState -> [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
-blacklistCmd bs args _ = doCmd (blacklist bs) args
+blacklistCmd :: BlacklistState -> CommandDef
+blacklistCmd bs = CommandDef ["blacklist"] $ doCmd (blacklist bs)
 
 -- |Same usage as 'blacklistCmd'.
-whitelistCmd :: BlacklistState -> [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
-whitelistCmd bs args _ = doCmd (whitelist bs) args
+whitelistCmd :: BlacklistState -> CommandDef
+whitelistCmd bs = CommandDef ["whitelist"] $ doCmd (whitelist bs)
 
-doCmd :: (ByteString -> Text -> Text -> IRC ()) -> [Text] -> UnicodeEvent -> Bot (IRC ())
-doCmd f (x:xs) ev = return $ do
+doCmd :: (ByteString -> Text -> Text -> IRC ()) -> [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
+doCmd f (x:xs) _ ev = return $ do
   network <- _server <$> connectionConfig
 
   case _source ev of
@@ -58,7 +58,7 @@ doCmd f (x:xs) ev = return $ do
     _ | "#" `isPrefixOf` x -> mapM_ (f network x) xs
       | otherwise -> reply ev "Which channel?"
 
-doCmd _ [] ev = return . reply ev $ "Name at least one plugin."
+doCmd _ [] _ ev = return . reply ev $ "Name at least one plugin."
 
 -- *Integration
 
