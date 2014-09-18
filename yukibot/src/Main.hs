@@ -7,7 +7,7 @@ import Control.Concurrent.STM (atomically, readTVar)
 import Control.Monad.Trans.Reader (runReaderT)
 import Data.Default.Class     (def)
 import Network.IRC.Asakura
-import Network.IRC.Asakura.Commands (CommandDef(..), registerCommand', registerLongCommand')
+import Network.IRC.Asakura.Commands (CommandDef(..), registerCommand, registerLongCommand)
 import Network.IRC.Asakura.State (rollback)
 import Network.IRC.Asakura.Types
 import Network.IRC.Client
@@ -73,18 +73,18 @@ runWithState fp ys = do
   installHandler sigTERM (Catch $ handler state) Nothing
 
   -- Register commands
-  registerCommand'     cs "join"              $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = CH.joinCmd }
-  registerCommand'     cs "part"              $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = CH.partCmd  }
-  registerLongCommand' cs ["set",   "prefix"] $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = CH.setChanPrefix   cs }
-  registerLongCommand' cs ["unset", "prefix"] $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = CH.unsetChanPrefix cs }
-  registerCommand'     cs "blacklist"         $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = BL.blacklistCmd bs }
-  registerCommand'     cs "whitelist"         $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = BL.whitelistCmd bs }
+  registerCommand     cs "join"              $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = CH.joinCmd }
+  registerCommand     cs "part"              $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = CH.partCmd  }
+  registerLongCommand cs ["set",   "prefix"] $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = CH.setChanPrefix   cs }
+  registerLongCommand cs ["unset", "prefix"] $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = CH.unsetChanPrefix cs }
+  registerCommand     cs "blacklist"         $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = BL.blacklistCmd bs }
+  registerCommand     cs "whitelist"         $ P.wrapsCmd ps (P.Admin 0) CommandDef { _action = BL.whitelistCmd bs }
 
-  registerCommand'     cs "mal"               $ BL.wrapsCmd bs "mal"      CommandDef { _action = M.malCommand (_malState ys) }
-  registerCommand'     cs "watching"          $ BL.wrapsCmd bs "watching" CommandDef { _action = Me.simpleGetCommand wfs }
-  registerLongCommand' cs ["set", "watching"] $ BL.wrapsCmd bs "watching" CommandDef { _action = Me.simpleSetCommand wfs }
-  registerCommand'     cs "seen"              $ BL.wrapsCmd bs "seen"     CommandDef { _action = S.command ms }
-  registerCommand'     cs "rule"              $ BL.wrapsCmd bs "cellular" CommandDef { _action = CA.command }
+  registerCommand     cs "mal"               $ BL.wrapsCmd bs "mal"      CommandDef { _action = M.malCommand (_malState ys) }
+  registerCommand     cs "watching"          $ BL.wrapsCmd bs "watching" CommandDef { _action = Me.simpleGetCommand wfs }
+  registerLongCommand cs ["set", "watching"] $ BL.wrapsCmd bs "watching" CommandDef { _action = Me.simpleSetCommand wfs }
+  registerCommand     cs "seen"              $ BL.wrapsCmd bs "seen"     CommandDef { _action = S.command ms }
+  registerCommand     cs "rule"              $ BL.wrapsCmd bs "cellular" CommandDef { _action = CA.command }
 
   -- Register event handlers
   addGlobalEventHandler' state $ C.eventRunner cs

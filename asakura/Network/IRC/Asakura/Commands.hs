@@ -11,9 +11,7 @@ module Network.IRC.Asakura.Commands
     , eventRunner
     -- *Registering commands
     , registerCommand
-    , registerCommand'
     , registerLongCommand
-    , registerLongCommand'
     -- *Miscellaneous
     , setPrefix
     , setChannelPrefix
@@ -146,24 +144,14 @@ registerCommand :: MonadIO m
                 -- ^The initialised state
                 -> Text
                 -- ^The command name
-                -> ([Text] -> IRCState -> UnicodeEvent -> Bot (IRC ()))
+                -> CommandDef
                 -- ^The command handler
                 -> m ()
 registerCommand state cmd = registerLongCommand state [cmd]
 
--- |Register a 'CommandDef' as a command.
-registerCommand' :: MonadIO m => CommandState -> Text -> CommandDef -> m ()
-registerCommand' state cmd = registerLongCommand' state [cmd]
-
 -- |Register a multi-word command.
-registerLongCommand :: MonadIO m => CommandState -> [Text] -> ([Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())) -> m ()
-registerLongCommand state cmd f = registerLongCommand' state cmd CommandDef
-                                  { _action     = f
-                                  }
-
--- |Register a 'CommandDef' as a multi-word command.
-registerLongCommand' :: MonadIO m => CommandState -> [Text] -> CommandDef -> m ()
-registerLongCommand' state cmd cdef = liftIO . atomically $ do
+registerLongCommand :: MonadIO m => CommandState -> [Text] -> CommandDef -> m ()
+registerLongCommand state cmd cdef = liftIO . atomically $ do
   let tvarL = _commandList state
 
   commands <- readTVar tvarL
