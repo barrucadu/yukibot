@@ -18,6 +18,7 @@ import System.Posix.Signals   (Handler(..), installHandler, sigINT, sigTERM)
 import Yukibot.State
 
 import qualified Network.IRC.Asakura.Commands    as C
+import qualified Network.IRC.Asakura.Help        as H
 import qualified Network.IRC.Asakura.Permissions as P
 import qualified Network.IRC.Asakura.Blacklist   as BL
 import qualified Yukibot.Plugins.Cellular        as CA
@@ -74,6 +75,8 @@ runWithState fp ys = do
   installHandler sigTERM (Catch $ handler state) Nothing
 
   -- Register commands
+  registerCommand cs $ H.helpCmd cs
+
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0)   CH.joinCmd
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0)   CH.partCmd
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0) $ CH.setChanPrefix   cs

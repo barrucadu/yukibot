@@ -55,6 +55,7 @@ library
                      , Network.IRC.Asakura.Blacklist
                      , Network.IRC.Asakura.Commands
                      , Network.IRC.Asakura.Events
+                     , Network.IRC.Asakura.Help
                      , Network.IRC.Asakura.Permissions
                      , Network.IRC.Asakura.State
                      , Network.IRC.Asakura.Types
