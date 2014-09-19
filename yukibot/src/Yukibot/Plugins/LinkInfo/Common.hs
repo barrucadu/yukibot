@@ -4,12 +4,11 @@
 module Yukibot.Plugins.LinkInfo.Common where
 
 import Control.Applicative    ((<$>), (<*>), pure)
-import Control.Monad          (liftM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson             (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
 import Data.Default.Class     (Default(..))
 import Data.Maybe             (listToMaybe)
-import Data.Text              (Text, pack)
+import Data.Text              (Text, pack, strip)
 import Text.XML.HXT.Core      ((//>), readString, hasName, getText, runX, withParseHTML, withWarnings, no, yes)
 import Text.XML.HXT.TagSoup   (withTagSoup)
 import Network.URI            (URI)
@@ -77,7 +76,13 @@ getLinkHandler lic uri = listToMaybe . map snd . filter (($uri) . fst) . _linkHa
 -- |Turn a function producing a Maybe title into a function producing
 -- a LinkTitle.
 liftHandler :: MonadIO m => (URI -> m (Maybe Text)) -> URI -> m (LinkInfo Text)
-liftHandler f uri = liftM (maybe Failed Title) $ f uri
+liftHandler f uri = do
+  title <- f uri
+  return $
+    case strip <$> title of
+      Just "" -> NoTitle
+      Just t  -> Title t
+      Nothing -> Failed
 
 -- *Title fetching
 
