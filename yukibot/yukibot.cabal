@@ -90,6 +90,7 @@ executable yukibot
                      , irc-client   >=0.2
                      , network-uri  >=2.5
                      , random       >=1.0
+                     , regex-tdfa   >=1.2
                      , stm          >=2.4
                      , text         >=1.1
                      , transformers >=0.3

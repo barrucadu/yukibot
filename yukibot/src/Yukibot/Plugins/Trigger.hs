@@ -26,9 +26,9 @@ import Data.Aeson                 (FromJSON(..), ToJSON(..), Value(..), (.=), (.
 import Data.ByteString            (ByteString)
 import Data.ByteString.Char8      (unpack)
 import Data.Default.Class         (Default(..))
-import Data.Map                   (Map)
+import Data.Map                   (Map, mapWithKey, foldWithKey)
 import Data.Maybe                 (fromMaybe)
-import Data.Text                  (Text, replace)
+import Data.Text                  (Text, replace, isPrefixOf, isSuffixOf)
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
 import Network.IRC.Asakura.State  (Snapshot(..), Rollback(..))
@@ -41,6 +41,8 @@ import Network.IRC.Client.Types   ( ConnectionConfig(..)
                                   , Source(..)
                                   , connectionConfig)
 import System.Random              (randomIO)
+import Text.Regex.TDFA            (CompOption(..), defaultCompOpt, defaultExecOpt)
+import Text.Regex.TDFA.String     (Regex, compile, execute)
 
 import qualified Data.Map  as M
 import qualified Data.Text as T
@@ -57,12 +59,17 @@ data Response = TR
     -- ^Servers/channels for which this trigger is inactive
     , _probability :: Double
     -- ^Probability of activating
+    , _regex       :: Maybe Regex
+    -- ^If the trigger is a regular expression string, this is the
+    -- compiled regex.
     }
 
 instance FromJSON Response where
-    parseJSON (Object v)= TR <$> v .:  "response"
-                             <*> v .:? "blacklist"   .!= M.empty
-                             <*> v .:? "probability" .!= 1
+    parseJSON (Object v) = tr <$> v .:  "response"
+                              <*> v .:? "blacklist"   .!= M.empty
+                              <*> v .:? "probability" .!= 1
+      where
+        tr r b p = TR r b p Nothing
     parseJSON _ = fail "Expected object"
 
 instance ToJSON Response where
@@ -79,19 +86,27 @@ instance ToJSON Response where
 newtype TriggerStateSnapshot = TSS { _ssTriggers :: Map Text Response }
 
 instance FromJSON TriggerStateSnapshot where
-    parseJSON = fmap TSS . parseJSON
+  parseJSON = fmap (TSS . mapWithKey doRegex) . parseJSON
+    where
+      doRegex trig resp | "/" `isPrefixOf` trig && "/" `isSuffixOf` trig && T.length trig >= 2 = doRegex' trig resp
+                        | otherwise = resp
+
+      -- Strip the leading and trailing '/', and attempt to compile the inner regex.
+      doRegex' trig resp = resp { _regex = either (const Nothing) Just . compile copt eopt . T.unpack . T.init . T.tail $ trig }
+      copt = defaultCompOpt { caseSensitive = False }
+      eopt = defaultExecOpt
 
 instance ToJSON TriggerStateSnapshot where
-    toJSON = toJSON . _ssTriggers
+  toJSON = toJSON . _ssTriggers
 
 instance Snapshot TriggerState TriggerStateSnapshot where
-    snapshotSTM ts = liftM TSS (readTVar $ _triggers ts)
+  snapshotSTM ts = liftM TSS (readTVar $ _triggers ts)
 
 instance Rollback TriggerStateSnapshot TriggerState where
-    rollbackSTM tss = liftM TS (newTVar $ _ssTriggers tss)
+  rollbackSTM tss = liftM TS (newTVar $ _ssTriggers tss)
 
 instance Default TriggerStateSnapshot where
-    def = TSS M.empty
+  def = TSS M.empty
 
 -- *Event handler
 
@@ -118,11 +133,25 @@ eventFunc ts _ ev = return $ do
 
   triggers <- liftIO . atomically . readTVar . _triggers $ ts
 
-  let trigger = T.toLower $ T.strip msg
-
-  case M.lookup trigger triggers of
+  case findTrigger (T.strip msg) triggers of
     Just resp -> respond ev resp network channel
     Nothing   -> return ()
+
+-- Find the first trigger matching this message.
+findTrigger :: Text -> Map Text Response -> Maybe Response
+findTrigger target = foldWithKey findTrigger' Nothing
+  where
+    findTrigger' _ _ resp@(Just _) = resp
+
+    findTrigger' trig resp _ =
+      case _regex resp of
+        Just r  -> if r =~ target                       then Just resp else Nothing
+        Nothing -> if T.toLower trig == T.toLower target then Just resp else Nothing
+
+    r =~ txt =
+      case execute r (T.unpack txt) of
+        Right (Just _) -> True
+        _ -> False
 
 respond :: UnicodeEvent -> Response -> ByteString -> Maybe Text -> IRC ()
 respond ev r network channel = do
@@ -174,10 +203,7 @@ blacklist ts trig network channel = liftIO . atomically $ do
   let triggers' = triggers & at (T.toLower trig) %~ fmap addBL
   writeTVar tvarT triggers'
 
-  where addBL r = TR { _response    = _response r
-                     , _blacklist   = _blacklist r & at (unpack network) . non [] %~ (channel:)
-                     , _probability = _probability r
-                     }
+  where addBL r = r { _blacklist   = _blacklist r & at (unpack network) . non [] %~ (channel:) }
 
 -- |Remove a channel from a trigger's blacklist
 whitelist :: MonadIO m => TriggerState -> Text -> ByteString -> Text -> m ()
@@ -188,10 +214,7 @@ whitelist ts trig network channel = liftIO . atomically $ do
   let triggers' = triggers & at (T.toLower trig) %~ fmap delBL
   writeTVar tvarT triggers'
 
-  where delBL r = TR { _response    = _response r
-                     , _blacklist   = _blacklist r & at (unpack network) %~ unblack
-                     , _probability = _probability r
-                     }
+  where delBL r = r { _blacklist   = _blacklist r & at (unpack network) %~ unblack }
         unblack chans = case filter (/=channel) $ fromMaybe [] chans of
                           [] -> Nothing
                           cs -> Just cs
