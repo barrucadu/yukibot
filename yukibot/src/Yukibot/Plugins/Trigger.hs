@@ -32,7 +32,7 @@ import Data.Text                  (Text, replace, isPrefixOf, isSuffixOf)
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
 import Network.IRC.Asakura.State  (Snapshot(..), Rollback(..))
-import Network.IRC.Client         (reply)
+import Network.IRC.Client         (ctcp, reply, send)
 import Network.IRC.Client.Types   ( ConnectionConfig(..)
                                   , Event(..), EventType(EPrivmsg)
                                   , IRC, IRCState
@@ -162,7 +162,7 @@ respond ev r network channel = do
   roll <- liftIO randomIO
 
   when (not blacklisted && roll <= _probability r) $
-     reply ev . replace "%channel" chan . replace "%nick" nick . _response $ r
+     reply' . replace "%channel" chan . replace "%nick" nick . _response $ r
 
   where
     chan = case _source ev of
@@ -173,6 +173,9 @@ respond ev r network channel = do
       User n      -> n
       Channel _ n -> n
       _ -> ""
+
+    reply' resp | "/me" `isPrefixOf` resp = send $ ctcp (if T.null chan then nick else chan) "ACTION" [T.strip $ T.drop 3 resp]
+                | otherwise = reply ev resp
 
 -- *Updating
 
