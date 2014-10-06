@@ -28,7 +28,7 @@ import Data.ByteString.Char8      (unpack)
 import Data.Default.Class         (Default(..))
 import Data.Map                   (Map)
 import Data.Maybe                 (fromMaybe)
-import Data.Text                  (Text)
+import Data.Text                  (Text, replace)
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
 import Network.IRC.Asakura.State  (Snapshot(..), Rollback(..))
@@ -133,7 +133,17 @@ respond ev r network channel = do
   roll <- liftIO randomIO
 
   when (not blacklisted && roll <= _probability r) $
-    reply ev $ _response r
+     reply ev . replace "%channel" chan . replace "%nick" nick . _response $ r
+
+  where
+    chan = case _source ev of
+      Channel c _ -> c
+      _ -> ""
+
+    nick = case _source ev of
+      User n      -> n
+      Channel _ n -> n
+      _ -> ""
 
 -- *Updating
 
