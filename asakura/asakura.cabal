@@ -83,7 +83,7 @@ library
                      , text         >=1.1
                      , time         >=1.4
                      , tls          >=1.2
-                     , transformers >=0.4
+                     , transformers >=0.3
   
   -- Directories containing source files.
   -- hs-source-dirs:      

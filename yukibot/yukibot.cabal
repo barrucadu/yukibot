@@ -87,7 +87,7 @@ executable yukibot
                      , hxt          >=9.3
                      , hxt-tagsoup  >=9.1
                      , lens         >=4.0
-                     , irc-client   >=0.2
+                     , irc-client   >=0.2.2.1
                      , network-uri  >=2.5
                      , random       >=1.0
                      , regex-tdfa   >=1.2
