@@ -100,10 +100,10 @@ runWithState fp ys = do
   -- Register event handlers
   addGlobalEventHandler' state $ C.eventRunner cs
 
-  addGlobalEventHandler' state $ BL.wraps bs "seen"       S.eventHandler
-  addGlobalEventHandler' state $ BL.wraps bs "linkinfo" $ L.eventHandler ls
-  addGlobalEventHandler' state $ BL.wraps bs "triggers"   T.eventHandler
-  addGlobalEventHandler' state $ BL.wraps bs "eval"     $ Mu.eventHandler
+  addGlobalEventHandler' state $ BL.wraps bs "seen"          S.eventHandler
+  addGlobalEventHandler' state $ BL.wraps bs "linkinfo"    $ L.eventHandler ls
+  addGlobalEventHandler' state $ BL.wraps bs "triggers"      T.eventHandler
+  addGlobalEventHandler' state $ BL.wraps bs "inline-eval"   Mu.eventHandler
 
   addGlobalEventHandler' state $ P.wrapsEv ps (P.Trusted 0) CH.inviteEv
 
