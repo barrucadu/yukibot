@@ -21,6 +21,7 @@ import qualified Network.IRC.Asakura.Commands    as C
 import qualified Network.IRC.Asakura.Help        as H
 import qualified Network.IRC.Asakura.Permissions as P
 import qualified Network.IRC.Asakura.Blacklist   as BL
+import qualified Yukibot.Plugins.Brainfuck       as BF
 import qualified Yukibot.Plugins.Cellular        as CA
 import qualified Yukibot.Plugins.Channels        as CH
 import qualified Yukibot.Plugins.ImgurLinks      as I
@@ -89,6 +90,7 @@ runWithState fp ys = do
   registerCommand cs $ BL.wrapsCmd bs "watching" $ (Me.simpleSetCommand wfs) { _verb = ["set", "watching"] }
   registerCommand cs $ BL.wrapsCmd bs "seen"     $  S.command           ms
   registerCommand cs $ BL.wrapsCmd bs "cellular"    CA.command
+  registerCommand cs $ BL.wrapsCmd bs "brainfuck"   BF.command
 
   -- Register event handlers
   addGlobalEventHandler' state $ C.eventRunner cs
