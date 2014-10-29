@@ -7,7 +7,7 @@ import Control.Applicative ((<$))
 import Control.Lens hiding (noneOf)
 import Control.Monad                (when)
 import Control.Monad.IO.Class
-import Control.Monad.Trans.State    (State, modify, execState)
+import Control.Monad.Trans.State    (State, execState)
 import qualified Data.DList as D
 import Data.Maybe                   (fromMaybe)
 import Data.Text                    (Text)
