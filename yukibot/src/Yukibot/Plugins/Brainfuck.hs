@@ -94,7 +94,7 @@ command = CommandDef { _verb   = ["bf"]
   where
     go [program] ircs ev = go [program, ""] ircs ev
     go (program:is) _ ev = do
-      o <- liftIO $ timeout 30 $ return $ case brainfuck program (T.unwords is) of
+      o <- liftIO $ timeout 3000000 $ return $! case brainfuck program (T.unwords is) of
         Nothing -> "Sorry, I don't understand that brainfuck program! Are brackets matched?"
         Just res -> res
       return . reply ev $ case o of
