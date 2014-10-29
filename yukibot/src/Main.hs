@@ -78,6 +78,7 @@ runWithState fp ys = do
   registerCommand cs $ H.helpCmd cs
 
   registerCommand cs $ P.wrapsCmd ps P.God         N.connectCmd
+  registerCommand cs $ P.wrapsCmd ps P.God         N.disconnectCmd
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0)   CH.joinCmd
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0)   CH.partCmd
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0) $ CH.setChanPrefix   cs

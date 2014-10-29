@@ -3,7 +3,7 @@
 -- |Provides commands to deal with multiple networks
 module Yukibot.Plugins.Networks
     ( connectCmd
-    --, disconnectCmd
+    , disconnectCmd
     --, shout
     -- *Integration
     , connectTo
@@ -19,7 +19,7 @@ import Data.Text                (Text, breakOn, unpack)
 import Network.IRC.Asakura      (addNetwork)
 import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Asakura.Types (Bot)
-import Network.IRC.Client       (Message(Numeric, Privmsg, Join), connectWithTLS, defaultIRCConf, send, reply)
+import Network.IRC.Client       (Message(Numeric, Privmsg, Join, Quit), connectWithTLS, defaultIRCConf, send, reply)
 import Network.IRC.Client.Types (EventType(ENumeric), Event(_message), EventHandler(..), InstanceConfig(_eventHandlers))
 import Text.Read                (readMaybe)
 
@@ -44,6 +44,17 @@ connectCmd = CommandDef
       in do
         connectTo net port nick nickserv []
         return $ return ()
+
+-- |Disconnect from the current network
+disconnectCmd :: CommandDef
+disconnectCmd = CommandDef
+                { _verb = ["disconnect"]
+                , _help = "[<message>] - Disconnect from the current network. Disconnecting from all networks terminates yukibot."
+                , _action = go
+                }
+  where
+    go []  _ _ = return . send $ Quit Nothing
+    go msg _ _ = return . send . Quit . Just $ T.unwords msg
 
 -- *Integration
 
