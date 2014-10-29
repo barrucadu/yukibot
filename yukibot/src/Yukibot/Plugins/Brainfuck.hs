@@ -38,6 +38,7 @@ data BFState = BFState { _tape   :: Zipper Int
                        }
 makeLenses ''BFState
 
+defaultBFState :: BFState
 defaultBFState = BFState { _tape = Z (repeat 0) 0 (repeat 0)
                          , _input = ""
                          , _output = D.empty
