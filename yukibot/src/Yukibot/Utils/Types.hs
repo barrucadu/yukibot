@@ -23,4 +23,4 @@ instance Comonad Zipper where
 
 -- |A lens operating over the focus of a `Zipper`
 focus :: Lens' (Zipper a) a
-focus f (Zipper ls a rs) = fmap (\b -> Zipper ls b rs) (f a)
+focus f (Z ls a rs) = fmap (\b -> Z ls b rs) (f a)

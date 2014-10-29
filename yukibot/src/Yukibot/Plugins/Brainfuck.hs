@@ -4,14 +4,16 @@
 module Yukibot.Plugins.Brainfuck (command) where
 
 import Control.Applicative ((<$))
-import Control.Lens
-import Control.Monad.Trans.State    (State, modify)
+import Control.Lens hiding (noneOf)
+import Control.Monad                (when)
+import Control.Monad.Trans.State    (State, modify, execState)
 import qualified Data.DList as D
+import Data.Maybe                   (fromMaybe)
 import Data.Text                    (Text)
 import qualified Data.Text as T
 import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Client           (reply)
-import Text.Parsec
+import Text.Parsec hiding (State)
 import Text.Parsec.Text
 import Yukibot.Utils.Types          (Zipper(..), left, right, focus)
 
@@ -46,7 +48,7 @@ consumeElement R = tape %= right
 consumeElement I = tape.focus.enum <~ input %%= fromMaybe ('\0', "") . uncons
 consumeElement O = do
   c <- use (tape.focus)
-  output <>= D.singleton c
+  output <>= D.singleton (toEnum c)
 consumeElement (Loop l) = go
   where
     go = do
@@ -58,18 +60,18 @@ consumeElement (Loop l) = go
 consumeProgram :: BFProgram -> State BFState ()
 consumeProgram = mapM_ consumeElement
 
-runProgram :: BFProgram -> [Char] -> DList Char
+runProgram :: BFProgram -> [Char] -> D.DList Char
 runProgram program i = _output $ execState (consumeProgram program)
                        defaultBFState {_input = i}
 
-parseProgram :: Monad m => Parser m BFProgram
-parseProgram = comment >> many $ choice [
+parseProgram :: Parser BFProgram
+parseProgram = (>>) comment $ many $ choice [
   parsePM,
   parseLoop,
   L <$ char '<',
   R <$ char '>',
   I <$ char ',',
-  O <$ char '.'] >> comment
+  O <$ char '.'] >>= \x -> x <$ comment
   where
     parsePM = fmap (P . sum) $ many1 $ choice [
       1    <$ char '+',
