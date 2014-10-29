@@ -6,6 +6,7 @@ module Yukibot.Plugins.Brainfuck (command) where
 import Control.Applicative ((<$))
 import Control.Lens hiding (noneOf)
 import Control.Monad                (when)
+import Control.Monad.IO.Class
 import Control.Monad.Trans.State    (State, modify, execState)
 import qualified Data.DList as D
 import Data.Maybe                   (fromMaybe)
@@ -13,6 +14,7 @@ import Data.Text                    (Text)
 import qualified Data.Text as T
 import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Client           (reply)
+import System.Timeout
 import Text.Parsec hiding (State)
 import Text.Parsec.Text
 import Yukibot.Utils.Types          (Zipper(..), left, right, focus)
@@ -90,10 +92,12 @@ command = CommandDef { _verb   = ["bf"]
                      , _action = go
                      }
   where
-    go [program] _ ev = return . reply ev $ case brainfuck program "" of
-      Nothing -> "Sorry, I don't understand that brainfuck program! Are brackets matched?"
-      Just res -> res
-    go (program:is) _ ev = return . reply ev $ case brainfuck program (T.unwords is) of
-      Nothing -> "Sorry, I don't understand that brainfuck program! Are brackets matched?"
-      Just res -> res
+    go [program] ircs ev = go [program, ""] ircs ev
+    go (program:is) _ ev = do
+      o <- liftIO $ timeout 30 $ return $ case brainfuck program (T.unwords is) of
+        Nothing -> "Sorry, I don't understand that brainfuck program! Are brackets matched?"
+        Just res -> res
+      return . reply ev $ case o of
+        Nothing -> "Timed out."
+        Just finalOutput -> finalOutput
     go _ _ _ = return $ return ()
