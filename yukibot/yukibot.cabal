@@ -57,7 +57,8 @@ executable yukibot
                        -fno-warn-unused-do-bind
 
   -- Modules included in this executable, other than Main.
-  other-modules:       Yukibot.Plugins.Cellular
+  other-modules:       Yukibot.Plugins.Brainfuck
+                     , Yukibot.Plugins.Cellular
                      , Yukibot.Plugins.Channels
                      , Yukibot.Plugins.ImgurLinks
                      , Yukibot.Plugins.Initialise
@@ -68,6 +69,7 @@ executable yukibot
                      , Yukibot.Plugins.Seen
                      , Yukibot.Plugins.Trigger
                      , Yukibot.Utils
+                     , Yukibot.Utils.Types
                      , Yukibot.State
   
   -- LANGUAGE extensions used by modules in this package.
@@ -83,12 +85,14 @@ executable yukibot
                      , containers   >=0.5
                      , data-default-class >=0.0.1
                      , directory    >=1.2
+                     , dlist        >=0.2
                      , http-client  >=0.3
                      , hxt          >=9.3
                      , hxt-tagsoup  >=9.1
-                     , lens         >=4.0
                      , irc-client   >=0.2.2.1
+                     , lens         >=4.0
                      , network-uri  >=2.5
+                     , parsec       >=3.0.0
                      , random       >=1.0
                      , regex-tdfa   >=1.2
                      , stm          >=2.4
