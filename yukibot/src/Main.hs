@@ -27,6 +27,7 @@ import qualified Yukibot.Plugins.Channels        as CH
 import qualified Yukibot.Plugins.Initialise      as I
 import qualified Yukibot.Plugins.LinkInfo        as L
 import qualified Yukibot.Plugins.MAL             as M
+import qualified Yukibot.Plugins.Networks        as N
 import qualified Yukibot.Plugins.Memory          as Me
 import qualified Yukibot.Plugins.Seen            as S
 import qualified Yukibot.Plugins.Trigger         as T
@@ -76,6 +77,7 @@ runWithState fp ys = do
   -- Register commands
   registerCommand cs $ H.helpCmd cs
 
+  registerCommand cs $ P.wrapsCmd ps P.God         N.connectCmd
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0)   CH.joinCmd
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0)   CH.partCmd
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0) $ CH.setChanPrefix   cs
