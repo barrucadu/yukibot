@@ -55,6 +55,7 @@ executable yukibot
 
   ghc-options:         -Wall
                        -fno-warn-unused-do-bind
+                       -threaded
 
   -- Modules included in this executable, other than Main.
   other-modules:       Yukibot.Plugins.Brainfuck
