@@ -1,22 +1,21 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |Fetch and display titles for HTML pages.
-module Yukibot.Plugins.LinkInfo.PageTitle
-    ( licPredicate
-    , licHandler
-    ) where
+module Yukibot.Plugins.LinkInfo.PageTitle (pageTitle) where
 
 import Control.Monad (liftM)
 import Data.Monoid   ((<>))
 import Data.Text     (Text)
 import Network.URI   (URI(..))
-import Yukibot.Plugins.LinkInfo.Common (LinkInfo(..), LinkInfoCfg(..), fetchTitle)
+import Yukibot.Plugins.LinkInfo.Common (LinkHandler(..), LinkInfo(..), LinkInfoCfg(..), fetchTitle)
 
 import qualified Data.Text as T
 
--- |Run always
-licPredicate :: URI -> Bool
-licPredicate = const True
+pageTitle :: LinkInfoCfg -> LinkHandler
+pageTitle lic = LinkHandler
+                { _licPredicate = const True
+                , _licHandler   = licHandler lic
+                }
 
 -- |Try to fetch the title of a URL.
 --

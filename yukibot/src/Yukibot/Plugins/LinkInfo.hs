@@ -62,4 +62,4 @@ eventFunc cfg _ ev = return $ do
 --
 -- TODO: Don't display empty titles
 fetchLinkInfo :: MonadIO m => LinkInfoCfg -> URI -> m (LinkInfo Text)
-fetchLinkInfo cfg url = liftIO . maybe (return NoTitle) ($ url) $ getLinkHandler cfg url
+fetchLinkInfo cfg url = liftIO . maybe (return NoTitle) (($ url) . _licHandler) $ getLinkHandler cfg url

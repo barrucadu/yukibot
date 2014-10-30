@@ -27,8 +27,8 @@ import qualified Yukibot.Plugins.Channels        as CH
 import qualified Yukibot.Plugins.Initialise      as I
 import qualified Yukibot.Plugins.LinkInfo        as L
 import qualified Yukibot.Plugins.LinkInfo.Common as LC
-import qualified Yukibot.Plugins.LinkInfo.Imgur  as LI
-import qualified Yukibot.Plugins.LinkInfo.PageTitle as LP
+import Yukibot.Plugins.LinkInfo.Imgur
+import Yukibot.Plugins.LinkInfo.PageTitle
 import qualified Yukibot.Plugins.MAL             as M
 import qualified Yukibot.Plugins.Memory          as Me
 import qualified Yukibot.Plugins.Seen            as S
@@ -69,8 +69,8 @@ runWithState fp ys = do
   let ts  = _triggerState    ys
 
   let wfs  = Me.simpleFactStore ms "watching"
-  let lis  = LC.addLinkHandler (_linkinfoState ys) LI.licPredicate   LI.licHandler
-  let lis' = LC.addLinkHandler lis LP.licPredicate $ LP.licHandler (_linkinfoState ys)
+  let lis  = LC.addLinkHandler (_linkinfoState ys) imgurLinks
+  let lis' = LC.addLinkHandler lis $ pageTitle (_linkinfoState ys)
   let mas  = _malState ys
 
   -- Register signal handlers

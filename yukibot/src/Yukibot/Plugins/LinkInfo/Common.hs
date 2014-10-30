@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFunctor     #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |Common functions for LinkInfo plugins
@@ -21,7 +22,7 @@ import Yukibot.Utils          (fetchHtml)
 data LinkInfoCfg = LIC
     { _numLinks     :: Int
     , _maxTitleLen  :: Int
-    , _linkHandlers :: [(URI -> Bool, URI -> IO (LinkInfo Text))]
+    , _linkHandlers :: [LinkHandler]
     -- ^Link handlers are used for providing site-specific
     -- information.
     }
@@ -45,34 +46,30 @@ instance Default LinkInfoCfg where
 
 -- *Link handlers
 
-data LinkInfo a = Title a -- ^This is the title to be displayed.
-                | Info a  -- ^Information to display, and don't also
-                          -- display the uri.
+data LinkHandler = LinkHandler
+                 { _licPredicate :: URI -> Bool
+                 -- ^When to apply this handler
+                 , _licHandler :: URI -> IO (LinkInfo Text)
+                 -- ^Get link info from a URI
+                 }
+
+data LinkInfo a = Title a -- ^Title to display, in quotes.
+                | Info a  -- ^Information to display, not in quotes.
                 | NoTitle -- ^The URI has no title.
                 | Failed  -- ^Retrieving the title failed.
-
-instance Functor LinkInfo where
-    fmap f (Title a) = Title $ f a
-    fmap f (Info a)  = Info $ f a
-    fmap _ NoTitle   = NoTitle
-    fmap _ Failed    = Failed
+                  deriving (Eq, Functor)
 
 -- |Add a new link handler
-addLinkHandler :: LinkInfoCfg
-               -> (URI -> Bool)
-               -- ^Predicate function.
-               -> (URI -> IO (LinkInfo Text))
-               -- ^Link info function, applied if the predicate matches.
-               -> LinkInfoCfg
-addLinkHandler lic p h = LIC { _numLinks     = _numLinks lic
-                             , _maxTitleLen  = _maxTitleLen lic
-                             -- Add in reverse order so plugins added earlier override ones added later
-                             , _linkHandlers = _linkHandlers lic ++ [(p, h)]
-                             }
+addLinkHandler :: LinkInfoCfg -> LinkHandler -> LinkInfoCfg
+addLinkHandler lic lh = LIC { _numLinks     = _numLinks     lic
+                            , _maxTitleLen  = _maxTitleLen  lic
+                            -- Add in reverse order so handlers added earlier override ones added later
+                            , _linkHandlers = _linkHandlers lic ++ [lh]
+                            }
 
--- |Find the handler for a URI.
-getLinkHandler :: LinkInfoCfg -> URI -> Maybe (URI -> IO (LinkInfo Text))
-getLinkHandler lic uri = listToMaybe . map snd . filter (($uri) . fst) . _linkHandlers $ lic
+-- |Find the first matching handler for a URI
+getLinkHandler :: LinkInfoCfg -> URI -> Maybe LinkHandler
+getLinkHandler lic uri = listToMaybe . filter (($ uri) . _licPredicate) . _linkHandlers $ lic
 
 -- |Turn a function producing a Maybe title into a function producing
 -- a LinkTitle.
@@ -81,7 +78,6 @@ liftHandler f uri = do
   title <- f uri
   return $
     case strip <$> title of
-      Just "" -> NoTitle
       Just t  -> Title t
       Nothing -> Failed
 
@@ -103,7 +99,9 @@ fetchTitle uri = liftIO $ do
 
     Nothing -> return Nothing
 
-  where toPlainText = dequote . unwords . words
-        dequote ('\"':xs) | last xs == '\"' = init xs
-        dequote x = x
+  where
+    toPlainText = dequote . unwords . words
+
+    dequote ('\"':xs) | last xs == '\"' = init xs
+    dequote x = x
 
