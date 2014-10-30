@@ -26,9 +26,6 @@ import qualified Yukibot.Plugins.Cellular        as CA
 import qualified Yukibot.Plugins.Channels        as CH
 import qualified Yukibot.Plugins.Initialise      as I
 import qualified Yukibot.Plugins.LinkInfo        as L
-import qualified Yukibot.Plugins.LinkInfo.Common as LC
-import Yukibot.Plugins.LinkInfo.Imgur
-import Yukibot.Plugins.LinkInfo.PageTitle
 import qualified Yukibot.Plugins.MAL             as M
 import qualified Yukibot.Plugins.Memory          as Me
 import qualified Yukibot.Plugins.Seen            as S
@@ -67,10 +64,9 @@ runWithState fp ys = do
   let bs  = _blacklistState  ys
   let ms  = _memoryState     ys
   let ts  = _triggerState    ys
+  let ls  = _linkinfoState   ys
 
   let wfs  = Me.simpleFactStore ms "watching"
-  let lis  = LC.addLinkHandler (_linkinfoState ys) imgurLinks
-  let lis' = LC.addLinkHandler lis $ pageTitle (_linkinfoState ys)
   let mas  = _malState ys
 
   -- Register signal handlers
@@ -101,7 +97,7 @@ runWithState fp ys = do
   addGlobalEventHandler' state $ C.eventRunner cs
 
   addGlobalEventHandler' state $ BL.wraps bs "seen"     $ S.eventHandler ms
-  addGlobalEventHandler' state $ BL.wraps bs "linkinfo" $ L.eventHandler lis'
+  addGlobalEventHandler' state $ BL.wraps bs "linkinfo" $ L.eventHandler ls
   addGlobalEventHandler' state $ BL.wraps bs "triggers" $ T.eventHandler ts
 
   -- Connect to networks

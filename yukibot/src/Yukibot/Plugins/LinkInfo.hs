@@ -11,20 +11,49 @@ module Yukibot.Plugins.LinkInfo
     , fetchTitle
     ) where
 
-import Control.Applicative        ((<$>))
+import Control.Applicative        ((<$>), (<*>))
 import Control.Monad.IO.Class     (MonadIO, liftIO)
+import Data.Aeson                 (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
+import Data.Default.Class         (Default(..))
 import Data.Maybe                 (catMaybes, mapMaybe)
 import Data.Monoid                ((<>))
-import Data.Text                  (Text, pack, unpack, isPrefixOf)
+import Data.Text                  (Text, pack, unpack, isPrefixOf, toLower)
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
 import Network.IRC.Client         (reply)
 import Network.IRC.Client.Types   (Event(..), EventType(EPrivmsg), IRC, Message(..), UnicodeEvent, IRCState)
 import Network.URI                (URI, parseURI)
-import Yukibot.Plugins.LinkInfo.Common
 import Yukibot.Utils              (showUri)
 
+import Yukibot.Plugins.LinkInfo.Common
+import Yukibot.Plugins.LinkInfo.Imgur
+import Yukibot.Plugins.LinkInfo.PageTitle
+
 import qualified Data.Text as T
+
+-- *State
+--
+-- This is handled here to avoid cyclic module imports.
+
+instance ToJSON LinkInfoCfg where
+    toJSON cfg = object [ "numLinks" .= _numLinks    cfg
+                        , "maxLen"   .= _maxTitleLen cfg
+                        , "handlers" .= map _licName (_linkHandlers cfg)
+                        ]
+
+instance FromJSON LinkInfoCfg where
+    parseJSON (Object v) = LIC <$> v .:? "numLinks" .!= _numLinks def
+                               <*> maxlen
+                               <*> handlers
+      where maxlen = v .:? "maxLen" .!= _maxTitleLen def
+            handlers = maybe (_linkHandlers def) . populateHandlers <$> maxlen <*> (v .:? "handlers")
+    parseJSON _ = fail "Expected object"
+
+instance Default LinkInfoCfg where
+    def = LIC { _numLinks     = 5
+              , _maxTitleLen  = 100
+              , _linkHandlers = [imgurLinks, pageTitle $ _maxTitleLen def]
+              }
 
 -- *Event handler
 
@@ -63,3 +92,13 @@ eventFunc cfg _ ev = return $ do
 -- TODO: Don't display empty titles
 fetchLinkInfo :: MonadIO m => LinkInfoCfg -> URI -> m (LinkInfo Text)
 fetchLinkInfo cfg url = liftIO . maybe (return NoTitle) (($ url) . _licHandler) $ getLinkHandler cfg url
+
+-- *Helpers
+
+-- |Turn a list of names of handlers into a list of handlers.
+populateHandlers :: Int -> [Text] -> [LinkHandler]
+populateHandlers maxlen = mapMaybe (toHandler . toLower)
+  where
+    toHandler "imgur"     = Just imgurLinks
+    toHandler "pagetitle" = Just $ pageTitle maxlen
+    toHandler _ = Nothing

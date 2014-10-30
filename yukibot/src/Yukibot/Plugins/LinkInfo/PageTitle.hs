@@ -7,21 +7,22 @@ import Control.Monad (liftM)
 import Data.Monoid   ((<>))
 import Data.Text     (Text)
 import Network.URI   (URI(..))
-import Yukibot.Plugins.LinkInfo.Common (LinkHandler(..), LinkInfo(..), LinkInfoCfg(..), fetchTitle)
+import Yukibot.Plugins.LinkInfo.Common (LinkHandler(..), LinkInfo(..), fetchTitle)
 
 import qualified Data.Text as T
 
-pageTitle :: LinkInfoCfg -> LinkHandler
-pageTitle lic = LinkHandler
-                { _licPredicate = const True
-                , _licHandler   = licHandler lic
-                }
+pageTitle :: Int -> LinkHandler
+pageTitle maxlen = LinkHandler
+                   { _licName      = "pageTitle"
+                   , _licPredicate = const True
+                   , _licHandler   = licHandler maxlen
+                   }
 
 -- |Try to fetch the title of a URL.
 --
 -- TODO: Don't return a title if it's too similar to the URI
-licHandler :: LinkInfoCfg -> URI -> IO (LinkInfo Text)
-licHandler lic = liftM (fmap (trunc $ _maxTitleLen lic) . maybe NoTitle Title) . fetchTitle
+licHandler :: Int -> URI -> IO (LinkInfo Text)
+licHandler maxlen = liftM (fmap (trunc maxlen) . maybe NoTitle Title) . fetchTitle
 
 -- |Truncate a Text and append an ellipsis if too long
 trunc :: Int -> Text -> Text

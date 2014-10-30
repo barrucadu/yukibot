@@ -4,10 +4,8 @@
 -- |Common functions for LinkInfo plugins
 module Yukibot.Plugins.LinkInfo.Common where
 
-import Control.Applicative    ((<$>), (<*>), pure)
+import Control.Applicative    ((<$>))
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.Aeson             (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
-import Data.Default.Class     (Default(..))
 import Data.Maybe             (listToMaybe)
 import Data.Text              (Text, pack, strip)
 import Text.XML.HXT.Core      ((//>), readString, hasName, getText, runX, withParseHTML, withWarnings, no, yes)
@@ -27,27 +25,12 @@ data LinkInfoCfg = LIC
     -- information.
     }
 
-instance ToJSON LinkInfoCfg where
-    toJSON cfg = object [ "numLinks" .= _numLinks    cfg
-                        , "maxLen"   .= _maxTitleLen cfg
-                        ]
-
-instance FromJSON LinkInfoCfg where
-    parseJSON (Object v) = LIC <$> v .:? "numLinks" .!= _numLinks    def
-                               <*> v .:? "maxLen"   .!= _maxTitleLen def
-                               <*> pure []
-    parseJSON _ = fail "Expected object"
-
-instance Default LinkInfoCfg where
-    def = LIC { _numLinks     = 5
-              , _maxTitleLen  = 100
-              , _linkHandlers = []
-              }
-
 -- *Link handlers
 
 data LinkHandler = LinkHandler
-                 { _licPredicate :: URI -> Bool
+                 { _licName :: Text
+                 -- ^Name of the link handler, used for serialising the state
+                 , _licPredicate :: URI -> Bool
                  -- ^When to apply this handler
                  , _licHandler :: URI -> IO (LinkInfo Text)
                  -- ^Get link info from a URI

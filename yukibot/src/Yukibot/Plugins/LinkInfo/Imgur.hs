@@ -14,7 +14,8 @@ import Yukibot.Plugins.LinkInfo.Common (LinkHandler(..), LinkInfo(..), fetchTitl
 
 imgurLinks :: LinkHandler
 imgurLinks = LinkHandler
-             { _licPredicate = licPredicate
+             { _licName      = "Imgur"
+             , _licPredicate = licPredicate
              , _licHandler   = licHandler
              }
 
