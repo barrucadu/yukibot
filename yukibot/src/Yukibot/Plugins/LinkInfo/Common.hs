@@ -66,7 +66,8 @@ addLinkHandler :: LinkInfoCfg
                -> LinkInfoCfg
 addLinkHandler lic p h = LIC { _numLinks     = _numLinks lic
                              , _maxTitleLen  = _maxTitleLen lic
-                             , _linkHandlers = (p, h) : _linkHandlers lic
+                             -- Add in reverse order so plugins added earlier override ones added later
+                             , _linkHandlers = _linkHandlers lic ++ [(p, h)]
                              }
 
 -- |Find the handler for a URI.

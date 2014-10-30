@@ -65,6 +65,7 @@ executable yukibot
                      , Yukibot.Plugins.LinkInfo
                      , Yukibot.Plugins.LinkInfo.Common
                      , Yukibot.Plugins.LinkInfo.Imgur
+                     , Yukibot.Plugins.LinkInfo.PageTitle
                      , Yukibot.Plugins.MAL
                      , Yukibot.Plugins.Memory
                      , Yukibot.Plugins.Seen

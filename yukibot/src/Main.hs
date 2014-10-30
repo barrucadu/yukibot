@@ -28,6 +28,7 @@ import qualified Yukibot.Plugins.Initialise      as I
 import qualified Yukibot.Plugins.LinkInfo        as L
 import qualified Yukibot.Plugins.LinkInfo.Common as LC
 import qualified Yukibot.Plugins.LinkInfo.Imgur  as LI
+import qualified Yukibot.Plugins.LinkInfo.PageTitle as LP
 import qualified Yukibot.Plugins.MAL             as M
 import qualified Yukibot.Plugins.Memory          as Me
 import qualified Yukibot.Plugins.Seen            as S
@@ -67,9 +68,10 @@ runWithState fp ys = do
   let ms  = _memoryState     ys
   let ts  = _triggerState    ys
 
-  let wfs = Me.simpleFactStore ms "watching"
-  let lis = LC.addLinkHandler (_linkinfoState ys) LI.licPredicate LI.licHandler
-  let mas = _malState ys
+  let wfs  = Me.simpleFactStore ms "watching"
+  let lis  = LC.addLinkHandler (_linkinfoState ys) LI.licPredicate   LI.licHandler
+  let lis' = LC.addLinkHandler lis LP.licPredicate $ LP.licHandler (_linkinfoState ys)
+  let mas  = _malState ys
 
   -- Register signal handlers
   installHandler sigINT  (Catch $ handler state) Nothing
@@ -99,7 +101,7 @@ runWithState fp ys = do
   addGlobalEventHandler' state $ C.eventRunner cs
 
   addGlobalEventHandler' state $ BL.wraps bs "seen"     $ S.eventHandler ms
-  addGlobalEventHandler' state $ BL.wraps bs "linkinfo" $ L.eventHandler lis
+  addGlobalEventHandler' state $ BL.wraps bs "linkinfo" $ L.eventHandler lis'
   addGlobalEventHandler' state $ BL.wraps bs "triggers" $ T.eventHandler ts
 
   -- Connect to networks

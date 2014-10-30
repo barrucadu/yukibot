@@ -12,7 +12,6 @@ module Yukibot.Plugins.LinkInfo
     ) where
 
 import Control.Applicative        ((<$>))
-import Control.Monad              (liftM)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Data.Maybe                 (catMaybes, mapMaybe)
 import Data.Monoid                ((<>))
@@ -40,10 +39,6 @@ eventHandler cfg = AsakuraEventHandler
 
 -- |Split a message up into words, and display information on the
 -- first `numLinks` links.
---
--- TODO: Don't show titles where URL is too similar.
---
--- TODO: Steal special titles from Mathison.
 eventFunc :: LinkInfoCfg -> IRCState -> UnicodeEvent -> Bot (IRC ())
 eventFunc cfg _ ev = return $ do
   let Privmsg _ (Right msg) = _message ev
@@ -63,11 +58,8 @@ eventFunc cfg _ ev = return $ do
 
 -- *External usage
 
--- |Try to fetch information on a URL. If there is no specific
--- handler, this will just be the truncated title.
+-- |Try to fetch information on a URL.
+--
+-- TODO: Don't display empty titles
 fetchLinkInfo :: MonadIO m => LinkInfoCfg -> URI -> m (LinkInfo Text)
-fetchLinkInfo cfg url = case getLinkHandler cfg url of
-                          Just handler -> liftIO $ handler url
-                          Nothing      -> liftM (fmap trunc . maybe NoTitle Title) $ fetchTitle url
-    where trunc txt | T.length txt > _maxTitleLen cfg = T.take (_maxTitleLen cfg - 1) txt <> "…"
-          trunc txt = txt
+fetchLinkInfo cfg url = liftIO . maybe (return NoTitle) ($ url) $ getLinkHandler cfg url
