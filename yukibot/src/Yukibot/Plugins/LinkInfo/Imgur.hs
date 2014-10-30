@@ -4,7 +4,7 @@
 --
 -- Based on Mathison's imgur linkinfo plugin:
 -- <https://github.com/HackSoc/csbot>
-module Yukibot.Plugins.ImgurLinks 
+module Yukibot.Plugins.LinkInfo.Imgur
     ( -- *LinkInfo integration 
       licPredicate
     , licHandler

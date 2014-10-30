@@ -61,10 +61,10 @@ executable yukibot
   other-modules:       Yukibot.Plugins.Brainfuck
                      , Yukibot.Plugins.Cellular
                      , Yukibot.Plugins.Channels
-                     , Yukibot.Plugins.ImgurLinks
                      , Yukibot.Plugins.Initialise
                      , Yukibot.Plugins.LinkInfo
                      , Yukibot.Plugins.LinkInfo.Common
+                     , Yukibot.Plugins.LinkInfo.Imgur
                      , Yukibot.Plugins.MAL
                      , Yukibot.Plugins.Memory
                      , Yukibot.Plugins.Seen
