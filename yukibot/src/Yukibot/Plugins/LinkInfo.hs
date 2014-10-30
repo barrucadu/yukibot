@@ -17,7 +17,7 @@ import Data.Aeson                 (FromJSON(..), ToJSON(..), Value(..), (.=), (.
 import Data.Default.Class         (Default(..))
 import Data.Maybe                 (catMaybes, mapMaybe)
 import Data.Monoid                ((<>))
-import Data.Text                  (Text, pack, unpack, isPrefixOf, toLower)
+import Data.Text                  (Text, pack, unpack, isPrefixOf, toLower, strip)
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
 import Network.IRC.Client         (reply)
@@ -88,10 +88,16 @@ eventFunc cfg _ ev = return $ do
 -- *External usage
 
 -- |Try to fetch information on a URL.
---
--- TODO: Don't display empty titles
 fetchLinkInfo :: MonadIO m => LinkInfoCfg -> URI -> m (LinkInfo Text)
-fetchLinkInfo cfg url = liftIO . maybe (return NoTitle) (($ url) . _licHandler) $ getLinkHandler cfg url
+fetchLinkInfo cfg url = liftIO $ unempty <$> handler url
+  where
+    -- Get the handler, or a fallback if none exists
+    handler = maybe (\_ -> return NoTitle) _licHandler $ getLinkHandler cfg url
+
+    -- Strip out empty titles
+    unempty (Title t) | strip t == "" = NoTitle
+    unempty (Info  i) | strip i == "" = NoTitle
+    unempty t = t
 
 -- *Helpers
 
