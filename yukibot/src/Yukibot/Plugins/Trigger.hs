@@ -10,6 +10,9 @@ module Yukibot.Plugins.Trigger
     , TriggerStateSnapshot
     -- *Event handler
     , eventHandler
+    -- Commands
+    , addTriggerCmd
+    , rmTriggerCmd
     -- *Updating
     , addTrigger
     , removeTrigger
@@ -28,7 +31,8 @@ import Data.ByteString.Char8      (unpack)
 import Data.Default.Class         (Default(..))
 import Data.Map                   (Map, mapWithKey, foldWithKey)
 import Data.Maybe                 (fromMaybe)
-import Data.Text                  (Text, replace, isPrefixOf, isSuffixOf)
+import Data.Text                  (Text, replace, isPrefixOf, isSuffixOf, breakOn, strip)
+import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
 import Network.IRC.Asakura.State  (Snapshot(..), Rollback(..))
@@ -87,14 +91,6 @@ newtype TriggerStateSnapshot = TSS { _ssTriggers :: Map Text Response }
 
 instance FromJSON TriggerStateSnapshot where
   parseJSON = fmap (TSS . mapWithKey doRegex) . parseJSON
-    where
-      doRegex trig resp | "/" `isPrefixOf` trig && "/" `isSuffixOf` trig && T.length trig >= 2 = doRegex' trig resp
-                        | otherwise = resp
-
-      -- Strip the leading and trailing '/', and attempt to compile the inner regex.
-      doRegex' trig resp = resp { _regex = either (const Nothing) Just . compile copt eopt . T.unpack . T.init . T.tail $ trig }
-      copt = defaultCompOpt { caseSensitive = False }
-      eopt = defaultExecOpt
 
 instance ToJSON TriggerStateSnapshot where
   toJSON = toJSON . _ssTriggers
@@ -177,6 +173,47 @@ respond ev r network channel = do
     reply' resp | "/me" `isPrefixOf` resp = send $ ctcp (if T.null chan then nick else chan) "ACTION" [T.strip $ T.drop 3 resp]
                 | otherwise = reply ev resp
 
+-- *Commands
+
+-- |Add a new trigger
+--
+-- Because triggers can be arbitrary text, " <reply> " is used to
+-- delimit the trigger and the response.
+addTriggerCmd :: TriggerState -> CommandDef
+addTriggerCmd ts = CommandDef
+  { _verb = ["add", "trigger"]
+  , _help = "<trigger> \\<reply\\> <response> -- add a trigger, as triggers can be arbitrary text, '<reply>' is used to delimit the trigger and the response. Regex triggers start and end with '/'."
+  , _action = go
+  }
+
+  where
+    go vs _ _ = go' $ T.unwords vs
+    go' trig = go'' $ T.drop 7 <$> breakOn "<reply>" trig
+    go'' (trig, resp) =
+      let trig' = strip trig
+          resp' = TR
+            { _response = strip resp
+            , _blacklist = M.empty
+            , _probability = 1
+            , _regex = Nothing
+            }
+      in do
+        addTrigger ts trig' $ doRegex trig' resp'
+        return $ return ()
+
+-- Remove a trigger
+rmTriggerCmd :: TriggerState -> CommandDef
+rmTriggerCmd ts = CommandDef
+  { _verb = ["remove", "trigger"]
+  , _help = "<trigger> - remove the named trigger"
+  , _action = go
+  }
+
+  where
+    go vs _ _ = do
+      removeTrigger ts . strip $ T.unwords vs
+      return $ return ()
+
 -- *Updating
 
 -- |Add a new trigger
@@ -221,3 +258,16 @@ whitelist ts trig network channel = liftIO . atomically $ do
         unblack chans = case filter (/=channel) $ fromMaybe [] chans of
                           [] -> Nothing
                           cs -> Just cs
+
+-- *Utils
+
+-- Attempt to interpret the trigger as regex, and compile it.
+doRegex :: Text -> Response -> Response
+doRegex trig resp | "/" `isPrefixOf` trig && "/" `isSuffixOf` trig && T.length trig >= 2 = doRegex'
+                  | otherwise = resp
+  where
+    -- Strip the leading and trailing '/', and attempt to compile the inner regex.
+    doRegex' = resp { _regex = either (const Nothing) Just . compile copt eopt . T.unpack . T.init . T.tail $ trig }
+
+    copt = defaultCompOpt { caseSensitive = False }
+    eopt = defaultExecOpt
