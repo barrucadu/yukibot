@@ -9,23 +9,19 @@ module Yukibot.Plugins.Mueval
   ) where
 
 import Control.Applicative          ((<$>), (<*>))
-import Control.Lens                 ((^.))
 import Control.Monad.IO.Class       (MonadIO, liftIO)
 import Data.Aeson                   (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
-import Data.ByteString.Lazy         (toStrict)
 import Data.Char                    (isSpace)
 import Data.Monoid                  ((<>))
 import Data.Text                    (isPrefixOf, unpack, pack)
-import Data.Text.Encoding           (decodeUtf8)
 import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Asakura.Events   (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types    (AsakuraEventHandler(..))
 import Network.IRC.Client           (reply)
 import Network.IRC.Client.Types     (Event(..), EventType(EPrivmsg), Message(Privmsg), UnicodeEvent, IRC)
-import Network.Wreq                 (FormParam((:=)), post, responseBody)
 import System.Process               (readProcessWithExitCode)
 import System.Random                (randomIO)
-import Yukibot.Utils                (cfgGet')
+import Yukibot.Utils
 
 import qualified Data.Text as T
 
@@ -125,15 +121,8 @@ muopts loadfile expr =
 -- |Reply (if the output is single line), or upload to sprunge (if
 -- multi-line) and reply with link.
 replyOrPaste :: UnicodeEvent -> String -> IRC ()
-replyOrPaste ev txt | '\n' `elem` txt = paste ev txt
+replyOrPaste ev txt | '\n' `elem` txt = paste txt >>= \p -> reply ev $ "Multi-line result: " <> p
                     | otherwise       = reply ev . pack $ shrink txt
-
--- |Upload to sprunge
-paste :: UnicodeEvent -> String -> IRC ()
-paste ev txt = do
-  r <- liftIO $ post "http://sprunge.us" [ "sprunge" := txt ]
-  let resp = unpack . decodeUtf8 . toStrict $ r ^. responseBody
-  reply ev . pack $ "Multi-line result: " ++ strip resp
 
 -- |Shrink a long output and add an ellipsis
 shrink :: String -> String
