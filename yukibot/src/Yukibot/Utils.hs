@@ -12,7 +12,7 @@ import Data.ByteString        (ByteString, isInfixOf)
 import Data.ByteString.Lazy   (toStrict)
 import Data.Maybe             (fromMaybe)
 import Data.String            (IsString(..))
-import Data.Text              (unpack)
+import Data.Text              (Text, strip, unpack)
 import Data.Text.Encoding     (decodeUtf8)
 import Network.HTTP.Client    (HttpException)
 import Network.Wreq
@@ -89,3 +89,9 @@ makeUri domain path query = URI { uriScheme    = "http:"
                                 , uriQuery     = fromMaybe "" query
                                 , uriFragment  = ""
                                 }
+
+-- |Upload some text to sprunge and return the response body (the URI)
+paste :: MonadIO m => String -> m Text
+paste txt = do
+  r <- liftIO $ post "http://sprunge.us" [ "sprunge" := txt ]
+  return . strip . decodeUtf8 . toStrict $ r ^. responseBody
