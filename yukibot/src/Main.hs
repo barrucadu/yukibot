@@ -86,6 +86,7 @@ runWithState fp ys = do
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0) $ BL.whitelistCmd    bs
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0) $ T.addTriggerCmd    ts
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0) $ T.rmTriggerCmd     ts
+  registerCommand cs $ T.listTriggerCmd ts
 
   registerCommand cs $ BL.wrapsCmd bs "mal"      $  M.malCommand        mas
   registerCommand cs $ BL.wrapsCmd bs "watching" $ (Me.simpleGetCommand wfs) { _verb = ["watching"] }

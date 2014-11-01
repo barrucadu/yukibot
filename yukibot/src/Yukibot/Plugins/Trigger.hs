@@ -13,6 +13,7 @@ module Yukibot.Plugins.Trigger
     -- Commands
     , addTriggerCmd
     , rmTriggerCmd
+    , listTriggerCmd
     -- *Updating
     , addTrigger
     , removeTrigger
@@ -31,6 +32,7 @@ import Data.ByteString.Char8      (unpack)
 import Data.Default.Class         (Default(..))
 import Data.Map                   (Map, mapWithKey, foldWithKey)
 import Data.Maybe                 (fromMaybe)
+import Data.Monoid                ((<>))
 import Data.Text                  (Text, replace, isPrefixOf, isSuffixOf, breakOn, strip)
 import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
@@ -47,6 +49,7 @@ import Network.IRC.Client.Types   ( ConnectionConfig(..)
 import System.Random              (randomIO)
 import Text.Regex.TDFA            (CompOption(..), defaultCompOpt, defaultExecOpt)
 import Text.Regex.TDFA.String     (Regex, compile, execute)
+import Yukibot.Utils              (paste)
 
 import qualified Data.Map  as M
 import qualified Data.Text as T
@@ -213,6 +216,28 @@ rmTriggerCmd ts = CommandDef
     go vs _ _ = do
       removeTrigger ts . strip $ T.unwords vs
       return $ return ()
+
+-- |List all triggers, by uploading to sprunge
+listTriggerCmd :: TriggerState -> CommandDef
+listTriggerCmd ts = CommandDef
+  { _verb = ["list", "triggers"]
+  , _help = "List all the current triggers"
+  , _action = go
+  }
+
+  where
+    go _ _ ev = do
+      trigs <- allTriggers
+      uri <- paste trigs
+      return $ reply ev uri
+
+    -- Get all triggers, as a newline-delimited string
+    allTriggers = liftIO . atomically $ do
+      triggers <- readTVar $ _triggers ts
+      return . unlines . map ppTrig $ M.toList triggers
+
+    -- Pretty-print an individual trigger
+    ppTrig (trig, resp) = T.unpack $ trig <> " <reply> " <> _response resp
 
 -- *Updating
 
