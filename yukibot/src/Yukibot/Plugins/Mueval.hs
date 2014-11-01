@@ -9,6 +9,9 @@ module Yukibot.Plugins.Mueval
   ) where
 
 import Control.Applicative          ((<$>), (<*>))
+import Control.Concurrent           (forkIO)
+import Control.Concurrent.MVar      (newEmptyMVar, takeMVar, putMVar)
+import Control.Exception            (evaluate)
 import Control.Monad.IO.Class       (MonadIO, liftIO)
 import Data.Aeson                   (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
 import Data.Char                    (isSpace)
@@ -19,7 +22,10 @@ import Network.IRC.Asakura.Events   (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types    (AsakuraEventHandler(..))
 import Network.IRC.Client           (reply)
 import Network.IRC.Client.Types     (Event(..), EventType(EPrivmsg), Message(Privmsg), UnicodeEvent, IRC)
-import System.Process               (readProcessWithExitCode)
+import System.Environment           (getEnvironment)
+import System.Exit                  (ExitCode)
+import System.IO                    (hGetContents, hClose)
+import System.Process               (CreateProcess(..), StdStream(CreatePipe), createProcess, proc, waitForProcess)
 import System.Random                (randomIO)
 import Yukibot.Utils
 
@@ -85,16 +91,17 @@ eventHandler = AsakuraEventHandler
 
 -- |Evaluate an expression and return the result.
 mueval :: MonadIO m => MuevalCfg -> String -> m String
-mueval mc expr = do
+mueval mc expr = liftIO $ do
   -- Generate a random seed
-  seed <- liftIO (randomIO :: IO Int)
+  seed <- randomIO :: IO Int
   let expr' = "let seed = " ++ show seed ++ " in " ++ expr
 
   let loadfile = _loadfile mc
   let binary   = _mueval mc
   let opts     = muopts loadfile expr'
 
-  (_, out, err) <- liftIO $ readProcessWithExitCode binary opts ""
+  muenv  <- (("LC_ALL", "C"):) <$> getEnvironment
+  (_, out, err) <- runProcess binary opts $ Just muenv
   return . strip $
     case (out, err) of
       ([], []) -> "Terminated"
@@ -115,6 +122,45 @@ muopts loadfile expr =
   , "--expression=" ++ expr
   , "+RTS", "-N2", "-RTS"
   ]
+
+-- |Run a process, returning the exit code, stdout, and stderr.
+--
+-- Copied from 'readProcessWithExitCode', but with environment
+-- setting.
+runProcess :: FilePath -> [String] -> Maybe [(String, String)] -> IO (ExitCode, String, String)
+runProcess cmd args env = do
+  -- Create the process
+  (Just inh, Just outh, Just errh, pid) <-
+    createProcess (proc cmd args)
+    { std_in  = CreatePipe
+    , std_out = CreatePipe
+    , std_err = CreatePipe
+    , env     = env
+    }
+
+  outMVar <- newEmptyMVar
+
+  -- New thread to read stdout
+  out  <- hGetContents outh
+  forkIO $ evaluate (length out) >> putMVar outMVar ()
+
+  -- New thread to read stderr
+  err  <- hGetContents errh
+  forkIO $ evaluate (length err) >> putMVar outMVar ()
+
+  -- Close stdin
+  hClose inh
+
+  -- Wait on the output
+  takeMVar outMVar
+  takeMVar outMVar
+  hClose outh
+  hClose errh
+
+  -- Wait for termination
+  ex <- waitForProcess pid
+
+  return (ex, out, err)
 
 -- *Misc
 
