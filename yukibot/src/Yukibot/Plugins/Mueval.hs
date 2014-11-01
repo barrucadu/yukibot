@@ -113,7 +113,7 @@ muopts loadfile expr =
   [ "--no-imports"
   , "-l", loadfile
   , "--expression=" ++ expr
-  , "+RTS", "-N", "-RTS"
+  , "+RTS", "-N2", "-RTS"
   ]
 
 -- *Misc
