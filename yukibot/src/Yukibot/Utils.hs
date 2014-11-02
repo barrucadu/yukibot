@@ -95,3 +95,13 @@ paste :: MonadIO m => String -> m Text
 paste txt = do
   r <- liftIO $ post "http://sprunge.us" [ "sprunge" := txt ]
   return . strip . decodeUtf8 . toStrict $ r ^. responseBody
+
+-- |Split a string by a character
+--
+-- Why isn't this built in?
+wordsWhen :: (Char -> Bool) -> String -> [String]
+wordsWhen p s =
+  case dropWhile p s of
+    "" -> []
+    s' -> let (w, s'') = break p s'
+         in w : wordsWhen p s''

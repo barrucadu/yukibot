@@ -12,20 +12,66 @@ module Yukibot.Plugins.LinkInfo
     ) where
 
 import Control.Applicative        ((<$>))
-import Control.Monad              (liftM)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
+import Data.Aeson                 (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
+import Data.Default.Class         (Default(..))
 import Data.Maybe                 (catMaybes, mapMaybe)
 import Data.Monoid                ((<>))
-import Data.Text                  (Text, pack, unpack, isPrefixOf)
+import Data.Text                  (Text, pack, unpack, isPrefixOf, toLower, strip)
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
 import Network.IRC.Client         (reply)
 import Network.IRC.Client.Types   (Event(..), EventType(EPrivmsg), IRC, Message(..), UnicodeEvent, IRCState)
 import Network.URI                (URI, parseURI)
-import Yukibot.Plugins.LinkInfo.Common
 import Yukibot.Utils              (showUri)
 
+import Yukibot.Plugins.LinkInfo.Common
+import Yukibot.Plugins.LinkInfo.Imgur
+import Yukibot.Plugins.LinkInfo.PageTitle
+import Yukibot.Plugins.LinkInfo.Soundcloud
+import Yukibot.Plugins.LinkInfo.Youtube
+
 import qualified Data.Text as T
+
+-- *State
+--
+-- This is handled here to avoid cyclic module imports.
+
+instance ToJSON LinkInfoCfg where
+    toJSON cfg = case _soundcloud cfg of
+      Just apikey ->
+        object [ "numLinks" .= _numLinks    cfg
+               , "maxLen"   .= _maxTitleLen cfg
+               , "handlers" .= map _licName (_linkHandlers cfg)
+               , "soundcloud" .= apikey
+               ]
+      Nothing ->
+        object [ "numLinks" .= _numLinks    cfg
+               , "maxLen"   .= _maxTitleLen cfg
+               , "handlers" .= map _licName (_linkHandlers cfg)
+               ]
+
+instance FromJSON LinkInfoCfg where
+  parseJSON (Object v) = do
+    numLinks   <- v .:? "numLinks" .!= _numLinks def
+    maxLen     <- v .:? "maxLen"   .!= _maxTitleLen def
+    handlers   <- v .:? "handlers"
+    soundcloud <- v .:? "soundcloud"
+
+    let handlers' = case handlers of
+          Just hs -> populateHandlers maxLen soundcloud hs
+          Nothing -> _linkHandlers def
+
+    return $ LIC numLinks maxLen handlers' soundcloud
+
+  parseJSON _ = fail "Expected object"
+
+instance Default LinkInfoCfg where
+    def = LIC { _numLinks     = 5
+              , _maxTitleLen  = 100
+              , _linkHandlers = [imgurLinks, youtubeLinks, pageTitle $ _maxTitleLen def]
+              , _soundcloud   = Nothing
+              }
 
 -- *Event handler
 
@@ -40,10 +86,6 @@ eventHandler cfg = AsakuraEventHandler
 
 -- |Split a message up into words, and display information on the
 -- first `numLinks` links.
---
--- TODO: Don't show titles where URL is too similar.
---
--- TODO: Steal special titles from Mathison.
 eventFunc :: LinkInfoCfg -> IRCState -> UnicodeEvent -> Bot (IRC ())
 eventFunc cfg _ ev = return $ do
   let Privmsg _ (Right msg) = _message ev
@@ -63,11 +105,26 @@ eventFunc cfg _ ev = return $ do
 
 -- *External usage
 
--- |Try to fetch information on a URL. If there is no specific
--- handler, this will just be the truncated title.
+-- |Try to fetch information on a URL.
 fetchLinkInfo :: MonadIO m => LinkInfoCfg -> URI -> m (LinkInfo Text)
-fetchLinkInfo cfg url = case getLinkHandler cfg url of
-                          Just handler -> liftIO $ handler url
-                          Nothing      -> liftM (fmap trunc . maybe NoTitle Title) $ fetchTitle url
-    where trunc txt | T.length txt > _maxTitleLen cfg = T.take (_maxTitleLen cfg - 1) txt <> "…"
-          trunc txt = txt
+fetchLinkInfo cfg url = liftIO $ unempty <$> handler url
+  where
+    -- Get the handler, or a fallback if none exists
+    handler = maybe (\_ -> return NoTitle) _licHandler $ getLinkHandler cfg url
+
+    -- Strip out empty titles
+    unempty (Title t) | strip t == "" = NoTitle
+    unempty (Info  i) | strip i == "" = NoTitle
+    unempty t = t
+
+-- *Helpers
+
+-- |Turn a list of names of handlers into a list of handlers.
+populateHandlers :: Int -> Maybe Text -> [Text] -> [LinkHandler]
+populateHandlers maxlen soundcloud = mapMaybe (toHandler . toLower)
+  where
+    toHandler "imgur"      = Just imgurLinks
+    toHandler "youtube"    = Just youtubeLinks
+    toHandler "soundcloud" = Just $ soundcloudLinks soundcloud
+    toHandler "pagetitle"  = Just $ pageTitle maxlen
+    toHandler _ = Nothing

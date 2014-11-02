@@ -61,10 +61,13 @@ executable yukibot
   other-modules:       Yukibot.Plugins.Brainfuck
                      , Yukibot.Plugins.Cellular
                      , Yukibot.Plugins.Channels
-                     , Yukibot.Plugins.ImgurLinks
                      , Yukibot.Plugins.Initialise
                      , Yukibot.Plugins.LinkInfo
                      , Yukibot.Plugins.LinkInfo.Common
+                     , Yukibot.Plugins.LinkInfo.Imgur
+                     , Yukibot.Plugins.LinkInfo.PageTitle
+                     , Yukibot.Plugins.LinkInfo.Soundcloud
+                     , Yukibot.Plugins.LinkInfo.Youtube
                      , Yukibot.Plugins.MAL
                      , Yukibot.Plugins.Memory
                      , Yukibot.Plugins.Seen
@@ -92,6 +95,7 @@ executable yukibot
                      , hxt-tagsoup  >=9.1
                      , irc-client   >=0.2.2.1
                      , lens         >=4.0
+                     , lens-aeson   >=1.0
                      , network-uri  >=2.5
                      , parsec       >=3.0.0
                      , random       >=1.0

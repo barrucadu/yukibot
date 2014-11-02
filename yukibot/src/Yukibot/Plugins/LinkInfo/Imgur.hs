@@ -4,17 +4,20 @@
 --
 -- Based on Mathison's imgur linkinfo plugin:
 -- <https://github.com/HackSoc/csbot>
-module Yukibot.Plugins.ImgurLinks 
-    ( -- *LinkInfo integration 
-      licPredicate
-    , licHandler
-    ) where
+module Yukibot.Plugins.LinkInfo.Imgur (imgurLinks) where
 
 import Data.Text                       (Text)
 import Network.URI                     (URI(..), URIAuth(..))
-import Yukibot.Plugins.LinkInfo.Common (LinkInfo(..), fetchTitle, liftHandler)
+import Yukibot.Plugins.LinkInfo.Common (LinkHandler(..), LinkInfo(..), fetchTitle, liftHandler)
 
 -- *LinkInfo integration
+
+imgurLinks :: LinkHandler
+imgurLinks = LinkHandler
+             { _licName      = "Imgur"
+             , _licPredicate = licPredicate
+             , _licHandler   = licHandler
+             }
 
 -- |LinkInfo predicate: handle any URLs for the domains "imgur.com" or
 -- "i.imgur.com".

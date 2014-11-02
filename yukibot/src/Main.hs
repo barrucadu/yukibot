@@ -17,17 +17,15 @@ import System.Exit            (exitFailure)
 import System.Posix.Signals   (Handler(..), installHandler, sigINT, sigTERM)
 import Yukibot.State
 
+import qualified Network.IRC.Asakura.Blacklist   as BL
 import qualified Network.IRC.Asakura.Commands    as C
 import qualified Network.IRC.Asakura.Help        as H
 import qualified Network.IRC.Asakura.Permissions as P
-import qualified Network.IRC.Asakura.Blacklist   as BL
 import qualified Yukibot.Plugins.Brainfuck       as BF
 import qualified Yukibot.Plugins.Cellular        as CA
 import qualified Yukibot.Plugins.Channels        as CH
-import qualified Yukibot.Plugins.ImgurLinks      as I
 import qualified Yukibot.Plugins.Initialise      as I
 import qualified Yukibot.Plugins.LinkInfo        as L
-import qualified Yukibot.Plugins.LinkInfo.Common as LC
 import qualified Yukibot.Plugins.MAL             as M
 import qualified Yukibot.Plugins.Memory          as Me
 import qualified Yukibot.Plugins.Seen            as S
@@ -66,10 +64,10 @@ runWithState fp ys = do
   let bs  = _blacklistState  ys
   let ms  = _memoryState     ys
   let ts  = _triggerState    ys
+  let ls  = _linkinfoState   ys
 
-  let wfs = Me.simpleFactStore ms "watching"
-  let lis = LC.addLinkHandler (_linkinfoState ys) I.licPredicate I.licHandler
-  let mas = _malState ys
+  let wfs  = Me.simpleFactStore ms "watching"
+  let mas  = _malState ys
 
   -- Register signal handlers
   installHandler sigINT  (Catch $ handler state) Nothing
@@ -99,7 +97,7 @@ runWithState fp ys = do
   addGlobalEventHandler' state $ C.eventRunner cs
 
   addGlobalEventHandler' state $ BL.wraps bs "seen"     $ S.eventHandler ms
-  addGlobalEventHandler' state $ BL.wraps bs "linkinfo" $ L.eventHandler lis
+  addGlobalEventHandler' state $ BL.wraps bs "linkinfo" $ L.eventHandler ls
   addGlobalEventHandler' state $ BL.wraps bs "triggers" $ T.eventHandler ts
 
   -- Connect to networks
