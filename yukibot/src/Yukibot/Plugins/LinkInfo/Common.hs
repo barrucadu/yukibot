@@ -23,6 +23,9 @@ data LinkInfoCfg = LIC
     , _linkHandlers :: [LinkHandler]
     -- ^Link handlers are used for providing site-specific
     -- information.
+    , _soundcloud :: Maybe Text
+    -- ^Soundcloud API key. If not present, Soundcloud linkinfo is not
+    -- available.
     }
 
 -- *Link handlers
@@ -43,12 +46,10 @@ data LinkInfo a = Title a -- ^Title to display, in quotes.
                   deriving (Eq, Functor)
 
 -- |Add a new link handler
+--
+-- Add in reverse order so handlers added earlier override ones added later
 addLinkHandler :: LinkInfoCfg -> LinkHandler -> LinkInfoCfg
-addLinkHandler lic lh = LIC { _numLinks     = _numLinks     lic
-                            , _maxTitleLen  = _maxTitleLen  lic
-                            -- Add in reverse order so handlers added earlier override ones added later
-                            , _linkHandlers = _linkHandlers lic ++ [lh]
-                            }
+addLinkHandler lic lh = lic { _linkHandlers = _linkHandlers lic ++ [lh] }
 
 -- |Find the first matching handler for a URI
 getLinkHandler :: LinkInfoCfg -> URI -> Maybe LinkHandler

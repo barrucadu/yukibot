@@ -11,7 +11,7 @@ module Yukibot.Plugins.LinkInfo
     , fetchTitle
     ) where
 
-import Control.Applicative        ((<$>), (<*>))
+import Control.Applicative        ((<$>))
 import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Data.Aeson                 (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
 import Data.Default.Class         (Default(..))
@@ -28,6 +28,7 @@ import Yukibot.Utils              (showUri)
 import Yukibot.Plugins.LinkInfo.Common
 import Yukibot.Plugins.LinkInfo.Imgur
 import Yukibot.Plugins.LinkInfo.PageTitle
+import Yukibot.Plugins.LinkInfo.Soundcloud
 import Yukibot.Plugins.LinkInfo.Youtube
 
 import qualified Data.Text as T
@@ -37,23 +38,39 @@ import qualified Data.Text as T
 -- This is handled here to avoid cyclic module imports.
 
 instance ToJSON LinkInfoCfg where
-    toJSON cfg = object [ "numLinks" .= _numLinks    cfg
-                        , "maxLen"   .= _maxTitleLen cfg
-                        , "handlers" .= map _licName (_linkHandlers cfg)
-                        ]
+    toJSON cfg = case _soundcloud cfg of
+      Just apikey ->
+        object [ "numLinks" .= _numLinks    cfg
+               , "maxLen"   .= _maxTitleLen cfg
+               , "handlers" .= map _licName (_linkHandlers cfg)
+               , "soundcloud" .= apikey
+               ]
+      Nothing ->
+        object [ "numLinks" .= _numLinks    cfg
+               , "maxLen"   .= _maxTitleLen cfg
+               , "handlers" .= map _licName (_linkHandlers cfg)
+               ]
 
 instance FromJSON LinkInfoCfg where
-    parseJSON (Object v) = LIC <$> v .:? "numLinks" .!= _numLinks def
-                               <*> maxlen
-                               <*> handlers
-      where maxlen = v .:? "maxLen" .!= _maxTitleLen def
-            handlers = maybe (_linkHandlers def) . populateHandlers <$> maxlen <*> (v .:? "handlers")
-    parseJSON _ = fail "Expected object"
+  parseJSON (Object v) = do
+    numLinks   <- v .:? "numLinks" .!= _numLinks def
+    maxLen     <- v .:? "maxLen"   .!= _maxTitleLen def
+    handlers   <- v .:? "handlers"
+    soundcloud <- v .:? "soundcloud"
+
+    let handlers' = case handlers of
+          Just hs -> populateHandlers maxLen soundcloud hs
+          Nothing -> _linkHandlers def
+
+    return $ LIC numLinks maxLen handlers' soundcloud
+
+  parseJSON _ = fail "Expected object"
 
 instance Default LinkInfoCfg where
     def = LIC { _numLinks     = 5
               , _maxTitleLen  = 100
               , _linkHandlers = [imgurLinks, youtubeLinks, pageTitle $ _maxTitleLen def]
+              , _soundcloud   = Nothing
               }
 
 -- *Event handler
@@ -103,10 +120,11 @@ fetchLinkInfo cfg url = liftIO $ unempty <$> handler url
 -- *Helpers
 
 -- |Turn a list of names of handlers into a list of handlers.
-populateHandlers :: Int -> [Text] -> [LinkHandler]
-populateHandlers maxlen = mapMaybe (toHandler . toLower)
+populateHandlers :: Int -> Maybe Text -> [Text] -> [LinkHandler]
+populateHandlers maxlen soundcloud = mapMaybe (toHandler . toLower)
   where
-    toHandler "imgur"     = Just imgurLinks
-    toHandler "youtube"   = Just youtubeLinks
-    toHandler "pagetitle" = Just $ pageTitle maxlen
+    toHandler "imgur"      = Just imgurLinks
+    toHandler "youtube"    = Just youtubeLinks
+    toHandler "soundcloud" = Just $ soundcloudLinks soundcloud
+    toHandler "pagetitle"  = Just $ pageTitle maxlen
     toHandler _ = Nothing
