@@ -28,6 +28,7 @@ import Yukibot.Utils              (showUri)
 import Yukibot.Plugins.LinkInfo.Common
 import Yukibot.Plugins.LinkInfo.Imgur
 import Yukibot.Plugins.LinkInfo.PageTitle
+import Yukibot.Plugins.LinkInfo.Youtube
 
 import qualified Data.Text as T
 
@@ -52,7 +53,7 @@ instance FromJSON LinkInfoCfg where
 instance Default LinkInfoCfg where
     def = LIC { _numLinks     = 5
               , _maxTitleLen  = 100
-              , _linkHandlers = [imgurLinks, pageTitle $ _maxTitleLen def]
+              , _linkHandlers = [imgurLinks, youtubeLinks, pageTitle $ _maxTitleLen def]
               }
 
 -- *Event handler
@@ -106,5 +107,6 @@ populateHandlers :: Int -> [Text] -> [LinkHandler]
 populateHandlers maxlen = mapMaybe (toHandler . toLower)
   where
     toHandler "imgur"     = Just imgurLinks
+    toHandler "youtube"   = Just youtubeLinks
     toHandler "pagetitle" = Just $ pageTitle maxlen
     toHandler _ = Nothing

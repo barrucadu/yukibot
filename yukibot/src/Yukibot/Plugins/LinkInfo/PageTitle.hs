@@ -10,6 +10,7 @@ import Data.Monoid         ((<>))
 import Data.Text           (Text, unpack)
 import Network.URI         (URI(..), URIAuth(..))
 import Yukibot.Plugins.LinkInfo.Common (LinkHandler(..), LinkInfo(..), fetchTitle)
+import Yukibot.Utils       (wordsWhen)
 
 import qualified Data.Text as T
 
@@ -53,13 +54,3 @@ isSimilar title uri = inDomain || inPath || inTitle
     inTitle = any (\c -> c `isPrefixOf` slug && sluglen <= length c * 2) chunks
     chunks  = filter ((<10) . length) $ wordsWhen (=='/') path
     sluglen = length slug
-
--- |Split a string by a character
---
--- Why isn't this built in?
-wordsWhen :: (Char -> Bool) -> String -> [String]
-wordsWhen p s =
-  case dropWhile p s of
-    "" -> []
-    s' -> let (w, s'') = break p s'
-         in w : wordsWhen p s''
