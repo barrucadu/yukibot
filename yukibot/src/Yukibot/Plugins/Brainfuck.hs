@@ -98,6 +98,6 @@ command = CommandDef { _verb   = ["bf"]
     go [program] ircs ev = go [program, ""] ircs ev
     go (program:is) _ ev = do
       o <- liftIO $ timeout 3000000 $ return $! fromMaybe "Sorry, I don't understand that brainfuck program! \
-                                                          \Are brackets matched?" brainfuck program (T.unwords is)
+                                                          \Are brackets matched?" $ brainfuck program (T.unwords is)
       return . reply ev $ fromMaybe "Timed out." o
     go _ _ _ = return $ return ()
