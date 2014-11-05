@@ -1,9 +1,11 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 
+{-# ANN module "HLint: ignore Use String" #-}
+
 module Yukibot.Plugins.Brainfuck (command) where
 
-import Control.Applicative ((<$))
+import Control.Applicative ((<$), (<$>))
 import Control.Lens hiding (noneOf)
 import Control.Monad                (when)
 import Control.Monad.IO.Class
@@ -79,7 +81,7 @@ parseProgram = (>>) comment $ many $ choice [
     parsePM = fmap (P . sum) $ many1 $ choice [
       1    <$ char '+',
       (-1) <$ char '-']
-    parseLoop = fmap Loop $ between (char '[') (char ']') parseProgram
+    parseLoop = Loop <$> between (char '[') (char ']') parseProgram
     comment = skipMany (noneOf "+-<>,.[]")
 
 brainfuck :: Text -> Text -> Maybe Text
@@ -95,10 +97,7 @@ command = CommandDef { _verb   = ["bf"]
   where
     go [program] ircs ev = go [program, ""] ircs ev
     go (program:is) _ ev = do
-      o <- liftIO $ timeout 3000000 $ return $! case brainfuck program (T.unwords is) of
-        Nothing -> "Sorry, I don't understand that brainfuck program! Are brackets matched?"
-        Just res -> res
-      return . reply ev $ case o of
-        Nothing -> "Timed out."
-        Just finalOutput -> finalOutput
+      o <- liftIO $ timeout 3000000 $ return $! fromMaybe "Sorry, I don't understand that brainfuck program! \
+                                                          \Are brackets matched?" $ brainfuck program (T.unwords is)
+      return . reply ev $ fromMaybe "Timed out." o
     go _ _ _ = return $ return ()
