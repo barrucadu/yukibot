@@ -1,8 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-{-# ANN module "HLint: ignore Use String" #-}
-
 module Yukibot.Plugins.Brainfuck (command) where
 
 import Control.Applicative ((<$), (<$>))
@@ -20,6 +18,8 @@ import System.Timeout
 import Text.Parsec hiding (State)
 import Text.Parsec.Text
 import Yukibot.Utils.Types          (Zipper(..), left, right, focus)
+
+{-# ANN module ("HLint: ignore Use String" :: String) #-}
 
 -- |Data type representing a single brainfuck element, that is, a single command
 -- or a loop.
