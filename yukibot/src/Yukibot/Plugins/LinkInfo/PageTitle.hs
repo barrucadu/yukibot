@@ -17,9 +17,15 @@ import qualified Data.Text as T
 pageTitle :: Int -> LinkHandler
 pageTitle maxlen = LinkHandler
                    { _licName      = "pageTitle"
-                   , _licPredicate = const True
+                   , _licPredicate = filterTypes
                    , _licHandler   = licHandler maxlen
                    }
+
+-- |Don't fetch titles for URLs which look like a media file.
+filterTypes :: URI -> Bool
+filterTypes uri = not $ any (`isPrefixOf` uriPath uri) types
+  where
+    types = [".png",".jpg",".jpeg",".gif",".mp3",".mp4",".wav",".avi",".mkv"]
 
 -- |Try to fetch the title of a URL.
 licHandler :: Int -> URI -> IO (LinkInfo Text)
