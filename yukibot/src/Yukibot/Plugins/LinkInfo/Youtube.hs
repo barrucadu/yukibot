@@ -4,17 +4,15 @@
 module Yukibot.Plugins.LinkInfo.Youtube (youtubeLinks, getVid) where
 
 import Control.Applicative ((<$>), (<*>))
-import Control.Lens    ((^.), (^?), ix, to)
-import Data.Aeson      (Object, decode')
+import Control.Lens    ((^?), ix, to)
+import Data.Aeson      (Object)
 import Data.Aeson.Lens (_String, nth)
-import Data.ByteString.Lazy (fromStrict)
 import Data.Char       (toLower)
 import Data.List       (isInfixOf, stripPrefix)
 import Data.Maybe      (isJust, fromMaybe, listToMaybe, mapMaybe)
 import Data.Monoid     ((<>))
 import Data.Text       (Text, unpack, pack)
 import Network.URI     (URI(..), URIAuth(..))
-import Network.Wreq    (responseBody)
 import Text.Read       (readMaybe)
 import Yukibot.Plugins.LinkInfo.Common
 import Yukibot.Utils
@@ -59,14 +57,10 @@ youtube uri = maybe (return Failed) getLinkInfo $ getVid uri
 getLinkInfo :: Text -> IO (LinkInfo Text)
 getLinkInfo vid = do
   -- Query the API
-  res <- fetchHttp apiuri
+  res <- fetchJson apiuri
 
   -- Extract the information
-  let ytinfo = do
-        response <- res
-        json     <- decode' . fromStrict $ response ^. responseBody
-
-        getLinkInfoFromJson json
+  let ytinfo = res >>= getLinkInfoFromJson
 
   -- Gracefully handle failure
   return $ maybe Failed Info ytinfo

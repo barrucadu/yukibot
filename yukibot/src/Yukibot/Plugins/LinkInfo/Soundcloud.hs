@@ -2,16 +2,14 @@
 module Yukibot.Plugins.LinkInfo.Soundcloud (soundcloudLinks) where
 
 import Control.Applicative ((<$>), (<*>))
-import Control.Lens    ((^.), (^?), ix, to)
-import Data.Aeson      (Object, decode')
+import Control.Lens    ((^?), ix, to)
+import Data.Aeson      (Object)
 import Data.Aeson.Lens (_String, _Integer)
-import Data.ByteString.Lazy (fromStrict)
 import Data.Char       (toLower)
 import Data.List       (isInfixOf)
 import Data.Monoid     ((<>))
 import Data.Text       (Text, unpack, pack)
 import Network.URI     (URI(..), URIAuth(..))
-import Network.Wreq    (responseBody)
 import Yukibot.Plugins.LinkInfo.Common
 import Yukibot.Utils
 
@@ -40,17 +38,13 @@ soundcloud (Just apikey) uri = getLinkInfo apikey uri
 getLinkInfo :: Text -> URI -> IO (LinkInfo Text)
 getLinkInfo apikey uri = do
   -- Query the API
-  res <- fetchHttp apiuri
+  res <- fetchJson apiuri
 
   -- Extract the information
-  let ytinfo = do
-        response <- res
-        json     <- decode' . fromStrict $ response ^. responseBody
-
-        getLinkInfoFromJson json
+  let scinfo = res >>= getLinkInfoFromJson
 
   -- Gracefully handle failure
-  return $ maybe Failed Info ytinfo
+  return $ maybe Failed Info scinfo
 
   where
     apiuri = makeUri "api.soundcloud.com" "/resolve.json" . Just $ "?url=" ++ show uri ++ "&client_id=" ++ unpack apikey

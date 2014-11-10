@@ -8,8 +8,9 @@ import Control.Exception      (catch)
 import Control.Lens           ((&), (.~), (^.))
 import Control.Monad          (guard)
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Aeson             (Object, decode')
 import Data.ByteString        (ByteString, isInfixOf)
-import Data.ByteString.Lazy   (toStrict)
+import Data.ByteString.Lazy   (toStrict, fromStrict)
 import Data.Maybe             (fromMaybe)
 import Data.String            (IsString(..))
 import Data.Text              (Text, strip, unpack)
@@ -49,6 +50,16 @@ fetchHtml' url opts = do
     guard $ "html" `isInfixOf` (response ^. responseHeader "Content-Type")
 
     Just . unpack . decodeUtf8 $ response ^. responseBody
+
+-- |Download some JSON over HTTP.
+fetchJson :: MonadIO m => URI -> m (Maybe Object)
+fetchJson uri = do
+  res <- fetchHttp uri
+
+  -- Attempt to JSON
+  return $ do
+    response <- res
+    decode' . fromStrict $ response ^. responseBody
 
 -- |Download something over HTTP, returning (Just response) on a 200
 -- response code. This follows redirects.
