@@ -15,9 +15,9 @@ module Yukibot.Plugins.Trigger
     ) where
 
 import Control.Applicative        ((<$>))
-import Control.Monad              (when)
+import Control.Monad              (filterM)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
-import Data.Maybe                 (fromMaybe, listToMaybe, mapMaybe)
+import Data.Maybe                 (fromMaybe, mapMaybe)
 import Data.Monoid                ((<>))
 import Data.Text                  (Text, replace, isPrefixOf, isSuffixOf, strip, pack, unpack)
 import Database.MongoDB           (Document, (=:), insert_)
@@ -30,7 +30,7 @@ import Network.IRC.Client.Types   ( Event(..), EventType(EPrivmsg)
                                   , Message(Privmsg)
                                   , UnicodeEvent
                                   , Source(..))
-import System.Random              (randomIO)
+import System.Random              (randomIO, randomRIO)
 import Text.Read                  (readMaybe)
 import Text.Regex.TDFA            (CompOption(..), defaultCompOpt, defaultExecOpt)
 import Text.Regex.TDFA.String     (Regex, compile, execute)
@@ -68,20 +68,19 @@ eventFunc _ ev = do
 
   return $ do
     let Privmsg _ (Right msg) = _message ev
+    respond ev $ findTriggers (T.strip msg) triggers
 
-    case findTrigger (T.strip msg) triggers of
-      Just resp -> respond ev resp
-      Nothing   -> return ()
-
--- Find the first trigger matching this message.
-findTrigger :: Text -> [Document] -> Maybe Response
-findTrigger target = listToMaybe . mapMaybe findTrigger'
+-- Find the triggers matching this message.
+findTriggers :: Text -> [Document] -> [Response]
+findTriggers target = mapMaybe findTrigger'
   where
     findTrigger' trig =
       let trig' = at' "trigger" "" trig
       in case tryRegex trig' of
-          Just r  -> if r =~ target                        then Just $ extract trig else Nothing
-          Nothing -> if T.toLower trig' == T.toLower target then Just $ extract trig else Nothing
+          Just r  | r =~ target -> Just $ extract trig
+                  | otherwise -> Nothing
+          Nothing | T.toLower trig' == T.toLower target -> Just $ extract trig
+                  | otherwise -> Nothing
 
     r =~ txt =
       case execute r (T.unpack txt) of
@@ -90,12 +89,16 @@ findTrigger target = listToMaybe . mapMaybe findTrigger'
 
     extract trig = TR (at' "response" "I am so triggered right now." trig) (at' "probability" 1 trig)
 
-respond :: UnicodeEvent -> Response -> IRC ()
-respond ev r = do
-  roll <- liftIO randomIO
+-- |Pick a random response and send it
+respond :: UnicodeEvent -> [Response] -> IRC ()
+respond ev rs = do
+  responses <- liftIO $ filterM (\r -> (<= _probability r) <$> randomIO) rs
 
-  when (roll <= _probability r) $
-     reply' . replace "%channel" chan . replace "%nick" nick . _response $ r
+  case responses of
+    [] -> return ()
+    _ -> do
+      idx <- liftIO $ randomRIO (0, length responses - 1)
+      reply' . replace "%channel" chan . replace "%nick" nick $ _response (responses !! idx)
 
   where
     chan = case _source ev of
