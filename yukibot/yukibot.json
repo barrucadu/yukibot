@@ -1,4 +1,8 @@
 {
+    "global": {
+        "foo": "bar"
+    },
+
     "initial": {
         "irc.freenode.net": {
             "channels": [
@@ -10,6 +14,7 @@
             "tls": true
         }
     },
+
     "permissions": {
         "irc.freenode.net": {
             "barrucadu": {
@@ -17,9 +22,11 @@
             }
         }
     },
+
     "prefixes": {
         "defaultPrefix": "!"
     },
+
     "triggers": {
         "/.*beep .*/": {
             "probability": 0.5,

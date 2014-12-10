@@ -56,7 +56,7 @@ main = do
 -- |Run the bot with a given state.
 runWithState :: FilePath -> YukibotState -> IO ()
 runWithState fp ys = do
-  state <- newBotState
+  state <- setKeyStore ys <$> newBotState
 
   let ps  = _permissionState ys
   let cs  = _commandState    ys
@@ -105,6 +105,11 @@ runWithState fp ys = do
 
   -- Save the state
   save fp ys
+
+-- |Set the key-value store in a botstate from the global
+-- configuration.
+setKeyStore :: YukibotState -> BotState -> BotState
+setKeyStore ys s = s { _keyStore = _roKeyStore ys }
 
 -- |Handle a signal by disconnecting from every IRC network.
 handler :: BotState -> IO ()
