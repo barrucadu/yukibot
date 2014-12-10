@@ -86,6 +86,8 @@ alterFacts mongo f network nick fact = liftIO $ do
   where
     alter now c = do
       facts <- queryMongo mongo ["network" =: unpack network, "nick" =: nick, "fact" =: fact] []
+      deleteMongo mongo ["network" =: unpack network, "nick" =: nick, "fact" =: fact]
+
       let newvals = f $ map (at "value") facts
       insertMany_ c
         [ ["network" =: unpack network, "nick" =: nick, "fact" =: fact, "value" =: val, "timestamp" =: now]

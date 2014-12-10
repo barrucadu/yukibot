@@ -18,10 +18,10 @@ import Data.Map               (Map, findWithDefault)
 import Data.String            (IsString(..))
 import Data.Text              (Text, strip, unpack)
 import Data.Text.Encoding     (decodeUtf8)
-import Database.MongoDB       (Action, Collection, Document, Order, Selector, access, close, connect, host, master, find, rest, select, sort)
+import Database.MongoDB       (Action, Collection, Document, Order, Selector, access, close, connect, delete, host, master, find, rest, select, sort)
 import Network.IRC.Asakura.Types (Bot, BotState(_keyStore))
 import Network.HTTP.Client    (HttpException)
-import Network.Wreq
+import Network.Wreq           (FormParam(..), Options, Response, auth, basicAuth, defaults, getWith, post, redirects, responseBody, responseHeader, responseStatus, statusCode)
 import Network.URI            (URI(..), URIAuth(..), uriToString)
 
 -- *Webby Stuff
@@ -139,6 +139,10 @@ doMongo (Mongo (h, c)) af = do
 -- |Lookup values in a MongoDB database
 queryMongo :: MonadIO m => Mongo -> Selector -> Order -> m [Document]
 queryMongo mongo selby sortby = liftIO . doMongo mongo $ \c -> rest =<< find (select selby c) { sort = sortby }
+
+-- |Delet values from a MongoDB database
+deleteMongo :: MonadIO m => Mongo -> Selector -> m ()
+deleteMongo mongo selby = liftIO . doMongo mongo $ \c -> delete (select selby c)
 
 -- *Misc
 
