@@ -15,6 +15,7 @@ import Data.ByteString        (ByteString, isInfixOf)
 import Data.ByteString.Lazy   (toStrict, fromStrict)
 import Data.Maybe             (fromMaybe)
 import Data.Map               (Map, findWithDefault)
+import Data.Monoid            ((<>))
 import Data.String            (IsString(..))
 import Data.Text              (Text, strip, unpack)
 import Data.Text.Encoding     (decodeUtf8)
@@ -121,6 +122,11 @@ paste txt = do
 -- |Type to encapsulate the MongoDB connection info
 newtype Mongo = Mongo (String, Collection)
 
+-- |A namespace, prepended to collection names passed into the
+-- 'defaultMongo' functions.
+mongoNamespace :: Collection
+mongoNamespace = "yukibot__"
+
 -- |Construct a 'Mongo' using the global host, or localhost if not
 -- found.
 defaultMongo :: Collection -> Bot Mongo
@@ -128,7 +134,7 @@ defaultMongo c = flip defaultMongo' c . _keyStore <$> ask
 
 -- |Like 'defaultMongo', but use the explicit key-val store.
 defaultMongo' :: Map Text Text -> Collection -> Mongo
-defaultMongo' kv c = Mongo (unpack $ findWithDefault "localhost" "mongodb" kv, c)
+defaultMongo' kv c = Mongo (unpack $ findWithDefault "localhost" "mongodb" kv, mongoNamespace <> c)
 
 -- |Run a function over a MongoDB database
 doMongo :: MonadIO m => Mongo -> (Collection -> Action m a) -> m a
