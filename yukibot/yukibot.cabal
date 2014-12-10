@@ -104,7 +104,7 @@ executable yukibot
                      , text         >=1.1
                      , transformers >=0.3
                      , unix         >=2.7
-                     , wreq         >=0.2
+                     , wreq         >=0.3
 
   -- Directories containing source files.
   hs-source-dirs:      src

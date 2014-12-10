@@ -5,7 +5,7 @@ module Yukibot.Utils where
 
 import Control.Applicative    ((<$>))
 import Control.Exception      (catch)
-import Control.Lens           ((&), (.~), (^.))
+import Control.Lens           ((&), (.~), (^.), (?~))
 import Control.Monad          (guard)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson             (Object, decode')
@@ -33,7 +33,7 @@ fetchHtml = flip fetchHtml' defaults
 -- use 'fetchHttp' directly.
 fetchHtmlWithCreds :: MonadIO m => URI -> String -> String -> m (Maybe String)
 fetchHtmlWithCreds url user pass = fetchHtml' url opts
-    where opts = defaults & auth .~ basicAuth (fromString user) (fromString pass)
+    where opts = defaults & auth ?~ basicAuth (fromString user) (fromString pass)
 
 -- |Like 'fetchHtml', but takes options (in addition to following
 -- redirects).
