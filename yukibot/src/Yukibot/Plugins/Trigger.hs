@@ -1,13 +1,8 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
 -- |Respond to predefined phrases.
 module Yukibot.Plugins.Trigger
-    ( -- *State
-      TriggerState
-    , Response(..)
-    -- *Snapshotting
-    , TriggerStateSnapshot
+    ( Response(..)
     -- *Event handler
     , eventHandler
     -- Commands
@@ -17,95 +12,39 @@ module Yukibot.Plugins.Trigger
     -- *Updating
     , addTrigger
     , removeTrigger
-    , blacklist
-    , whitelist
     ) where
 
-import Control.Applicative        ((<$>), (<*>))
-import Control.Concurrent.STM     (TVar, atomically, newTVar, readTVar, writeTVar)
-import Control.Lens               ((&), (^.), (.~), (%~), at, non)
-import Control.Monad              (liftM, when)
+import Control.Applicative        ((<$>))
+import Control.Monad              (when)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
-import Data.Aeson                 (FromJSON(..), ToJSON(..), Value(..), (.=), (.:), (.:?), (.!=), object)
-import Data.ByteString            (ByteString)
-import Data.ByteString.Char8      (unpack)
-import Data.Default.Class         (Default(..))
-import Data.Map                   (Map, mapWithKey, foldWithKey)
-import Data.Maybe                 (fromMaybe)
+import Data.Maybe                 (fromMaybe, listToMaybe, mapMaybe)
 import Data.Monoid                ((<>))
-import Data.Text                  (Text, replace, isPrefixOf, isSuffixOf, breakOn, strip)
+import Data.Text                  (Text, replace, isPrefixOf, isSuffixOf, strip, pack, unpack)
+import Database.MongoDB           (Document, (=:), insert_)
 import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
 import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
-import Network.IRC.Asakura.State  (Snapshot(..), Rollback(..))
 import Network.IRC.Client         (ctcp, reply, send)
-import Network.IRC.Client.Types   ( ConnectionConfig(..)
-                                  , Event(..), EventType(EPrivmsg)
+import Network.IRC.Client.Types   ( Event(..), EventType(EPrivmsg)
                                   , IRC, IRCState
                                   , Message(Privmsg)
                                   , UnicodeEvent
-                                  , Source(..)
-                                  , connectionConfig)
+                                  , Source(..))
 import System.Random              (randomIO)
+import Text.Read                  (readMaybe)
 import Text.Regex.TDFA            (CompOption(..), defaultCompOpt, defaultExecOpt)
 import Text.Regex.TDFA.String     (Regex, compile, execute)
-import Yukibot.Utils              (paste)
+import Yukibot.Utils
 
-import qualified Data.Map  as M
 import qualified Data.Text as T
 
--- *State
-
--- |List of all triggers, along with a network/channel blacklist.
-newtype TriggerState = TS { _triggers :: TVar (Map Text Response) }
-
 data Response = TR
-    { _response    :: Text
-    -- ^The response text. "%n" is replaced with the user's nick
-    , _blacklist   :: Map String [Text]
-    -- ^Servers/channels for which this trigger is inactive
-    , _probability :: Double
-    -- ^Probability of activating
-    , _regex       :: Maybe Regex
-    -- ^If the trigger is a regular expression string, this is the
-    -- compiled regex.
-    }
+  { _response    :: Text
+  -- ^The response text. "%n" is replaced with the user's nick
+  , _probability :: Double
+  -- ^Probability of activating
+  }
 
-instance FromJSON Response where
-    parseJSON (Object v) = tr <$> v .:  "response"
-                              <*> v .:? "blacklist"   .!= M.empty
-                              <*> v .:? "probability" .!= 1
-      where
-        tr r b p = TR r b p Nothing
-    parseJSON _ = fail "Expected object"
-
-instance ToJSON Response where
-    toJSON r = object $ [ "response" .= _response r] ++ blackl ++ prob
-
-        where blackl | _blacklist r == M.empty = []
-                     | otherwise = [ "blacklist" .= _blacklist r ]
-
-              prob | _probability r == 1 = []
-                   | otherwise = [ "probability" .= _probability r ]
-
--- *Snapshotting
-
-newtype TriggerStateSnapshot = TSS { _ssTriggers :: Map Text Response }
-
-instance FromJSON TriggerStateSnapshot where
-  parseJSON = fmap (TSS . mapWithKey doRegex) . parseJSON
-
-instance ToJSON TriggerStateSnapshot where
-  toJSON = toJSON . _ssTriggers
-
-instance Snapshot TriggerState TriggerStateSnapshot where
-  snapshotSTM ts = liftM TSS (readTVar $ _triggers ts)
-
-instance Rollback TriggerStateSnapshot TriggerState where
-  rollbackSTM tss = liftM TS (newTVar $ _ssTriggers tss)
-
-instance Default TriggerStateSnapshot where
-  def = TSS M.empty
 
 -- *Event handler
 
@@ -113,54 +52,49 @@ instance Default TriggerStateSnapshot where
 --
 -- Triggers are matched by stripping leading and trailing whitespace
 -- and by ignoring case.
-eventHandler :: TriggerState -> AsakuraEventHandler
-eventHandler ts = AsakuraEventHandler
-                    { _description = "Respond to messages consisting of trigger phrases."
-                    , _matchType   = EPrivmsg
-                    , _eventFunc   = eventFunc ts
-                    , _appliesTo   = runEverywhere
-                    , _appliesDef  = runAlways
-                    }
+eventHandler :: AsakuraEventHandler
+eventHandler = AsakuraEventHandler
+  { _description = "Respond to messages consisting of trigger phrases."
+  , _matchType   = EPrivmsg
+  , _eventFunc   = eventFunc
+  , _appliesTo   = runEverywhere
+  , _appliesDef  = runAlways
+  }
 
-eventFunc :: TriggerState -> IRCState -> UnicodeEvent -> Bot (IRC ())
-eventFunc ts _ ev = return $ do
-  let Privmsg _ (Right msg) = _message ev
-  network <- _server <$> connectionConfig
-  let channel = case _source ev of
-                  Channel c _ -> Just c
-                  _           -> Nothing
+eventFunc :: IRCState -> UnicodeEvent -> Bot (IRC ())
+eventFunc _ ev = do
+  mongo    <- defaultMongo "triggers"
+  triggers <- queryMongo mongo [] []
 
-  triggers <- liftIO . atomically . readTVar . _triggers $ ts
+  return $ do
+    let Privmsg _ (Right msg) = _message ev
 
-  case findTrigger (T.strip msg) triggers of
-    Just resp -> respond ev resp network channel
-    Nothing   -> return ()
+    case findTrigger (T.strip msg) triggers of
+      Just resp -> respond ev resp
+      Nothing   -> return ()
 
 -- Find the first trigger matching this message.
-findTrigger :: Text -> Map Text Response -> Maybe Response
-findTrigger target = foldWithKey findTrigger' Nothing
+findTrigger :: Text -> [Document] -> Maybe Response
+findTrigger target = listToMaybe . mapMaybe findTrigger'
   where
-    findTrigger' _ _ resp@(Just _) = resp
-
-    findTrigger' trig resp _ =
-      case _regex resp of
-        Just r  -> if r =~ target                       then Just resp else Nothing
-        Nothing -> if T.toLower trig == T.toLower target then Just resp else Nothing
+    findTrigger' trig =
+      let trig' = at' "trigger" "" trig
+      in case tryRegex trig' of
+          Just r  -> if r =~ target                        then Just $ extract trig else Nothing
+          Nothing -> if T.toLower trig' == T.toLower target then Just $ extract trig else Nothing
 
     r =~ txt =
       case execute r (T.unpack txt) of
         Right (Just _) -> True
         _ -> False
 
-respond :: UnicodeEvent -> Response -> ByteString -> Maybe Text -> IRC ()
-respond ev r network channel = do
-  let blacklisted = case channel of
-                      Just chan -> chan `elem` (_blacklist r ^. at (unpack network) . non [])
-                      Nothing   -> False
+    extract trig = TR (at' "response" "I am so triggered right now." trig) (at' "probability" 1 trig)
 
+respond :: UnicodeEvent -> Response -> IRC ()
+respond ev r = do
   roll <- liftIO randomIO
 
-  when (not blacklisted && roll <= _probability r) $
+  when (roll <= _probability r) $
      reply' . replace "%channel" chan . replace "%nick" nick . _response $ r
 
   where
@@ -182,31 +116,41 @@ respond ev r network channel = do
 --
 -- Because triggers can be arbitrary text, " <reply> " is used to
 -- delimit the trigger and the response.
-addTriggerCmd :: TriggerState -> CommandDef
-addTriggerCmd ts = CommandDef
+addTriggerCmd :: CommandDef
+addTriggerCmd = CommandDef
   { _verb = ["add", "trigger"]
-  , _help = "<trigger> \\<reply\\> <response> -- add a trigger, as triggers can be arbitrary text, '<reply>' is used to delimit the trigger and the response. Regex triggers start and end with '/'."
+  , _help = "<trigger> \\<reply\\> <response> -- add a trigger, as triggers can be arbitrary text, '<reply>' is used to delimit the trigger and the response. Regex triggers start and end with '/'. \\<reply <num>\\> can be used to set the probability (0 to 1)."
   , _action = go
   }
 
   where
-    go vs _ _ = go' $ T.unwords vs
-    go' trig = go'' $ T.drop 7 <$> breakOn "<reply>" trig
-    go'' (trig, resp) =
+    go vs _ _ = case () of
+      _ | "<reply>" `elem` vs ->
+          case break (=="<reply>") vs of
+            (pref, "<reply>":suf) -> go' (T.unwords pref) (T.unwords suf) 1
+            _ -> return $ return ()
+
+        | "<reply" `elem` vs ->
+          case break (=="<reply") vs of
+            (pref, "<reply":prob:suf) -> go' (T.unwords pref) (T.unwords suf) $ fromMaybe 1 . readMaybe . filter (/='>') . unpack $ prob
+            _ -> return $ return ()
+
+        | otherwise -> return $ return ()
+
+    go' trig resp prob =
       let trig' = strip trig
           resp' = TR
-            { _response = strip resp
-            , _blacklist = M.empty
-            , _probability = 1
-            , _regex = Nothing
+            { _response    = strip resp
+            , _probability = if prob > 1 || prob < 0 then 1 else prob
             }
       in do
-        addTrigger ts trig' $ doRegex trig' resp'
+        mongo <- defaultMongo "triggers"
+        addTrigger mongo trig' resp'
         return $ return ()
 
 -- Remove a trigger
-rmTriggerCmd :: TriggerState -> CommandDef
-rmTriggerCmd ts = CommandDef
+rmTriggerCmd :: CommandDef
+rmTriggerCmd = CommandDef
   { _verb = ["remove", "trigger"]
   , _help = "<trigger> - remove the named trigger"
   , _action = go
@@ -214,12 +158,13 @@ rmTriggerCmd ts = CommandDef
 
   where
     go vs _ _ = do
-      removeTrigger ts . strip $ T.unwords vs
+      mongo <- defaultMongo "triggers"
+      removeTrigger mongo . strip $ T.unwords vs
       return $ return ()
 
 -- |List all triggers, by uploading to sprunge
-listTriggerCmd :: TriggerState -> CommandDef
-listTriggerCmd ts = CommandDef
+listTriggerCmd :: CommandDef
+listTriggerCmd = CommandDef
   { _verb = ["list", "triggers"]
   , _help = "List all the current triggers"
   , _action = go
@@ -227,72 +172,41 @@ listTriggerCmd ts = CommandDef
 
   where
     go _ _ ev = do
-      trigs <- allTriggers
+      mongo <- defaultMongo "triggers"
+      trigs <- allTriggers mongo
       uri <- paste trigs
       return $ reply ev uri
 
     -- Get all triggers, as a newline-delimited string
-    allTriggers = liftIO . atomically $ do
-      triggers <- readTVar $ _triggers ts
-      return . unlines . map ppTrig $ M.toList triggers
+    allTriggers mongo = unlines . map ppTrig <$> queryMongo mongo [] ["trigger" =: (1 :: Int)]
 
     -- Pretty-print an individual trigger
-    ppTrig (trig, resp) = T.unpack $ trig <> " <reply> " <> _response resp
+    ppTrig trig = T.unpack $ at' "trigger" "" trig <> ppProb trig <> at' "response" "I am so triggered right now." trig
+    ppProb trig = let prob = at' "probability" (1::Float) trig in if prob == 1 then " <reply> " else " <reply " <> pack (show prob) <> "> "
 
 -- *Updating
 
 -- |Add a new trigger
-addTrigger :: MonadIO m => TriggerState -> Text -> Response -> m ()
-addTrigger ts trig r = liftIO . atomically $ do
-  let tvarT = _triggers ts
-  triggers <- readTVar tvarT
-
-  let triggers' = triggers & at (T.toLower trig) .~ Just r
-  writeTVar tvarT triggers'
+addTrigger :: MonadIO m => Mongo -> Text -> Response -> m ()
+addTrigger mongo trig resp = doMongo mongo add
+  where
+    add c = insert_ c ["trigger" =: trig, "response" =: _response resp, "probability" =: _probability resp]
 
 -- |Remove a trigger
-removeTrigger :: MonadIO m => TriggerState -> Text -> m ()
-removeTrigger ts trig = liftIO . atomically $ do
-  let tvarT = _triggers ts
-  triggers <- readTVar tvarT
-
-  let triggers' = triggers & at (T.toLower trig) .~ Nothing
-  writeTVar tvarT triggers'
-
--- |Blacklist a trigger in a given channel
-blacklist :: MonadIO m => TriggerState -> Text -> ByteString -> Text -> m ()
-blacklist ts trig network channel = liftIO . atomically $ do
-  let tvarT = _triggers ts
-  triggers <- readTVar tvarT
-
-  let triggers' = triggers & at (T.toLower trig) %~ fmap addBL
-  writeTVar tvarT triggers'
-
-  where addBL r = r { _blacklist   = _blacklist r & at (unpack network) . non [] %~ (channel:) }
-
--- |Remove a channel from a trigger's blacklist
-whitelist :: MonadIO m => TriggerState -> Text -> ByteString -> Text -> m ()
-whitelist ts trig network channel = liftIO . atomically $ do
-  let tvarT = _triggers ts
-  triggers <- readTVar tvarT
-
-  let triggers' = triggers & at (T.toLower trig) %~ fmap delBL
-  writeTVar tvarT triggers'
-
-  where delBL r = r { _blacklist   = _blacklist r & at (unpack network) %~ unblack }
-        unblack chans = case filter (/=channel) $ fromMaybe [] chans of
-                          [] -> Nothing
-                          cs -> Just cs
+removeTrigger :: MonadIO m => Mongo -> Text -> m ()
+removeTrigger mongo trig = deleteMongo mongo ["trigger" =: T.toLower trig]
 
 -- *Utils
 
 -- Attempt to interpret the trigger as regex, and compile it.
-doRegex :: Text -> Response -> Response
-doRegex trig resp | "/" `isPrefixOf` trig && "/" `isSuffixOf` trig && T.length trig >= 2 = doRegex'
-                  | otherwise = resp
+tryRegex :: Text -> Maybe Regex
+tryRegex trig
+  | "/" `isPrefixOf` trig && "/" `isSuffixOf` trig && T.length trig >= 2 = doRegex'
+  | otherwise = Nothing
+
   where
     -- Strip the leading and trailing '/', and attempt to compile the inner regex.
-    doRegex' = resp { _regex = either (const Nothing) Just . compile copt eopt . T.unpack . T.init . T.tail $ trig }
+    doRegex' = either (const Nothing) Just . compile copt eopt . T.unpack . T.init . T.tail $ trig
 
     copt = defaultCompOpt { caseSensitive = False }
     eopt = defaultExecOpt

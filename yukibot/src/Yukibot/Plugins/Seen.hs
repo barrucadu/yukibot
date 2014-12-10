@@ -21,51 +21,58 @@ import Network.IRC.Client.Types   ( ConnectionConfig(_server)
                                   , Source(Channel)
                                   , UnicodeEvent
                                   , connectionConfig)
-import Yukibot.Plugins.Memory     (MemoryState, getFactValue, setFactValues)
+import Yukibot.Plugins.Memory     (getFactValue, setFactValues)
+import Yukibot.Utils
 
 -- *Event handler
 
-eventHandler :: MemoryState -> AsakuraEventHandler
-eventHandler ms = AsakuraEventHandler
-                    { _description = "Keep track of the last thing a person said"
-                    , _matchType   = EPrivmsg
-                    , _eventFunc   = eventFunc ms
-                    , _appliesTo   = runEverywhere
-                    , _appliesDef  = const $ return False
-                    }
+eventHandler :: AsakuraEventHandler
+eventHandler = AsakuraEventHandler
+  { _description = "Keep track of the last thing a person said"
+  , _matchType   = EPrivmsg
+  , _eventFunc   = eventFunc
+  , _appliesTo   = runEverywhere
+  , _appliesDef  = const $ return False
+  }
 
-eventFunc :: MemoryState -> IRCState -> UnicodeEvent -> Bot (IRC ())
-eventFunc ms _ ev = return $ do
+eventFunc :: IRCState -> UnicodeEvent -> Bot (IRC ())
+eventFunc _ ev = do
   let Channel channel nick  = _source ev
   let Privmsg _ (Right msg) = _message ev
 
-  network <- _server <$> connectionConfig
+  ms <- defaultMongo "seen"
 
-  setFactValues ms network nick ("seen-" <> channel) [msg]
+  return $ do
+    network <- _server <$> connectionConfig
+    setFactValues ms network nick channel [msg]
 
 -- *Command
 
-command :: MemoryState -> CommandDef
-command ms = CommandDef { _verb   = ["seen"]
-                        , _help = "<nick> - Get the last thing said by that nick in this channel."
-                        , _action = go
-                        }
+command :: CommandDef
+command = CommandDef
+  { _verb   = ["seen"]
+  , _help = "<nick> - Get the last thing said by that nick in this channel."
+  , _action = go
+  }
 
   where
-    go (nick:_) _ ev = return $ do
-      let channel = case _source ev of
-                      Channel c _ -> Just c
-                      _           -> Nothing
+    go (nick:_) _ ev = do
+      ms <- defaultMongo "seen"
 
-      network <- _server <$> connectionConfig
+      return $ do
+        let channel = case _source ev of
+                        Channel c _ -> Just c
+                        _           -> Nothing
 
-      case channel of
-        Just chan -> do
-          val <- getFactValue ms network nick ("seen-" <> chan)
-          case val of
-            Just msg -> reply ev $ nick <> " was last seen saying: " <> msg
-            Nothing  -> reply ev $ "I haven't seen " <> nick <> " say anything yet."
+        network <- _server <$> connectionConfig
 
-        Nothing -> return ()
+        case channel of
+          Just chan -> do
+            val <- getFactValue ms network nick chan
+            case val of
+              Just msg -> reply ev $ nick <> " was last seen saying: " <> msg
+              Nothing  -> reply ev $ "I haven't seen " <> nick <> " say anything yet."
+
+          Nothing -> return ()
 
     go [] _ ev = return $ reply ev "You need to give me a nick."

@@ -1,4 +1,8 @@
 {
+    "global": {
+        "mongodb": "localhost"
+    },
+
     "initial": {
         "irc.freenode.net": {
             "channels": [
@@ -10,6 +14,7 @@
             "tls": true
         }
     },
+
     "permissions": {
         "irc.freenode.net": {
             "barrucadu": {
@@ -17,13 +22,8 @@
             }
         }
     },
+
     "prefixes": {
         "defaultPrefix": "!"
-    },
-    "triggers": {
-        "/.*beep .*/": {
-            "probability": 0.5,
-            "response": "Beep boop."
-        }
     }
 }

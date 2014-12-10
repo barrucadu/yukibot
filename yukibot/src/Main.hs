@@ -16,6 +16,7 @@ import System.Environment     (getArgs)
 import System.Exit            (exitFailure)
 import System.Posix.Signals   (Handler(..), installHandler, sigINT, sigTERM)
 import Yukibot.State
+import Yukibot.Utils
 
 import qualified Network.IRC.Asakura.Blacklist   as BL
 import qualified Network.IRC.Asakura.Commands    as C
@@ -26,7 +27,7 @@ import qualified Yukibot.Plugins.Cellular        as CA
 import qualified Yukibot.Plugins.Channels        as CH
 import qualified Yukibot.Plugins.Initialise      as I
 import qualified Yukibot.Plugins.LinkInfo        as L
-import qualified Yukibot.Plugins.Memory          as Me
+import qualified Yukibot.Plugins.Memory          as M
 import qualified Yukibot.Plugins.Seen            as S
 import qualified Yukibot.Plugins.Trigger         as T
 
@@ -56,15 +57,15 @@ main = do
 -- |Run the bot with a given state.
 runWithState :: FilePath -> YukibotState -> IO ()
 runWithState fp ys = do
-  state <- newBotState
+  state <- setKeyStore ys <$> newBotState
+
+  let keyval = _roKeyStore ys
 
   let ps  = _permissionState ys
   let cs  = _commandState    ys
   let bs  = _blacklistState  ys
-  let ms  = _memoryState     ys
-  let ts  = _triggerState    ys
   let ls  = _linkinfoState   ys
-  let wfs = Me.simpleFactStore ms "watching"
+  let wfs = M.simpleFactStore (defaultMongo' keyval "watching") "watching"
 
   -- Register signal handlers
   installHandler sigINT  (Catch $ handler state) Nothing
@@ -79,22 +80,22 @@ runWithState fp ys = do
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0) $ CH.unsetChanPrefix cs
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0) $ BL.blacklistCmd    bs
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0) $ BL.whitelistCmd    bs
-  registerCommand cs $ P.wrapsCmd ps (P.Admin 0) $ T.addTriggerCmd    ts
-  registerCommand cs $ P.wrapsCmd ps (P.Admin 0) $ T.rmTriggerCmd     ts
-  registerCommand cs $ T.listTriggerCmd ts
+  registerCommand cs $ P.wrapsCmd ps (P.Admin 0)   T.addTriggerCmd
+  registerCommand cs $ P.wrapsCmd ps (P.Admin 0)   T.rmTriggerCmd
+  registerCommand cs   T.listTriggerCmd
 
-  registerCommand cs $ BL.wrapsCmd bs "watching" $ (Me.simpleGetCommand wfs) { _verb = ["watching"] }
-  registerCommand cs $ BL.wrapsCmd bs "watching" $ (Me.simpleSetCommand wfs) { _verb = ["set", "watching"] }
-  registerCommand cs $ BL.wrapsCmd bs "seen"     $  S.command           ms
+  registerCommand cs $ BL.wrapsCmd bs "watching" $ (M.simpleGetCommand wfs) { _verb = ["watching"] }
+  registerCommand cs $ BL.wrapsCmd bs "watching" $ (M.simpleSetCommand wfs) { _verb = ["set", "watching"] }
+  registerCommand cs $ BL.wrapsCmd bs "seen"        S.command
   registerCommand cs $ BL.wrapsCmd bs "cellular"    CA.command
   registerCommand cs $ BL.wrapsCmd bs "brainfuck"   BF.command
 
   -- Register event handlers
   addGlobalEventHandler' state $ C.eventRunner cs
 
-  addGlobalEventHandler' state $ BL.wraps bs "seen"     $ S.eventHandler ms
+  addGlobalEventHandler' state $ BL.wraps bs "seen"       S.eventHandler
   addGlobalEventHandler' state $ BL.wraps bs "linkinfo" $ L.eventHandler ls
-  addGlobalEventHandler' state $ BL.wraps bs "triggers" $ T.eventHandler ts
+  addGlobalEventHandler' state $ BL.wraps bs "triggers"   T.eventHandler
 
   -- Connect to networks
   let is = _initialState ys
@@ -105,6 +106,11 @@ runWithState fp ys = do
 
   -- Save the state
   save fp ys
+
+-- |Set the key-value store in a botstate from the global
+-- configuration.
+setKeyStore :: YukibotState -> BotState -> BotState
+setKeyStore ys s = s { _keyStore = _roKeyStore ys }
 
 -- |Handle a signal by disconnecting from every IRC network.
 handler :: BotState -> IO ()
