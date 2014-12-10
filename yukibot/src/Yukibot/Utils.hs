@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |Common utility functions for plugins.
@@ -8,16 +9,22 @@ import Control.Exception      (catch)
 import Control.Lens           ((&), (.~), (^.), (?~))
 import Control.Monad          (guard)
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Trans.Reader (ask)
 import Data.Aeson             (Object, decode')
 import Data.ByteString        (ByteString, isInfixOf)
 import Data.ByteString.Lazy   (toStrict, fromStrict)
 import Data.Maybe             (fromMaybe)
+import Data.Map               (Map, findWithDefault)
 import Data.String            (IsString(..))
 import Data.Text              (Text, strip, unpack)
 import Data.Text.Encoding     (decodeUtf8)
+import Database.MongoDB       (Action, Collection, Document, Order, Selector, access, close, connect, host, master, find, rest, select, sort)
+import Network.IRC.Asakura.Types (Bot, BotState(_keyStore))
 import Network.HTTP.Client    (HttpException)
 import Network.Wreq
 import Network.URI            (URI(..), URIAuth(..), uriToString)
+
+-- *Webby Stuff
 
 -- |Download an HTML document. Return (Just html) if we get a 200
 -- response code, and a html-y content-type. This follows redirects.
@@ -106,6 +113,34 @@ paste :: MonadIO m => String -> m Text
 paste txt = do
   r <- liftIO $ post "http://sprunge.us" [ "sprunge" := txt ]
   return . strip . decodeUtf8 . toStrict $ r ^. responseBody
+
+-- *MongoDB
+
+-- |Type to encapsulate the MongoDB connection info
+newtype Mongo = Mongo (String, Collection)
+
+-- |Construct a 'Mongo' using the global host, or localhost if not
+-- found.
+defaultMongo :: Collection -> Bot Mongo
+defaultMongo c = flip defaultMongo' c . _keyStore <$> ask
+
+-- |Like 'defaultMongo', but use the explicit key-val store.
+defaultMongo' :: Map Text Text -> Collection -> Mongo
+defaultMongo' kv c = Mongo (unpack $ findWithDefault "localhost" "mongodb" kv, c)
+
+-- |Run a function over a MongoDB database
+doMongo :: MonadIO m => Mongo -> (Collection -> Action m a) -> m a
+doMongo (Mongo (h, c)) af = do
+  pipe <- liftIO $ connect $ host h
+  res <- access pipe master c $ af c
+  liftIO $ close pipe
+  return res
+
+-- |Lookup values in a MongoDB database
+queryMongo :: MonadIO m => Mongo -> Selector -> Order -> m [Document]
+queryMongo mongo selby sortby = liftIO . doMongo mongo $ \c -> rest =<< find (select selby c) { sort = sortby }
+
+-- *Misc
 
 -- |Split a string by a character
 --

@@ -2,9 +2,8 @@
 
 -- |Remember facts about nicks.
 module Yukibot.Plugins.Memory
-    ( MemoryState(..)
-      -- *Querying
-    , getFactValue
+    ( -- *Querying
+      getFactValue
     , getFactValues
     , getFacts
     -- *Updating
@@ -29,90 +28,66 @@ import Data.Maybe                (fromMaybe, listToMaybe)
 import Data.Monoid               ((<>))
 import Data.Text                 (Text)
 import Data.Time.Clock           (getCurrentTime)
-import Database.MongoDB          ((=:), Collection, Document, access, at, close, connect, host, master, find, rest, select, sort, insertMany)
+import Database.MongoDB          (Document, (=:), at, insertMany_)
 import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Client        (reply)
 import Network.IRC.Client.Types  (ConnectionConfig(..), Event(..), Source(..), connectionConfig)
+import Yukibot.Utils
 
 import qualified Data.Text as T
-
--- *Wrapper for the Mongo connection info, storing a hostname and collection name
-newtype MemoryState = MS (String, Collection)
 
 -- *Querying
 
 -- |Get the first value for a fact associated with a user.
-getFactValue :: MonadIO m => MemoryState -> ByteString -> Text -> Text -> m (Maybe Text)
+getFactValue :: MonadIO m => Mongo -> ByteString -> Text -> Text -> m (Maybe Text)
 getFactValue ms network nick fact = liftM listToMaybe facts
     where facts = getFactValues ms network nick fact
 
 -- |Get all values for a fact associated with a nick.
-getFactValues :: MonadIO m => MemoryState -> ByteString -> Text -> Text -> m [Text]
-getFactValues (MS (h, c)) network nick fact = liftIO $ do
-  pipe <- connect $ host h
-  res <- access pipe master c mongo
-  close pipe
-  return $ map (at "value") res
-
+getFactValues :: MonadIO m => Mongo -> ByteString -> Text -> Text -> m [Text]
+getFactValues mongo network nick fact = map (at "value") `liftM` queryMongo mongo selector ordering
   where
-    mongo = rest =<< find (select query c) {sort = ["timestamp" =: (-1 :: Int)]}
-
-    query =
-      [ "network" =: unpack network
-      , "nick"    =: nick
-      , "fact"    =: fact
-      ]
+    selector = ["network" =: unpack network, "nick" =: nick, "fact" =: fact]
+    ordering = ["timestamp" =: (-1 :: Int)]
 
 -- |Get all facts associated with a nick. There is no meaningful
 -- distinction between a user not having any facts, and a user having
 -- an empty list of facts, so this doesn't return a Maybe.
-getFacts :: MonadIO m => MemoryState -> ByteString -> Text -> m [(Text, [Text])]
-getFacts (MS (h, c)) network nick = liftIO $ do
-  pipe <- connect $ host h
-  res <- access pipe master c mongo
-  close pipe
-  return $ toFactList res
-
+getFacts :: MonadIO m => Mongo -> ByteString -> Text -> m [(Text, [Text])]
+getFacts mongo network nick = toFactList `liftM` queryMongo mongo selector ordering
   where
-    mongo = rest =<< find (select query c) {sort = ["fact" =: (1 :: Int), "timestamp" =: (-1 :: Int)]}
-
-    query =
-      [ "network" =: unpack network
-      , "nick"    =: nick
-      ]
-
+    selector = ["network" =: unpack network, "nick" =: nick]
+    ordering = ["fact" =: (1 :: Int), "timestamp" =: (-1 :: Int)]
     toFactList = map (\fs@(f:_) -> (at "fact" f, map (at "value") fs)) . groupBy ((==) `on` (at "fact" :: Document -> Text))
 
 -- *Updating
 
 -- |Add a fact value to a user. If the fact did not exist, it will be
 -- created.
-addFactValue :: MonadIO m => MemoryState -> ByteString -> Text -> Text -> Text -> m ()
+addFactValue :: MonadIO m => Mongo -> ByteString -> Text -> Text -> Text -> m ()
 addFactValue ms network nick fact value = alterFacts ms (Just . (value:)) network nick fact
 
 -- |Replace the fact values associated with a user. If the fact did
 -- not exist, it will be created.
-setFactValues :: MonadIO m => MemoryState -> ByteString -> Text -> Text -> [Text] -> m ()
+setFactValues :: MonadIO m => Mongo -> ByteString -> Text -> Text -> [Text] -> m ()
 setFactValues ms network nick fact values = alterFacts ms (Just . const values) network nick fact
 
 -- |Delete a fact associated with a user. If the fact did not exist,
 -- this is a no-op.
-delFact :: MonadIO m => MemoryState -> ByteString -> Text -> Text -> m ()
+delFact :: MonadIO m => Mongo -> ByteString -> Text -> Text -> m ()
 delFact ms = alterFacts ms $ const Nothing
 
 -- |Alter the fact values of a user by a function.
-alterFacts :: MonadIO m => MemoryState -> ([Text] -> Maybe [Text]) -> ByteString -> Text -> Text -> m ()
-alterFacts (MS (h, c)) f network nick fact = liftIO $ do
+alterFacts :: MonadIO m => Mongo -> ([Text] -> Maybe [Text]) -> ByteString -> Text -> Text -> m ()
+alterFacts mongo f network nick fact = liftIO $ do
   now <- getCurrentTime
-  pipe <- connect $ host h
-  access pipe master c $ mongo now
-  close pipe
+  doMongo mongo $ alter now
 
   where
-    mongo now = do
-      facts <- rest =<< find (select ["network" =: unpack network, "nick" =: nick, "fact" =: fact] c)
+    alter now c = do
+      facts <- queryMongo mongo ["network" =: unpack network, "nick" =: nick, "fact" =: fact] []
       let newvals = f $ map (at "value") facts
-      insertMany c
+      insertMany_ c
         [ ["network" =: unpack network, "nick" =: nick, "fact" =: fact, "value" =: val, "timestamp" =: now]
         | val <- [] `fromMaybe` newvals
         ]
@@ -128,7 +103,7 @@ data SimpleFactStore = SimpleFactStore
     }
 
 -- |Construct a simple fact store.
-simpleFactStore :: MemoryState -> Text -> SimpleFactStore
+simpleFactStore :: Mongo -> Text -> SimpleFactStore
 simpleFactStore ms fact = SimpleFactStore
   { getSimpleValue = \network nick       -> getFactValue  ms network nick fact
   , setSimpleValue = \network nick value -> setFactValues ms network nick fact [value]

@@ -6,8 +6,6 @@ import Control.Applicative    ((<$>))
 import Control.Concurrent.STM (atomically, readTVar)
 import Control.Monad.Trans.Reader (runReaderT)
 import Data.Default.Class     (def)
-import Data.Map               (findWithDefault)
-import Data.Text              (unpack)
 import Network.IRC.Asakura
 import Network.IRC.Asakura.Commands (CommandDef(..), registerCommand)
 import Network.IRC.Asakura.State (rollback)
@@ -18,6 +16,7 @@ import System.Environment     (getArgs)
 import System.Exit            (exitFailure)
 import System.Posix.Signals   (Handler(..), installHandler, sigINT, sigTERM)
 import Yukibot.State
+import Yukibot.Utils
 
 import qualified Network.IRC.Asakura.Blacklist   as BL
 import qualified Network.IRC.Asakura.Commands    as C
@@ -67,9 +66,7 @@ runWithState fp ys = do
   let bs  = _blacklistState  ys
   let ts  = _triggerState    ys
   let ls  = _linkinfoState   ys
-
-  let wfs = M.simpleFactStore (M.MS (unpack $ findWithDefault "localhost" "mongodb" keyval, "watching")) "watching"
-  let sfs = M.MS (unpack $ findWithDefault "localhost" "mongodb" keyval, "seen")
+  let wfs = M.simpleFactStore (defaultMongo' keyval "watching") "watching"
 
   -- Register signal handlers
   installHandler sigINT  (Catch $ handler state) Nothing
@@ -90,14 +87,14 @@ runWithState fp ys = do
 
   registerCommand cs $ BL.wrapsCmd bs "watching" $ (M.simpleGetCommand wfs) { _verb = ["watching"] }
   registerCommand cs $ BL.wrapsCmd bs "watching" $ (M.simpleSetCommand wfs) { _verb = ["set", "watching"] }
-  registerCommand cs $ BL.wrapsCmd bs "seen"     $  S.command          sfs
+  registerCommand cs $ BL.wrapsCmd bs "seen"        S.command
   registerCommand cs $ BL.wrapsCmd bs "cellular"    CA.command
   registerCommand cs $ BL.wrapsCmd bs "brainfuck"   BF.command
 
   -- Register event handlers
   addGlobalEventHandler' state $ C.eventRunner cs
 
-  addGlobalEventHandler' state $ BL.wraps bs "seen"     $ S.eventHandler sfs
+  addGlobalEventHandler' state $ BL.wraps bs "seen"       S.eventHandler
   addGlobalEventHandler' state $ BL.wraps bs "linkinfo" $ L.eventHandler ls
   addGlobalEventHandler' state $ BL.wraps bs "triggers" $ T.eventHandler ts
 
