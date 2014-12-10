@@ -1,11 +1,14 @@
 {
-    "linkinfo": {
-        "maxLen": 100,
-        "numLinks": 1
-    },
-    "myanimelist": {
-        "password": "",
-        "username": ""
+    "initial": {
+        "irc.freenode.net": {
+            "channels": [
+                "##yukibot"
+            ],
+            "nick": "yukibot",
+            "nickservPassword": "",
+            "port": 7000,
+            "tls": true
+        }
     },
     "permissions": {
         "irc.freenode.net": {
@@ -15,6 +18,12 @@
         }
     },
     "prefixes": {
-        "defaultPrefix": "#"
+        "defaultPrefix": "!"
+    },
+    "triggers": {
+        "/.*beep .*/": {
+            "probability": 0.5,
+            "response": "Beep boop."
+        }
     }
 }
