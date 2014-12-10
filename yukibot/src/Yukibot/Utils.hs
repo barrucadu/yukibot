@@ -18,11 +18,13 @@ import Data.Map               (Map, findWithDefault)
 import Data.String            (IsString(..))
 import Data.Text              (Text, strip, unpack)
 import Data.Text.Encoding     (decodeUtf8)
-import Database.MongoDB       (Action, Collection, Document, Order, Selector, access, close, connect, delete, host, master, find, rest, select, sort)
+import Database.MongoDB       (Action, Collection, Document, Label, Order, Selector, Val, access, close, connect, delete, host, master, find, rest, select, sort)
 import Network.IRC.Asakura.Types (Bot, BotState(_keyStore))
 import Network.HTTP.Client    (HttpException)
 import Network.Wreq           (FormParam(..), Options, Response, auth, basicAuth, defaults, getWith, post, redirects, responseBody, responseHeader, responseStatus, statusCode)
 import Network.URI            (URI(..), URIAuth(..), uriToString)
+
+import qualified Database.MongoDB as Mo
 
 -- *Webby Stuff
 
@@ -143,6 +145,11 @@ queryMongo mongo selby sortby = liftIO . doMongo mongo $ \c -> rest =<< find (se
 -- |Delet values from a MongoDB database
 deleteMongo :: MonadIO m => Mongo -> Selector -> m ()
 deleteMongo mongo selby = liftIO . doMongo mongo $ \c -> delete (select selby c)
+
+-- |Typed value of field in document, with a default for the
+-- missing/bad type case.
+at' :: Val v => Label -> v -> Document -> v
+at' lbl def doc = def `fromMaybe` Mo.lookup lbl doc
 
 -- *Misc
 

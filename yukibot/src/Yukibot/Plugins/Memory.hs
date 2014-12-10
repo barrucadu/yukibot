@@ -28,7 +28,7 @@ import Data.Maybe                (fromMaybe, listToMaybe)
 import Data.Monoid               ((<>))
 import Data.Text                 (Text)
 import Data.Time.Clock           (getCurrentTime)
-import Database.MongoDB          (Document, (=:), at, insertMany_)
+import Database.MongoDB          (Document, (=:), insertMany_)
 import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Client        (reply)
 import Network.IRC.Client.Types  (ConnectionConfig(..), Event(..), Source(..), connectionConfig)
@@ -45,7 +45,7 @@ getFactValue ms network nick fact = liftM listToMaybe facts
 
 -- |Get all values for a fact associated with a nick.
 getFactValues :: MonadIO m => Mongo -> ByteString -> Text -> Text -> m [Text]
-getFactValues mongo network nick fact = map (at "value") `liftM` queryMongo mongo selector ordering
+getFactValues mongo network nick fact = map (at' "value" "") `liftM` queryMongo mongo selector ordering
   where
     selector = ["network" =: unpack network, "nick" =: nick, "fact" =: fact]
     ordering = ["timestamp" =: (-1 :: Int)]
@@ -58,7 +58,7 @@ getFacts mongo network nick = toFactList `liftM` queryMongo mongo selector order
   where
     selector = ["network" =: unpack network, "nick" =: nick]
     ordering = ["fact" =: (1 :: Int), "timestamp" =: (-1 :: Int)]
-    toFactList = map (\fs@(f:_) -> (at "fact" f, map (at "value") fs)) . groupBy ((==) `on` (at "fact" :: Document -> Text))
+    toFactList = map (\fs@(f:_) -> (at' "fact" "" f, map (at' "value" "") fs)) . groupBy ((==) `on` (at' "fact" "" :: Document -> Text))
 
 -- *Updating
 
@@ -88,7 +88,7 @@ alterFacts mongo f network nick fact = liftIO $ do
       facts <- queryMongo mongo ["network" =: unpack network, "nick" =: nick, "fact" =: fact] []
       deleteMongo mongo ["network" =: unpack network, "nick" =: nick, "fact" =: fact]
 
-      let newvals = f $ map (at "value") facts
+      let newvals = f $ map (at' "value" "") facts
       insertMany_ c
         [ ["network" =: unpack network, "nick" =: nick, "fact" =: fact, "value" =: val, "timestamp" =: now]
         | val <- [] `fromMaybe` newvals
