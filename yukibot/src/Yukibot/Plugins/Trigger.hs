@@ -1,4 +1,3 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
 -- |Respond to predefined phrases.
@@ -18,9 +17,9 @@ module Yukibot.Plugins.Trigger
 import Control.Applicative        ((<$>))
 import Control.Monad              (when)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
-import Data.Maybe                 (listToMaybe, mapMaybe)
+import Data.Maybe                 (fromMaybe, listToMaybe, mapMaybe)
 import Data.Monoid                ((<>))
-import Data.Text                  (Text, replace, isPrefixOf, isSuffixOf, breakOn, strip)
+import Data.Text                  (Text, replace, isPrefixOf, isSuffixOf, strip, pack, unpack)
 import Database.MongoDB           (Document, (=:), insert_)
 import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
@@ -32,6 +31,7 @@ import Network.IRC.Client.Types   ( Event(..), EventType(EPrivmsg)
                                   , UnicodeEvent
                                   , Source(..))
 import System.Random              (randomIO)
+import Text.Read                  (readMaybe)
 import Text.Regex.TDFA            (CompOption(..), defaultCompOpt, defaultExecOpt)
 import Text.Regex.TDFA.String     (Regex, compile, execute)
 import Yukibot.Utils
@@ -119,18 +119,29 @@ respond ev r = do
 addTriggerCmd :: CommandDef
 addTriggerCmd = CommandDef
   { _verb = ["add", "trigger"]
-  , _help = "<trigger> \\<reply\\> <response> -- add a trigger, as triggers can be arbitrary text, '<reply>' is used to delimit the trigger and the response. Regex triggers start and end with '/'."
+  , _help = "<trigger> \\<reply\\> <response> -- add a trigger, as triggers can be arbitrary text, '<reply>' is used to delimit the trigger and the response. Regex triggers start and end with '/'. \\<reply <num>\\> can be used to set the probability (0 to 1)."
   , _action = go
   }
 
   where
-    go vs _ _ = go' $ T.unwords vs
-    go' trig = go'' $ T.drop 7 <$> breakOn "<reply>" trig
-    go'' (trig, resp) =
+    go vs _ _ = case () of
+      _ | "<reply>" `elem` vs ->
+          case break (=="<reply>") vs of
+            (pref, "<reply>":suf) -> go' (T.unwords pref) (T.unwords suf) 1
+            _ -> return $ return ()
+
+        | "<reply" `elem` vs ->
+          case break (=="<reply") vs of
+            (pref, "<reply":prob:suf) -> go' (T.unwords pref) (T.unwords suf) $ fromMaybe 1 . readMaybe . filter (/='>') . unpack $ prob
+            _ -> return $ return ()
+
+        | otherwise -> return $ return ()
+
+    go' trig resp prob =
       let trig' = strip trig
           resp' = TR
             { _response    = strip resp
-            , _probability = 1
+            , _probability = if prob > 1 || prob < 0 then 1 else prob
             }
       in do
         mongo <- defaultMongo "triggers"
@@ -170,7 +181,8 @@ listTriggerCmd = CommandDef
     allTriggers mongo = unlines . map ppTrig <$> queryMongo mongo [] ["trigger" =: (1 :: Int)]
 
     -- Pretty-print an individual trigger
-    ppTrig trig = T.unpack $ at' "trigger" "" trig <> " <reply> " <> at' "response" "I am so triggered right now." trig
+    ppTrig trig = T.unpack $ at' "trigger" "" trig <> ppProb trig <> at' "response" "I am so triggered right now." trig
+    ppProb trig = let prob = at' "probability" (1::Float) trig in if prob == 1 then " <reply> " else " <reply " <> pack (show prob) <> "> "
 
 -- *Updating
 
