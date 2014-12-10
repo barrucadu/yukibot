@@ -5,8 +5,11 @@ import Control.Concurrent.STM     (TVar, atomically, newTVar)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.ByteString            (ByteString)
+import Data.Map                   (Map)
 import Data.Text                  (Text)
 import Network.IRC.Client.Types   (EventType, IRC, IRCState, UnicodeEvent)
+
+import qualified Data.Map as M
 
 -- *State
 
@@ -23,6 +26,8 @@ data BotState = BotState
     -- things at runtime.
     , _defHandlers :: TVar [AsakuraEventHandler]
     -- ^Default event handlers added to all new connections.
+    , _keyStore :: Map Text Text
+    -- ^Read-only key-value store for global configuration.
     }
 
 -- |Construct a new bot state
@@ -32,6 +37,7 @@ newBotState = do
   tvarDH <- liftIO . atomically . newTVar $ []
   return BotState { _connections = tvarC
                   , _defHandlers = tvarDH
+                  , _keyStore = M.empty
                   }
 
 -- *Events

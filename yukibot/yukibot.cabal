@@ -95,6 +95,7 @@ executable yukibot
                      , irc-client   >=0.2.2.1
                      , lens         >=4.0
                      , lens-aeson   >=1.0
+                     , mongoDB      >=2.0
                      , network-uri  >=2.5
                      , parsec       >=3.0.0
                      , random       >=1.0
