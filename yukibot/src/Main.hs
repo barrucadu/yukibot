@@ -64,7 +64,6 @@ runWithState fp ys = do
   let ps  = _permissionState ys
   let cs  = _commandState    ys
   let bs  = _blacklistState  ys
-  let ts  = _triggerState    ys
   let ls  = _linkinfoState   ys
   let wfs = M.simpleFactStore (defaultMongo' keyval "watching") "watching"
 
@@ -81,9 +80,9 @@ runWithState fp ys = do
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0) $ CH.unsetChanPrefix cs
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0) $ BL.blacklistCmd    bs
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0) $ BL.whitelistCmd    bs
-  registerCommand cs $ P.wrapsCmd ps (P.Admin 0) $ T.addTriggerCmd    ts
-  registerCommand cs $ P.wrapsCmd ps (P.Admin 0) $ T.rmTriggerCmd     ts
-  registerCommand cs $ T.listTriggerCmd ts
+  registerCommand cs $ P.wrapsCmd ps (P.Admin 0)   T.addTriggerCmd
+  registerCommand cs $ P.wrapsCmd ps (P.Admin 0)   T.rmTriggerCmd
+  registerCommand cs   T.listTriggerCmd
 
   registerCommand cs $ BL.wrapsCmd bs "watching" $ (M.simpleGetCommand wfs) { _verb = ["watching"] }
   registerCommand cs $ BL.wrapsCmd bs "watching" $ (M.simpleSetCommand wfs) { _verb = ["set", "watching"] }
@@ -96,7 +95,7 @@ runWithState fp ys = do
 
   addGlobalEventHandler' state $ BL.wraps bs "seen"       S.eventHandler
   addGlobalEventHandler' state $ BL.wraps bs "linkinfo" $ L.eventHandler ls
-  addGlobalEventHandler' state $ BL.wraps bs "triggers" $ T.eventHandler ts
+  addGlobalEventHandler' state $ BL.wraps bs "triggers"   T.eventHandler
 
   -- Connect to networks
   let is = _initialState ys

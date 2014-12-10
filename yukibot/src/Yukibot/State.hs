@@ -21,7 +21,6 @@ import qualified Network.IRC.Asakura.Permissions as P
 import qualified Network.IRC.Asakura.Blacklist   as BL
 import qualified Yukibot.Plugins.Initialise      as I
 import qualified Yukibot.Plugins.LinkInfo        as L
-import qualified Yukibot.Plugins.Trigger         as T
 
 -- *Live State
 
@@ -30,7 +29,6 @@ data YukibotState = YS
     { _commandState    :: C.CommandState
     , _permissionState :: P.PermissionState
     , _linkinfoState   :: L.LinkInfoCfg
-    , _triggerState    :: T.TriggerState
     , _blacklistState  :: BL.BlacklistState
     , _initialState    :: I.InitialCfg
     , _roKeyStore      :: Map Text Text
@@ -43,26 +41,23 @@ data YukibotStateSnapshot = YSS
     { _commandSnapshot    :: C.CommandStateSnapshot
     , _permissionSnapshot :: P.PermissionStateSnapshot
     , _linkinfoSnapshot   :: L.LinkInfoCfg
-    , _triggerSnapshot    :: T.TriggerStateSnapshot
     , _blacklistSnapshot  :: BL.BlacklistStateSnapshot
     , _initialSnapshot    :: I.InitialCfg
     , _roKeyStoreSnapshot :: Map Text Text
     }
 
 instance Default YukibotStateSnapshot where
-    def = YSS def def def def def def def
+    def = YSS def def def def def def
 
 instance Snapshot YukibotState YukibotStateSnapshot where
     snapshotSTM ys = do
       css <- snapshotSTM . _commandState    $ ys
       pss <- snapshotSTM . _permissionState $ ys
-      tss <- snapshotSTM . _triggerState    $ ys
       bss <- snapshotSTM . _blacklistState  $ ys
 
       return YSS { _commandSnapshot    = css
                  , _permissionSnapshot = pss
                  , _linkinfoSnapshot   = _linkinfoState ys
-                 , _triggerSnapshot    = tss
                  , _blacklistSnapshot  = bss
                  , _initialSnapshot    = _initialState ys
                  , _roKeyStoreSnapshot = _roKeyStore ys
@@ -72,13 +67,11 @@ instance Rollback YukibotStateSnapshot YukibotState where
     rollbackSTM yss = do
       cs <- rollbackSTM . _commandSnapshot    $ yss
       ps <- rollbackSTM . _permissionSnapshot $ yss
-      ts <- rollbackSTM . _triggerSnapshot    $ yss
       bs <- rollbackSTM . _blacklistSnapshot  $ yss
 
       return YS { _commandState    = cs
                 , _permissionState = ps
                 , _linkinfoState   = _linkinfoSnapshot yss
-                , _triggerState    = ts
                 , _blacklistState  = bs
                 , _initialState    = _initialSnapshot yss
                 , _roKeyStore      = _roKeyStoreSnapshot yss
@@ -88,7 +81,6 @@ instance ToJSON YukibotStateSnapshot where
     toJSON yss = object [ "prefixes"    .= _commandSnapshot    yss
                         , "permissions" .= _permissionSnapshot yss
                         , "linkinfo"    .= _linkinfoSnapshot   yss
-                        , "triggers"    .= _triggerSnapshot    yss
                         , "blacklist"   .= _blacklistSnapshot  yss
                         , "initial"     .= _initialSnapshot    yss
                         , "global"      .= _roKeyStoreSnapshot yss
@@ -98,7 +90,6 @@ instance FromJSON YukibotStateSnapshot where
     parseJSON (Object v) = YSS <$> v .:? "prefixes"    .!= def
                                <*> v .:? "permissions" .!= def
                                <*> v .:? "linkinfo"    .!= def
-                               <*> v .:? "triggers"    .!= def
                                <*> v .:? "blacklist"   .!= def
                                <*> v .:? "initial"     .!= def
                                <*> v .:? "global"      .!= def
