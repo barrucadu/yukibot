@@ -41,7 +41,7 @@ eventFunc ms _ ev = return $ do
 
   network <- _server <$> connectionConfig
 
-  setFactValues ms network nick ("seen-" <> channel) [msg]
+  setFactValues ms network nick channel [msg]
 
 -- *Command
 
@@ -61,7 +61,7 @@ command ms = CommandDef { _verb   = ["seen"]
 
       case channel of
         Just chan -> do
-          val <- getFactValue ms network nick ("seen-" <> chan)
+          val <- getFactValue ms network nick chan
           case val of
             Just msg -> reply ev $ nick <> " was last seen saying: " <> msg
             Nothing  -> reply ev $ "I haven't seen " <> nick <> " say anything yet."

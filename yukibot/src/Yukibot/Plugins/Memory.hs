@@ -1,13 +1,9 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
 -- |Remember facts about nicks.
-module Yukibot.Plugins.Memory 
-    ( -- *State
-      MemoryState
-    -- *Snapshotting
-    , MemoryStateSnapshot
-    -- *Querying
+module Yukibot.Plugins.Memory
+    ( MemoryState(..)
+      -- *Querying
     , getFactValue
     , getFactValues
     , getFacts
@@ -22,56 +18,26 @@ module Yukibot.Plugins.Memory
     , simpleGetCommand
     ) where
 
-import Control.Arrow             (first)
 import Control.Applicative       ((<$>))
-import Control.Concurrent.STM    (TVar, atomically, newTVar, readTVar, writeTVar)
-import Control.Lens              ((&), (^.), (%~), at, non)
 import Control.Monad             (liftM)
 import Control.Monad.IO.Class    (MonadIO, liftIO)
-import Data.Aeson                (FromJSON(..), ToJSON(..))
 import Data.ByteString           (ByteString)
-import Data.ByteString.Char8     (pack, unpack)
-import Data.Default.Class        (Default(..))
-import Data.Map                  (Map)
+import Data.ByteString.Char8     (unpack)
+import Data.List                 (groupBy)
+import Data.Function             (on)
 import Data.Maybe                (fromMaybe, listToMaybe)
 import Data.Monoid               ((<>))
 import Data.Text                 (Text)
+import Data.Time.Clock           (getCurrentTime)
+import Database.MongoDB          ((=:), Collection, Document, access, at, close, connect, host, master, find, rest, select, sort, insertMany)
 import Network.IRC.Asakura.Commands (CommandDef(..))
-import Network.IRC.Asakura.State (Snapshot(..), Rollback(..))
 import Network.IRC.Client        (reply)
 import Network.IRC.Client.Types  (ConnectionConfig(..), Event(..), Source(..), connectionConfig)
 
-import qualified Data.Map  as M
 import qualified Data.Text as T
 
--- *State
-
--- |Facts about users. A fact belongs to a (network, nick), has a
--- name, and may have a number of values.
-type FactStore a = Map a (Map Text (Map Text [Text]))
-
-newtype MemoryState = MS { _facts :: TVar (FactStore ByteString) }
-
--- *Snapshotting
-
-newtype MemoryStateSnapshot = MSS { _msFacts :: FactStore String }
-
-instance Default MemoryStateSnapshot where
-    def = MSS M.empty
-
-instance ToJSON MemoryStateSnapshot where
-    toJSON = toJSON . _msFacts
-
-instance FromJSON MemoryStateSnapshot where
-    parseJSON v = MSS <$> parseJSON v
-
-instance Snapshot MemoryState MemoryStateSnapshot where
-    snapshotSTM ms = MSS . toStr <$> readTVar (_facts ms)
-        where toStr = M.fromList . map (first unpack) . M.toList
-
-instance Rollback MemoryStateSnapshot MemoryState where
-    rollbackSTM mss = MS <$> newTVar (fromStr $ _msFacts mss)
-        where fromStr = M.fromList . map (first pack) . M.toList
+-- *Wrapper for the Mongo connection info, storing a hostname and collection name
+newtype MemoryState = MS (String, Collection)
 
 -- *Querying
 
@@ -82,17 +48,40 @@ getFactValue ms network nick fact = liftM listToMaybe facts
 
 -- |Get all values for a fact associated with a nick.
 getFactValues :: MonadIO m => MemoryState -> ByteString -> Text -> Text -> m [Text]
-getFactValues ms network nick fact = liftM (concatMap snd . filter relevent) facts
-    where facts    = getFacts ms network nick
-          relevent = (==fact) . fst
+getFactValues (MS (h, c)) network nick fact = liftIO $ do
+  pipe <- connect $ host h
+  res <- access pipe master c mongo
+  close pipe
+  return $ map (at "value") res
+
+  where
+    mongo = rest =<< find (select query c) {sort = ["timestamp" =: (-1 :: Int)]}
+
+    query =
+      [ "network" =: unpack network
+      , "nick"    =: nick
+      , "fact"    =: fact
+      ]
 
 -- |Get all facts associated with a nick. There is no meaningful
 -- distinction between a user not having any facts, and a user having
 -- an empty list of facts, so this doesn't return a Maybe.
 getFacts :: MonadIO m => MemoryState -> ByteString -> Text -> m [(Text, [Text])]
-getFacts ms network nick = liftIO . atomically $ do
-  facts <- readTVar $ _facts ms
-  return . M.toList $ facts ^. at network . non M.empty . at nick . non M.empty
+getFacts (MS (h, c)) network nick = liftIO $ do
+  pipe <- connect $ host h
+  res <- access pipe master c mongo
+  close pipe
+  return $ toFactList res
+
+  where
+    mongo = rest =<< find (select query c) {sort = ["fact" =: (1 :: Int), "timestamp" =: (-1 :: Int)]}
+
+    query =
+      [ "network" =: unpack network
+      , "nick"    =: nick
+      ]
+
+    toFactList = map (\fs@(f:_) -> (at "fact" f, map (at "value") fs)) . groupBy ((==) `on` (at "fact" :: Document -> Text))
 
 -- *Updating
 
@@ -113,13 +102,20 @@ delFact ms = alterFacts ms $ const Nothing
 
 -- |Alter the fact values of a user by a function.
 alterFacts :: MonadIO m => MemoryState -> ([Text] -> Maybe [Text]) -> ByteString -> Text -> Text -> m ()
-alterFacts ms f network nick fact = liftIO . atomically $ do
-  facts <- readTVar $ _facts ms
-  writeTVar (_facts ms) $ alterFacts' facts f network nick fact
+alterFacts (MS (h, c)) f network nick fact = liftIO $ do
+  now <- getCurrentTime
+  pipe <- connect $ host h
+  access pipe master c $ mongo now
+  close pipe
 
-alterFacts' :: Ord a => FactStore a -> ([Text] -> Maybe [Text]) -> a -> Text -> Text -> FactStore a
-alterFacts' fs f network nick fact = fs & at network . non M.empty . at nick . non M.empty . at fact %~ f'
-    where f' = f . fromMaybe []
+  where
+    mongo now = do
+      facts <- rest =<< find (select ["network" =: unpack network, "nick" =: nick, "fact" =: fact] c)
+      let newvals = f $ map (at "value") facts
+      insertMany c
+        [ ["network" =: unpack network, "nick" =: nick, "fact" =: fact, "value" =: val, "timestamp" =: now]
+        | val <- [] `fromMaybe` newvals
+        ]
 
 -- *Integration with other things
 
@@ -134,9 +130,9 @@ data SimpleFactStore = SimpleFactStore
 -- |Construct a simple fact store.
 simpleFactStore :: MemoryState -> Text -> SimpleFactStore
 simpleFactStore ms fact = SimpleFactStore
-                            { getSimpleValue = \network nick       -> getFactValue  ms network nick fact
-                            , setSimpleValue = \network nick value -> setFactValues ms network nick fact [value]
-                            }
+  { getSimpleValue = \network nick       -> getFactValue  ms network nick fact
+  , setSimpleValue = \network nick value -> setFactValues ms network nick fact [value]
+  }
 
 -- |Construct a command to get the value of a simple fact store for
 -- the named user (or the suer themselves, if no nick was given).
