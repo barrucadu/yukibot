@@ -68,7 +68,6 @@ executable yukibot
                      , Yukibot.Plugins.LinkInfo.PageTitle
                      , Yukibot.Plugins.LinkInfo.Soundcloud
                      , Yukibot.Plugins.LinkInfo.Youtube
-                     , Yukibot.Plugins.MAL
                      , Yukibot.Plugins.Memory
                      , Yukibot.Plugins.Seen
                      , Yukibot.Plugins.Trigger

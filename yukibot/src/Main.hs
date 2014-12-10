@@ -26,7 +26,6 @@ import qualified Yukibot.Plugins.Cellular        as CA
 import qualified Yukibot.Plugins.Channels        as CH
 import qualified Yukibot.Plugins.Initialise      as I
 import qualified Yukibot.Plugins.LinkInfo        as L
-import qualified Yukibot.Plugins.MAL             as M
 import qualified Yukibot.Plugins.Memory          as Me
 import qualified Yukibot.Plugins.Seen            as S
 import qualified Yukibot.Plugins.Trigger         as T
@@ -65,9 +64,7 @@ runWithState fp ys = do
   let ms  = _memoryState     ys
   let ts  = _triggerState    ys
   let ls  = _linkinfoState   ys
-
-  let wfs  = Me.simpleFactStore ms "watching"
-  let mas  = _malState ys
+  let wfs = Me.simpleFactStore ms "watching"
 
   -- Register signal handlers
   installHandler sigINT  (Catch $ handler state) Nothing
@@ -86,7 +83,6 @@ runWithState fp ys = do
   registerCommand cs $ P.wrapsCmd ps (P.Admin 0) $ T.rmTriggerCmd     ts
   registerCommand cs $ T.listTriggerCmd ts
 
-  registerCommand cs $ BL.wrapsCmd bs "mal"      $  M.malCommand        mas
   registerCommand cs $ BL.wrapsCmd bs "watching" $ (Me.simpleGetCommand wfs) { _verb = ["watching"] }
   registerCommand cs $ BL.wrapsCmd bs "watching" $ (Me.simpleSetCommand wfs) { _verb = ["set", "watching"] }
   registerCommand cs $ BL.wrapsCmd bs "seen"     $  S.command           ms

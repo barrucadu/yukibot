@@ -20,7 +20,6 @@ import qualified Network.IRC.Asakura.Permissions as P
 import qualified Network.IRC.Asakura.Blacklist   as BL
 import qualified Yukibot.Plugins.Initialise      as I
 import qualified Yukibot.Plugins.LinkInfo        as L
-import qualified Yukibot.Plugins.MAL             as M
 import qualified Yukibot.Plugins.Memory          as Me
 import qualified Yukibot.Plugins.Trigger         as T
 
@@ -31,7 +30,6 @@ data YukibotState = YS
     { _commandState    :: C.CommandState
     , _permissionState :: P.PermissionState
     , _linkinfoState   :: L.LinkInfoCfg
-    , _malState        :: M.MALCfg
     , _memoryState     :: Me.MemoryState
     , _triggerState    :: T.TriggerState
     , _blacklistState  :: BL.BlacklistState
@@ -45,7 +43,6 @@ data YukibotStateSnapshot = YSS
     { _commandSnapshot    :: C.CommandStateSnapshot
     , _permissionSnapshot :: P.PermissionStateSnapshot
     , _linkinfoSnapshot   :: L.LinkInfoCfg
-    , _malSnapshot        :: M.MALCfg
     , _memorySnapshot     :: Me.MemoryStateSnapshot
     , _triggerSnapshot    :: T.TriggerStateSnapshot
     , _blacklistSnapshot  :: BL.BlacklistStateSnapshot
@@ -53,7 +50,7 @@ data YukibotStateSnapshot = YSS
     }
 
 instance Default YukibotStateSnapshot where
-    def = YSS def def def def def def def def
+    def = YSS def def def def def def def
 
 instance Snapshot YukibotState YukibotStateSnapshot where
     snapshotSTM ys = do
@@ -66,7 +63,6 @@ instance Snapshot YukibotState YukibotStateSnapshot where
       return YSS { _commandSnapshot    = css
                  , _permissionSnapshot = pss
                  , _linkinfoSnapshot   = _linkinfoState ys
-                 , _malSnapshot        = _malState ys
                  , _memorySnapshot     = mss
                  , _triggerSnapshot    = tss
                  , _blacklistSnapshot  = bss
@@ -84,7 +80,6 @@ instance Rollback YukibotStateSnapshot YukibotState where
       return YS { _commandState    = cs
                 , _permissionState = ps
                 , _linkinfoState   = _linkinfoSnapshot yss
-                , _malState        = _malSnapshot yss
                 , _memoryState     = ms
                 , _triggerState    = ts
                 , _blacklistState  = bs
@@ -95,7 +90,6 @@ instance ToJSON YukibotStateSnapshot where
     toJSON yss = object [ "prefixes"    .= toJSON (_commandSnapshot    yss)
                         , "permissions" .= toJSON (_permissionSnapshot yss)
                         , "linkinfo"    .= toJSON (_linkinfoSnapshot   yss)
-                        , "myanimelist" .= toJSON (_malSnapshot        yss)
                         , "memory"      .= toJSON (_memorySnapshot     yss)
                         , "triggers"    .= toJSON (_triggerSnapshot    yss)
                         , "blacklist"   .= toJSON (_blacklistSnapshot  yss)
@@ -106,7 +100,6 @@ instance FromJSON YukibotStateSnapshot where
     parseJSON (Object v) = YSS <$> v .:? "prefixes"    .!= def
                                <*> v .:? "permissions" .!= def
                                <*> v .:? "linkinfo"    .!= def
-                               <*> v .:? "myanimelist" .!= def
                                <*> v .:? "memory"      .!= def
                                <*> v .:? "triggers"    .!= def
                                <*> v .:? "blacklist"   .!= def
