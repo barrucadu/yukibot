@@ -10,7 +10,7 @@ import Control.Lens           ((&), (.~), (^.), (?~), (^?), ix)
 import Control.Monad          (guard)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ask)
-import Data.Aeson             (Object, Value, decode')
+import Data.Aeson             (FromJSON, Object, Value, decode', encode)
 import Data.Aeson.Lens        (_String)
 import Data.ByteString        (ByteString, isInfixOf)
 import Data.ByteString.Lazy   (toStrict, fromStrict)
@@ -169,6 +169,18 @@ epoch = readTime defaultTimeLocale "%s" "0"
 -- |Display UTC in a format "HH:MM (YYYY-MM-DD)
 showUtc :: UTCTime -> Text
 showUtc = pack . formatTime defaultTimeLocale "%R (%F)"
+
+-- *Embedded configuration
+
+-- |Extract a value from the embedded JSON
+--
+-- TODO: Got to be a more efficient way of doing this.
+cfgGet :: FromJSON a => Bot (Maybe a)
+cfgGet = decode' . encode . _config <$> ask
+
+-- |Extract a value from the embedded JSON with a default value.
+cfgGet' :: FromJSON a => a -> Bot a
+cfgGet' d = fromMaybe d <$> cfgGet
 
 -- *Misc
 
