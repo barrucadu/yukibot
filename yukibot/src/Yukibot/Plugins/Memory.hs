@@ -18,6 +18,7 @@ module Yukibot.Plugins.Memory
     ) where
 
 import Control.Applicative       ((<$>))
+import Control.Arrow             ((&&&))
 import Control.Monad             (liftM)
 import Control.Monad.IO.Class    (MonadIO, liftIO)
 import Data.ByteString           (ByteString)
@@ -27,25 +28,37 @@ import Data.Function             (on)
 import Data.Maybe                (fromMaybe, listToMaybe)
 import Data.Monoid               ((<>))
 import Data.Text                 (Text)
-import Data.Time.Clock           (getCurrentTime)
+import Data.Time.Clock           (UTCTime, getCurrentTime)
+import Data.Time.Format          (readTime)
 import Database.MongoDB          (Document, (=:), insertMany_)
 import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Client        (reply)
 import Network.IRC.Client.Types  (ConnectionConfig(..), Event(..), Source(..), connectionConfig)
+import System.Locale             (defaultTimeLocale)
 import Yukibot.Utils
 
 import qualified Data.Text as T
 
+atFact      :: Document -> Text
+atValue     :: Document -> Text
+atTimestamp :: Document -> UTCTime
+
+atFact      = at' "fact"      ""
+atValue     = at' "value"     ""
+atTimestamp = at' "timestamp" $ readTime defaultTimeLocale "%s" "0"
+
 -- *Querying
 
--- |Get the first value for a fact associated with a user.
-getFactValue :: MonadIO m => Mongo -> ByteString -> Text -> Text -> m (Maybe Text)
+-- |Get the first value for a fact associated with a user and the time
+-- at which it was stored.
+getFactValue :: MonadIO m => Mongo -> ByteString -> Text -> Text -> m (Maybe (Text, UTCTime))
 getFactValue ms network nick fact = liftM listToMaybe facts
     where facts = getFactValues ms network nick fact
 
--- |Get all values for a fact associated with a nick.
-getFactValues :: MonadIO m => Mongo -> ByteString -> Text -> Text -> m [Text]
-getFactValues mongo network nick fact = map (at' "value" "") `liftM` queryMongo mongo selector ordering
+-- |Get all values for a fact associated with a nick and the time at
+-- which they were stored.
+getFactValues :: MonadIO m => Mongo -> ByteString -> Text -> Text -> m [(Text, UTCTime)]
+getFactValues mongo network nick fact = map (atValue &&& atTimestamp) `liftM` queryMongo mongo selector ordering
   where
     selector = ["network" =: unpack network, "nick" =: nick, "fact" =: fact]
     ordering = ["timestamp" =: (-1 :: Int)]
@@ -53,12 +66,12 @@ getFactValues mongo network nick fact = map (at' "value" "") `liftM` queryMongo 
 -- |Get all facts associated with a nick. There is no meaningful
 -- distinction between a user not having any facts, and a user having
 -- an empty list of facts, so this doesn't return a Maybe.
-getFacts :: MonadIO m => Mongo -> ByteString -> Text -> m [(Text, [Text])]
+getFacts :: MonadIO m => Mongo -> ByteString -> Text -> m [(Text, [(Text, UTCTime)])]
 getFacts mongo network nick = toFactList `liftM` queryMongo mongo selector ordering
   where
     selector = ["network" =: unpack network, "nick" =: nick]
     ordering = ["fact" =: (1 :: Int), "timestamp" =: (-1 :: Int)]
-    toFactList = map (\fs@(f:_) -> (at' "fact" "" f, map (at' "value" "") fs)) . groupBy ((==) `on` (at' "fact" "" :: Document -> Text))
+    toFactList = map (\fs@(f:_) -> (atFact f, map (atValue &&& atTimestamp) fs)) . groupBy ((==) `on` atFact)
 
 -- *Updating
 
@@ -88,7 +101,7 @@ alterFacts mongo f network nick fact = liftIO $ do
       facts <- queryMongo mongo ["network" =: unpack network, "nick" =: nick, "fact" =: fact] []
       deleteMongo mongo ["network" =: unpack network, "nick" =: nick, "fact" =: fact]
 
-      let newvals = f $ map (at' "value" "") facts
+      let newvals = f $ map atValue facts
       insertMany_ c
         [ ["network" =: unpack network, "nick" =: nick, "fact" =: fact, "value" =: val, "timestamp" =: now]
         | val <- [] `fromMaybe` newvals
@@ -107,7 +120,7 @@ data SimpleFactStore = SimpleFactStore
 -- |Construct a simple fact store.
 simpleFactStore :: Mongo -> Text -> SimpleFactStore
 simpleFactStore ms fact = SimpleFactStore
-  { getSimpleValue = \network nick       -> getFactValue  ms network nick fact
+  { getSimpleValue = \network nick       -> fmap fst <$> getFactValue  ms network nick fact
   , setSimpleValue = \network nick value -> setFactValues ms network nick fact [value]
   }
 
