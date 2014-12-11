@@ -137,7 +137,7 @@ defaultMongo c = flip defaultMongo' c . _config <$> ask
 
 -- |Like 'defaultMongo', but use an explicit config.
 defaultMongo' :: Value -> Collection -> Mongo
-defaultMongo' cfg c = Mongo (unpack . fromMaybe "localhost" $ cfg ^? ix "global" . ix "mongodb" . _String, mongoNamespace <> c)
+defaultMongo' cfg c = Mongo (unpack . fromMaybe "localhost" $ cfg ^? ix "mongodb" . ix "host" . _String, mongoNamespace <> c)
 
 -- |Run a function over a MongoDB database
 doMongo :: MonadIO m => Mongo -> (Collection -> Action m a) -> m a

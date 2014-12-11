@@ -1,6 +1,6 @@
 {
-    "global": {
-        "mongodb": "localhost"
+    "mongodb": {
+        "host": "localhost"
     },
 
     "initial": {
