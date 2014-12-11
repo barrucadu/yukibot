@@ -6,7 +6,6 @@ module Main where
 import Control.Applicative    ((<$>))
 import Control.Concurrent.STM (atomically, readTVar)
 import Control.Monad.Trans.Reader (runReaderT)
-import Data.Aeson.Types       (emptyObject)
 import Data.Default.Class     (def)
 import Network.IRC.Asakura
 import Network.IRC.Asakura.Commands (CommandDef(..), registerCommand)
@@ -50,15 +49,17 @@ main = do
   confExists <- doesFileExist configFile
   ys <- if confExists
        then stateFromFile configFile
-       else Just . (, emptyObject) <$> rollback def
+       else Just <$> rollback def
 
   case ys of
-    Just (ys', val) -> newBotState' val >>= runWithState configFile ys'
+    Just ys' -> runWithState configFile ys'
     Nothing  -> putStrLn "Failed to parse configuration file." >> exitFailure
 
 -- |Run the bot with a given state.
-runWithState :: FilePath -> YukibotState -> BotState -> IO ()
-runWithState fp ys state = do
+runWithState :: FilePath -> YukibotState -> IO ()
+runWithState fp ys = do
+  state <- newBotState' $ _original ys
+
   let ps  = _permissionState ys
   let cs  = _commandState    ys
   let bs  = _blacklistState  ys

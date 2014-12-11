@@ -106,6 +106,7 @@ executable yukibot
                      , time         >=1.4
                      , transformers >=0.3
                      , unix         >=2.7
+                     , unordered-containers >=0.2
                      , wreq         >=0.3
 
   -- Directories containing source files.
