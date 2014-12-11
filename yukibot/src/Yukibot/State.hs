@@ -86,7 +86,6 @@ instance ToJSON YukibotStateSnapshot where
     , "permissions" .= _permissionSnapshot yss
     , "linkinfo"    .= _linkinfoSnapshot   yss
     , "blacklist"   .= _blacklistSnapshot  yss
-    , "initial"     .= _initialSnapshot    yss
     ]
     ++
     opairs (_originalSnapshot yss)

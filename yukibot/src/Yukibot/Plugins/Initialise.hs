@@ -12,11 +12,10 @@ import Control.Applicative        ((<$>), (<*>))
 import Control.Monad              (when, void)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (runReaderT)
-import Data.Aeson                 (FromJSON(..), ToJSON(..), Value(..), (.=), (.:), (.:?), (.!=), object)
+import Data.Aeson                 (FromJSON(..), Value(..), (.:), (.:?), (.!=))
 import Data.Default.Class         (Default(..))
 import Data.ByteString.Char8      (pack)
 import Data.Map                   (Map)
-import Data.Maybe                 (catMaybes)
 import Data.Monoid                ((<>))
 import Data.Text                  (Text)
 import Network.IRC.Asakura        (addNetwork)
@@ -32,9 +31,6 @@ newtype InitialCfg = IS { _networks :: Map String NetworkState }
 
 instance FromJSON InitialCfg where
     parseJSON = fmap IS . parseJSON
-
-instance ToJSON InitialCfg where
-    toJSON = toJSON . _networks
 
 instance Default InitialCfg where
     def = IS $ M.fromList [("irc.freenode.net", freenode)]
@@ -60,14 +56,6 @@ instance FromJSON NetworkState where
                               <*> v .:? "nickservPassword"
                               <*> v .:? "channels" .!= []
     parseJSON _ = fail "Expected object"
-
-instance ToJSON NetworkState where
-    toJSON ns = object . catMaybes $ [ Just $ "nick"     .= _nick ns
-                                     , Just $ "port"     .= _port ns
-                                     , Just $ "tls"      .= _tls ns
-                                     , ("nickservPassword" .=) <$> _nickserv ns
-                                     , Just $ "channels" .= _channels ns
-                                     ]
 
 -- *Application
 
