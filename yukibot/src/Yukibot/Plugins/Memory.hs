@@ -29,12 +29,10 @@ import Data.Maybe                (fromMaybe, listToMaybe)
 import Data.Monoid               ((<>))
 import Data.Text                 (Text)
 import Data.Time.Clock           (UTCTime, getCurrentTime)
-import Data.Time.Format          (readTime)
 import Database.MongoDB          (Document, (=:), insertMany_)
 import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Client        (reply)
 import Network.IRC.Client.Types  (ConnectionConfig(..), Event(..), Source(..), connectionConfig)
-import System.Locale             (defaultTimeLocale)
 import Yukibot.Utils
 
 import qualified Data.Text as T
@@ -45,7 +43,7 @@ atTimestamp :: Document -> UTCTime
 
 atFact      = at' "fact"      ""
 atValue     = at' "value"     ""
-atTimestamp = at' "timestamp" $ readTime defaultTimeLocale "%s" "0"
+atTimestamp = at' "timestamp" epoch
 
 -- *Querying
 

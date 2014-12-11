@@ -10,8 +10,6 @@ module Yukibot.Plugins.Seen
 
 import Control.Applicative        ((<$>))
 import Data.Monoid                ((<>))
-import Data.Text                  (pack)
-import Data.Time.Format           (formatTime)
 import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Asakura.Events (runEverywhere)
 import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
@@ -24,7 +22,6 @@ import Network.IRC.Client.Types   ( ConnectionConfig(_server)
                                   , UnicodeEvent
                                   , connectionConfig)
 import Yukibot.Plugins.Memory     (getFactValue, setFactValues)
-import System.Locale              (defaultTimeLocale)
 import Yukibot.Utils
 
 -- *Event handler
@@ -73,7 +70,7 @@ command = CommandDef
           Just chan -> do
             val <- getFactValue ms network nick chan
             case val of
-              Just (msg, utc) -> reply ev $ nick <> " was last seen saying: \"" <> msg <> "\" at " <> pack (formatTime defaultTimeLocale "%R (%F)" utc)
+              Just (msg, utc) -> reply ev $ nick <> " was last seen saying: \"" <> msg <> "\" at " <> showUtc utc
               Nothing -> reply ev $ "I haven't seen " <> nick <> " say anything yet."
 
           Nothing -> return ()

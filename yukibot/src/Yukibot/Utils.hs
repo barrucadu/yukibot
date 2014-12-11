@@ -17,13 +17,16 @@ import Data.Maybe             (fromMaybe)
 import Data.Map               (Map, findWithDefault)
 import Data.Monoid            ((<>))
 import Data.String            (IsString(..))
-import Data.Text              (Text, strip, unpack)
+import Data.Text              (Text, strip, unpack, pack)
 import Data.Text.Encoding     (decodeUtf8)
+import Data.Time.Clock        (UTCTime)
+import Data.Time.Format       (formatTime, readTime)
 import Database.MongoDB       (Action, Collection, Document, Label, Order, Selector, Val, access, close, connect, delete, host, master, find, rest, select, sort)
 import Network.IRC.Asakura.Types (Bot, BotState(_keyStore))
 import Network.HTTP.Client    (HttpException)
 import Network.Wreq           (FormParam(..), Options, Response, auth, basicAuth, defaults, getWith, post, redirects, responseBody, responseHeader, responseStatus, statusCode)
 import Network.URI            (URI(..), URIAuth(..), uriToString)
+import System.Locale          (defaultTimeLocale)
 
 import qualified Database.MongoDB as Mo
 
@@ -156,6 +159,16 @@ deleteMongo mongo selby = liftIO . doMongo mongo $ \c -> delete (select selby c)
 -- missing/bad type case.
 at' :: Val v => Label -> v -> Document -> v
 at' lbl def doc = def `fromMaybe` Mo.lookup lbl doc
+
+-- *Time
+
+-- |The UNIX epoch, a sane default time.
+epoch :: UTCTime
+epoch = readTime defaultTimeLocale "%s" "0"
+
+-- |Display UTC in a format "HH:MM (YYYY-MM-DD)
+showUtc :: UTCTime -> Text
+showUtc = pack . formatTime defaultTimeLocale "%R (%F)"
 
 -- *Misc
 
