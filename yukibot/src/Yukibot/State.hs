@@ -20,7 +20,6 @@ import qualified Data.HashMap.Strict             as HM
 import qualified Network.IRC.Asakura.Commands    as C
 import qualified Network.IRC.Asakura.Permissions as P
 import qualified Network.IRC.Asakura.Blacklist   as BL
-import qualified Yukibot.Plugins.Initialise      as I
 import qualified Yukibot.Plugins.LinkInfo        as L
 
 -- *Live State
@@ -31,7 +30,6 @@ data YukibotState = YS
   , _permissionState :: P.PermissionState
   , _linkinfoState   :: L.LinkInfoCfg
   , _blacklistState  :: BL.BlacklistState
-  , _initialState    :: I.InitialCfg
   , _original        :: Value
   }
 
@@ -43,12 +41,11 @@ data YukibotStateSnapshot = YSS
   , _permissionSnapshot :: P.PermissionStateSnapshot
   , _linkinfoSnapshot   :: L.LinkInfoCfg
   , _blacklistSnapshot  :: BL.BlacklistStateSnapshot
-  , _initialSnapshot    :: I.InitialCfg
   , _originalSnapshot   :: Value
   }
 
 instance Default YukibotStateSnapshot where
-  def = YSS def def def def def emptyObject
+  def = YSS def def def def emptyObject
 
 instance Snapshot YukibotState YukibotStateSnapshot where
   snapshotSTM ys = do
@@ -61,7 +58,6 @@ instance Snapshot YukibotState YukibotStateSnapshot where
       , _permissionSnapshot = pss
       , _linkinfoSnapshot   = _linkinfoState ys
       , _blacklistSnapshot  = bss
-      , _initialSnapshot    = _initialState ys
       , _originalSnapshot   = _original ys
       }
 
@@ -76,7 +72,6 @@ instance Rollback YukibotStateSnapshot YukibotState where
       , _permissionState = ps
       , _linkinfoState   = _linkinfoSnapshot yss
       , _blacklistState  = bs
-      , _initialState    = _initialSnapshot yss
       , _original        = _originalSnapshot yss
       }
 
@@ -100,7 +95,6 @@ instance FromJSON YukibotStateSnapshot where
     <*> v .:? "permissions" .!= def
     <*> v .:? "linkinfo"    .!= def
     <*> v .:? "blacklist"   .!= def
-    <*> v .:? "initial"     .!= def
     <*> pure o
 
   parseJSON _ = fail "Expected object"

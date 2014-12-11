@@ -97,8 +97,7 @@ runWithState fp ys = do
   addGlobalEventHandler' state $ BL.wraps bs "triggers"   T.eventHandler
 
   -- Connect to networks
-  let is = _initialState ys
-  I.initialiseWithState state is
+  I.initialiseWithState state
 
   -- Block until all networks have been disconnected from
   blockWithState state

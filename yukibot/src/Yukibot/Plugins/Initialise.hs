@@ -22,6 +22,7 @@ import Network.IRC.Asakura        (addNetwork)
 import Network.IRC.Asakura.Types  (Bot, BotState)
 import Network.IRC.Client         (Message(Numeric, Privmsg, Join), connect, connectWithTLS, defaultIRCConf, send)
 import Network.IRC.Client.Types   (EventType(ENumeric), Event(_message), EventHandler(..), InstanceConfig(_eventHandlers))
+import Yukibot.Utils
 
 import qualified Data.Map as M
 
@@ -61,8 +62,8 @@ instance FromJSON NetworkState where
 
 -- |Connect to all default networks, auth with nickservs, and join
 -- channels.
-initialise :: InitialCfg -> Bot ()
-initialise = mapM_ goN . M.toList . _networks
+initialise :: Bot ()
+initialise = cfgGet' def "initial" >>= mapM_ goN . M.toList
     where goN (hostname, ns) = do
             -- Connect to the network
             cconf <- if _tls ns
@@ -92,5 +93,5 @@ initialise = mapM_ goN . M.toList . _networks
                            mapM_ (send . Join) $ _channels ns
 
 -- |Initialise with the provided bot state
-initialiseWithState :: MonadIO m => BotState -> InitialCfg -> m ()
-initialiseWithState bs = liftIO . flip runReaderT bs . initialise
+initialiseWithState :: MonadIO m => BotState -> m ()
+initialiseWithState bs = liftIO . flip runReaderT bs $ initialise

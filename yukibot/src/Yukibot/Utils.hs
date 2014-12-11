@@ -10,8 +10,9 @@ import Control.Lens           ((&), (.~), (^.), (?~), (^?), ix)
 import Control.Monad          (guard)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ask)
-import Data.Aeson             (FromJSON, Object, Value, decode', encode)
+import Data.Aeson             (FromJSON, Object, Value(Object), decode', encode)
 import Data.Aeson.Lens        (_String)
+import Data.Aeson.Types       (emptyObject)
 import Data.ByteString        (ByteString, isInfixOf)
 import Data.ByteString.Lazy   (toStrict, fromStrict)
 import Data.Maybe             (fromMaybe)
@@ -28,7 +29,8 @@ import Network.Wreq           (FormParam(..), Options, Response, auth, basicAuth
 import Network.URI            (URI(..), URIAuth(..), uriToString)
 import System.Locale          (defaultTimeLocale)
 
-import qualified Database.MongoDB as Mo
+import qualified Data.HashMap.Strict as HM
+import qualified Database.MongoDB    as Mo
 
 -- *Webby Stuff
 
@@ -175,12 +177,16 @@ showUtc = pack . formatTime defaultTimeLocale "%R (%F)"
 -- |Extract a value from the embedded JSON
 --
 -- TODO: Got to be a more efficient way of doing this.
-cfgGet :: FromJSON a => Bot (Maybe a)
-cfgGet = decode' . encode . _config <$> ask
+cfgGet :: FromJSON a => Text -> Bot (Maybe a)
+cfgGet name = do
+  json <- _config <$> ask
+  let (Object thing) = json
+  let obj = HM.lookupDefault emptyObject name thing
+  return . decode' $ encode obj
 
 -- |Extract a value from the embedded JSON with a default value.
-cfgGet' :: FromJSON a => a -> Bot a
-cfgGet' d = fromMaybe d <$> cfgGet
+cfgGet' :: FromJSON a => a -> Text -> Bot a
+cfgGet' d name = fromMaybe d <$> cfgGet name
 
 -- *Misc
 
