@@ -6,15 +6,15 @@ module Yukibot.Utils where
 
 import Control.Applicative    ((<$>))
 import Control.Exception      (catch)
-import Control.Lens           ((&), (.~), (^.), (?~))
+import Control.Lens           ((&), (.~), (^.), (?~), (^?), ix)
 import Control.Monad          (guard)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ask)
-import Data.Aeson             (Object, decode')
+import Data.Aeson             (Object, Value, decode')
+import Data.Aeson.Lens        (_String)
 import Data.ByteString        (ByteString, isInfixOf)
 import Data.ByteString.Lazy   (toStrict, fromStrict)
 import Data.Maybe             (fromMaybe)
-import Data.Map               (Map, findWithDefault)
 import Data.Monoid            ((<>))
 import Data.String            (IsString(..))
 import Data.Text              (Text, strip, unpack, pack)
@@ -22,7 +22,7 @@ import Data.Text.Encoding     (decodeUtf8)
 import Data.Time.Clock        (UTCTime)
 import Data.Time.Format       (formatTime, readTime)
 import Database.MongoDB       (Action, Collection, Document, Label, Order, Selector, Val, access, close, connect, delete, host, master, find, rest, select, sort)
-import Network.IRC.Asakura.Types (Bot, BotState(_keyStore))
+import Network.IRC.Asakura.Types (Bot, BotState(_config))
 import Network.HTTP.Client    (HttpException)
 import Network.Wreq           (FormParam(..), Options, Response, auth, basicAuth, defaults, getWith, post, redirects, responseBody, responseHeader, responseStatus, statusCode)
 import Network.URI            (URI(..), URIAuth(..), uriToString)
@@ -133,11 +133,11 @@ mongoNamespace = "yukibot__"
 -- |Construct a 'Mongo' using the global host, or localhost if not
 -- found.
 defaultMongo :: Collection -> Bot Mongo
-defaultMongo c = flip defaultMongo' c . _keyStore <$> ask
+defaultMongo c = flip defaultMongo' c . _config <$> ask
 
--- |Like 'defaultMongo', but use the explicit key-val store.
-defaultMongo' :: Map Text Text -> Collection -> Mongo
-defaultMongo' kv c = Mongo (unpack $ findWithDefault "localhost" "mongodb" kv, mongoNamespace <> c)
+-- |Like 'defaultMongo', but use an explicit config.
+defaultMongo' :: Value -> Collection -> Mongo
+defaultMongo' cfg c = Mongo (unpack . fromMaybe "localhost" $ cfg ^? ix "global" . ix "mongodb" . _String, mongoNamespace <> c)
 
 -- |Run a function over a MongoDB database
 doMongo :: MonadIO m => Mongo -> (Collection -> Action m a) -> m a

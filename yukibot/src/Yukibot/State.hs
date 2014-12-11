@@ -1,5 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE TupleSections         #-}
 
 module Yukibot.State where
 
@@ -98,13 +99,18 @@ instance FromJSON YukibotStateSnapshot where
 -- *Initialisation
 
 -- |Attempt to load a state from a lazy ByteString.
-stateFromByteString :: (Functor m, MonadIO m) => ByteString -> m (Maybe YukibotState)
-stateFromByteString bs = case (decode' bs :: Maybe YukibotStateSnapshot) of
-                           Just yss -> Just <$> rollback yss
-                           Nothing  -> return Nothing
+stateFromByteString :: (Functor m, MonadIO m) => ByteString -> m (Maybe (YukibotState, Value))
+stateFromByteString bs =
+  case (yss, val) of
+    (Just yss', Just val') -> Just . (, val') <$> rollback yss'
+    _ -> return Nothing
+
+  where
+    yss = decode' bs :: Maybe YukibotStateSnapshot
+    val = decode' bs :: Maybe Value
 
 -- |Attempt to load a state from a file.
-stateFromFile :: MonadIO m => FilePath -> m (Maybe YukibotState)
+stateFromFile :: MonadIO m => FilePath -> m (Maybe (YukibotState, Value))
 stateFromFile fp = liftIO $ do
   exists <- doesFileExist fp
   if exists

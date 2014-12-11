@@ -1,10 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections     #-}
 
 module Main where
 
 import Control.Applicative    ((<$>))
 import Control.Concurrent.STM (atomically, readTVar)
 import Control.Monad.Trans.Reader (runReaderT)
+import Data.Aeson.Types       (emptyObject)
 import Data.Default.Class     (def)
 import Network.IRC.Asakura
 import Network.IRC.Asakura.Commands (CommandDef(..), registerCommand)
@@ -48,24 +50,20 @@ main = do
   confExists <- doesFileExist configFile
   ys <- if confExists
        then stateFromFile configFile
-       else Just <$> rollback def
+       else Just . (, emptyObject) <$> rollback def
 
   case ys of
-    Just ys' -> runWithState configFile ys'
+    Just (ys', val) -> newBotState' val >>= runWithState configFile ys'
     Nothing  -> putStrLn "Failed to parse configuration file." >> exitFailure
 
 -- |Run the bot with a given state.
-runWithState :: FilePath -> YukibotState -> IO ()
-runWithState fp ys = do
-  state <- setKeyStore ys <$> newBotState
-
-  let keyval = _roKeyStore ys
-
+runWithState :: FilePath -> YukibotState -> BotState -> IO ()
+runWithState fp ys state = do
   let ps  = _permissionState ys
   let cs  = _commandState    ys
   let bs  = _blacklistState  ys
   let ls  = _linkinfoState   ys
-  let wfs = M.simpleFactStore (defaultMongo' keyval "watching") "watching"
+  let wfs = M.simpleFactStore (defaultMongo' (_config state) "watching") "watching"
 
   -- Register signal handlers
   installHandler sigINT  (Catch $ handler state) Nothing
@@ -106,11 +104,6 @@ runWithState fp ys = do
 
   -- Save the state
   save fp ys
-
--- |Set the key-value store in a botstate from the global
--- configuration.
-setKeyStore :: YukibotState -> BotState -> BotState
-setKeyStore ys s = s { _keyStore = _roKeyStore ys }
 
 -- |Handle a signal by disconnecting from every IRC network.
 handler :: BotState -> IO ()
