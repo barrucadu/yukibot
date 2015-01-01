@@ -33,11 +33,16 @@ poundsAndPence money = money `divMod` 100
 
 -- | Try to parse a string as containing some (positive) currency.
 readCurrency :: Text -> Maybe Currency
-readCurrency txt = (\a b -> 100*a + b) <$> readMaybe pounds <*> readMaybe pence where
-  (pounds, pence) = (unpack . defZero) ^*^ breakOn' "." txt
+readCurrency txt =
+  if length pence /= 2
+  then Nothing
+  else (\a b -> 100*a + b) <$> readMaybe pounds <*> readMaybe pence
 
-  defZero ""  = "0"
-  defZero t   = t
+  where
+    (pounds, pence) = (unpack . defZero) ^*^ breakOn' "." txt
+
+    defZero ""  = "00"
+    defZero t   = t
 
 -- | Display some currency as a string.
 showCurrency :: Currency -> Text
