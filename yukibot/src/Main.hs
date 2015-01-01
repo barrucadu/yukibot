@@ -26,6 +26,7 @@ import qualified Network.IRC.Asakura.Permissions as P
 import qualified Yukibot.Plugins.Brainfuck       as BF
 import qualified Yukibot.Plugins.Cellular        as CA
 import qualified Yukibot.Plugins.Channels        as CH
+import qualified Yukibot.Plugins.Dedebtifier     as D
 import qualified Yukibot.Plugins.Initialise      as I
 import qualified Yukibot.Plugins.LinkInfo        as L
 import qualified Yukibot.Plugins.Memory          as M
@@ -65,6 +66,7 @@ runWithState fp ys = do
   let bs  = _blacklistState  ys
   let ls  = _linkinfoState   ys
   let wfs = M.simpleFactStore (defaultMongo' (_config state) "watching") "watching"
+  let ds  = defaultMongo' (_config state) "debts"
 
   -- Register signal handlers
   installHandler sigINT  (Catch $ handler state) Nothing
@@ -88,6 +90,10 @@ runWithState fp ys = do
   registerCommand cs $ BL.wrapsCmd bs "seen"        S.command
   registerCommand cs $ BL.wrapsCmd bs "cellular"    CA.command
   registerCommand cs $ BL.wrapsCmd bs "brainfuck"   BF.command
+  registerCommand cs $ BL.wrapsCmd bs "debts"    $  D.oweCmd  ds
+  registerCommand cs $ BL.wrapsCmd bs "debts"    $  D.owedCmd ds
+  registerCommand cs $ BL.wrapsCmd bs "debts"    $  D.payCmd  ds
+  registerCommand cs $ BL.wrapsCmd bs "debts"    $  D.listCmd ds
 
   -- Register event handlers
   addGlobalEventHandler' state $ C.eventRunner cs
