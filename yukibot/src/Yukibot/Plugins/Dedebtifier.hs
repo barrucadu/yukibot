@@ -17,7 +17,7 @@ import Data.Monoid ((<>))
 import Data.Text (Text, pack, unpack)
 import Database.MongoDB (Document, (=:), insert_)
 import Network.IRC.Asakura.Commands (CommandDef(..))
-import Network.IRC.Client (Event(_source), UnicodeEvent, IRC, Source(..), reply)
+import Network.IRC.Client (UnicodeEvent, IRC, reply)
 import Text.PrettyPrint.Boxes (render, hsep, left, vcat, text)
 import Text.Read (readMaybe)
 import Yukibot.Utils
@@ -66,7 +66,7 @@ owedCmd mongo = CommandDef
 debtCmd :: Monad m => (Text -> Text -> Currency -> IRC ()) -> [Text] -> a -> UnicodeEvent -> m (IRC ())
 debtCmd f [target, amount] _ ev = return $ case readCurrency amount of
   Just amount' -> do
-    let User me = _source ev
+    let me = sender' ev
     f me target amount'
   Nothing -> reply ev "Couldn't parse amount."
 debtCmd _ _ _ ev = return $ reply ev "Expected two arguments."
@@ -89,15 +89,13 @@ listCmd mongo = CommandDef
 
   where
     go _ _ ev = do
-      let User nick = _source ev
-      from <- queryMongo mongo (owes nick) ["to"   =: (1::Int)]
-      to   <- queryMongo mongo (owed nick) ["from" =: (1::Int)]
+      let me = sender' ev
+      from <- queryMongo mongo (owes me) ["to"   =: (1::Int)]
+      to   <- queryMongo mongo (owed me) ["from" =: (1::Int)]
 
-      let output = toBoxes . sort . listDebts $ from ++ to
-
-      return $ case output of
-        "" -> reply ev "You have no debts or credits."
-        _  -> paste output >>= reply ev
+      return $ case from ++ to of
+        [] -> reply ev "You have no debts or credits."
+        dc -> paste (toBoxes . sort $ listDebts dc) >>= reply ev
 
     listDebts = map $ \d -> [at' "from" "" d, at' "to" "" d, showCurrency $ at' "amount" 0 d]
     toBoxes rows = render $ hsep 2 left (map (vcat left . map (text . unpack))

@@ -16,7 +16,7 @@ import Data.Aeson.Lens        (_String)
 import Data.Aeson.Types       (emptyObject)
 import Data.ByteString        (ByteString, isInfixOf)
 import Data.ByteString.Lazy   (toStrict, fromStrict)
-import Data.Maybe             (fromMaybe)
+import Data.Maybe             (fromMaybe, fromJust)
 import Data.Monoid            ((<>))
 import Data.String            (IsString(..))
 import Data.Text              (Text, strip, unpack, pack, breakOn)
@@ -25,6 +25,7 @@ import Data.Time.Clock        (UTCTime)
 import Data.Time.Format       (formatTime, readTime)
 import Database.MongoDB       (Action, Collection, Document, Label, Order, Selector, Val, access, close, connect, delete, host, master, find, rest, select, sort)
 import Network.IRC.Asakura.Types (Bot, BotState(_config))
+import Network.IRC.Client.Types  (Event(_source), UnicodeEvent, Source(..))
 import Network.HTTP.Client    (HttpException)
 import Network.Wreq           (FormParam(..), Options, Response, auth, basicAuth, defaults, getWith, post, redirects, responseBody, responseHeader, responseStatus, statusCode)
 import Network.URI            (URI(..), URIAuth(..), uriToString)
@@ -220,3 +221,15 @@ f ^*^ x = (f *** f) x
 -- | Like breakOn, but strip the delimiter.
 breakOn' :: Text -> Text -> (Text, Text)
 breakOn' delim txt = second (T.drop 1) (breakOn delim txt)
+
+-- | Get the nick which sent a message
+sender :: UnicodeEvent -> Maybe Text
+sender ev = case _source ev of
+  User nick      -> Just nick
+  Channel _ nick -> Just nick
+  Server _       -> Nothing
+
+-- | Get the nick which sent a message, throwing an error if there was
+-- no such nick.
+sender' :: UnicodeEvent -> Text
+sender' = fromJust . sender
