@@ -31,7 +31,7 @@ type Currency = Integer
 poundsAndPence :: Currency -> (Integer, Integer)
 poundsAndPence money = money `divMod` 100
 
--- | Try to parse a string as containing some currency.
+-- | Try to parse a string as containing some (positive) currency.
 readCurrency :: Text -> Maybe Currency
 readCurrency txt = (\a b -> 100*a + b) <$> readMaybe pounds <*> readMaybe pence where
   (pounds, pence) = (unpack . defZero) ^*^ breakOn' "." txt
@@ -65,9 +65,13 @@ owedCmd mongo = CommandDef
 -- | Helper function for 'oweCmd' and 'owedCmd'
 debtCmd :: Monad m => (Text -> Text -> Currency -> IRC ()) -> [Text] -> a -> UnicodeEvent -> m (IRC ())
 debtCmd f [target, amount] _ ev = return $ case readCurrency amount of
-  Just amount' -> do
-    let me = sender' ev
-    f me target amount'
+  Just amount'
+    | amount' <= 0 -> reply ev "Stop being silly."
+    | otherwise -> do
+      let me = sender' ev
+      if me == target
+      then reply ev "Stop being silly."
+      else f me target amount'
   Nothing -> reply ev "Couldn't parse amount."
 debtCmd _ _ _ ev = return $ reply ev "Expected two arguments."
 
