@@ -11,14 +11,13 @@ module Yukibot.Plugins.Dedebtifier
   ) where
 
 import Control.Applicative ((<$>), (<*>))
+import Control.Arrow ((***))
 import Control.Monad (forM_)
 import Control.Monad.IO.Class (MonadIO)
-import Data.Bson (Val(..), Value(..))
 import Data.Function (on)
-import Data.List (transpose, sortBy)
-import Data.Maybe (catMaybes)
-import Data.Ord (comparing)
-import Data.Ratio ((%))
+import Data.List (transpose)
+import Data.Maybe (catMaybes, fromMaybe)
+import Data.Monoid ((<>))
 import Data.Text (Text, breakOn, stripPrefix, pack, unpack)
 import Database.MongoDB (Document, (=:), insert_)
 import Network.IRC.Asakura.Commands (CommandDef(..))
@@ -36,7 +35,7 @@ oweCmd mongo = CommandDef
   }
 
   where
-    go [to, amount] _ ev = return $ case readRat amount of
+    go [to, amount] _ ev = return $ case readCur amount of
       Just amount' -> do
         let User from = _source ev
         addDebt mongo from to amount'
@@ -52,7 +51,7 @@ owedCmd mongo = CommandDef
   }
 
   where
-    go [from, amount] _ ev = return $ case readRat amount of
+    go [from, amount] _ ev = return $ case readCur amount of
       Just amount' -> do
         let User to = _source ev
         addDebt mongo from to amount'
@@ -68,7 +67,7 @@ payCmd mongo = CommandDef
   }
 
   where
-    go [to, amount] _ ev = return $ case readRat amount of
+    go [to, amount] _ ev = return $ case readCur amount of
       Just amount' -> do
         let User from = _source ev
         addCredit mongo from to amount'
@@ -91,31 +90,30 @@ listCmd mongo = CommandDef
       debtFrom   <- queryMongo mongo (sel (Just "debt")   (Just nick) Nothing Nothing) ["to"   =: (1::Int)]
       debtTo     <- queryMongo mongo (sel (Just "debt")   Nothing (Just nick) Nothing) ["from" =: (1::Int)]
 
-      let output = toBoxes . sortDebts . listDebts $ creditFrom ++ creditTo ++ debtFrom ++ debtTo
+      let output = toBoxes . sort . listDebts $ creditFrom ++ creditTo ++ debtFrom ++ debtTo
 
       return $ case output of
         "" -> reply ev "You have no debts or credits."
         _ | '\n' `elem` output -> paste output >>= reply ev
           | otherwise -> reply ev $ pack output
 
-    listDebts = map $ \d -> [at' "from" "" d, at' "to" "" d, at' "type" "debt" d, pack . show $ at' "amount" (0::Rational) d]
-    sortDebts = sortBy (comparing $ \(f:t:_) -> (f,t))
+    listDebts = map $ \d -> [at' "from" "" d, at' "to" "" d, at' "type" "debt" d, showCur $ at' "amount" 0 d]
     toBoxes rows = render $ hsep 2 left (map (vcat left . map (text . unpack)) (transpose rows))
 
 -- * Managing debts
 
 -- | Add a new debt to the system, between the two people, for the
 -- given amount. Then simplify their debts/credits.
-addDebt :: MonadIO m => Mongo -> Text -> Text -> Rational -> m ()
+addDebt :: MonadIO m => Mongo -> Text -> Text -> Integer -> m ()
 addDebt = flip add "debt"
 
 -- | Add a new credit to the system, between the two people, for the
 -- given amount. Then simplify their debts/credits.
-addCredit :: MonadIO m => Mongo -> Text -> Text -> Rational -> m ()
+addCredit :: MonadIO m => Mongo -> Text -> Text -> Integer -> m ()
 addCredit = flip add "credit"
 
 -- | Add a new debt/credit, adding to what was already there (if any).
-add :: MonadIO m => Mongo -> Text -> Text -> Text -> Rational -> m ()
+add :: MonadIO m => Mongo -> Text -> Text -> Text -> Integer -> m ()
 add mongo type_ from to amount = do
   doMongo mongo $ \c -> do
     let qS = sel (Just type_) (Just from) (Just to) Nothing
@@ -133,19 +131,19 @@ add mongo type_ from to amount = do
   simplify mongo to
 
 -- | Construct a debt record
-debt :: Text -> Text -> Rational -> Document
+debt :: Text -> Text -> Integer -> Document
 debt = mk "debt"
 
 -- | Construct a credit record"
-credit :: Text -> Text -> Rational -> Document
+credit :: Text -> Text -> Integer -> Document
 credit = mk "credit"
 
 -- | Construct a debt/credit record
-mk :: Text -> Text -> Text -> Rational -> Document
+mk :: Text -> Text -> Text -> Integer -> Document
 mk type_ from to amount = sel (Just type_) (Just from) (Just to) (Just amount)
 
 -- | Construct a debt/credit record/selector
-sel :: Maybe Text -> Maybe Text -> Maybe Text -> Maybe Rational -> Document
+sel :: Maybe Text -> Maybe Text -> Maybe Text -> Maybe Integer -> Document
 sel type_ from to amount = catMaybes
   [ "type"   ~: type_
   , "from"   ~: from
@@ -187,14 +185,21 @@ simplify mongo who = doMongo mongo credits
 
 -- * Utils
 
--- | Try to convert a Text into a Rational.
-readRat :: Text -> Maybe Rational
-readRat txt = (\a b -> (100*a + b) % 100) <$> 
-  readMaybe (unpack pounds) <*>
-  ((unpack <$> stripPrefix "." pence) >>= readMaybe)
+-- | Try to read a currency value from a Text.
+readCur :: Text -> Maybe Integer
+readCur txt = (\a b -> 100*a + b) <$> readMaybe pounds <*> readMaybe pence where
+  (pounds, pence) = ((unpack . defZero) *** (unpack . defZero')) $ breakOn "." txt
 
-  where
-    (pounds, pence) = breakOn "." txt
+  defZero ""  = "0"
+  defZero t   = t
+
+  defZero' "" = "0"
+  defZero' t = fromMaybe "0" $ stripPrefix "." t
+
+-- | Display an Integer as a number of pence
+showCur :: Integer -> Text
+showCur cur = pack (show pounds) <> "." <> pack (show pence) where
+  (pounds, pence) = cur `divMod` 100
 
 -- | Group two sorted lists into pairs, dropping the lesser element
 -- when pairs do not match.
@@ -209,11 +214,3 @@ pairs eq cmp (a:as) (b:bs)
 -- | Like pairs, but use (==) `on` and compare `on`.
 pairs' :: (Eq b, Ord b) => (a -> b) -> [a] -> [a] -> [(a,a)]
 pairs' f = pairs ((==) `on` f) (compare `on` f)
-
--- * Work-arounds
-
-instance Val Rational where
-  val = String . pack . show
-
-  cast' (String str) = readMaybe $ unpack str
-  cast' _ = Nothing
