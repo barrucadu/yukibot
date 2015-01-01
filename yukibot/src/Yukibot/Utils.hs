@@ -5,6 +5,7 @@
 module Yukibot.Utils where
 
 import Control.Applicative    ((<$>))
+import Control.Arrow          ((***), second)
 import Control.Exception      (catch)
 import Control.Lens           ((&), (.~), (^.), (?~), (^?), ix)
 import Control.Monad          (guard)
@@ -18,7 +19,7 @@ import Data.ByteString.Lazy   (toStrict, fromStrict)
 import Data.Maybe             (fromMaybe)
 import Data.Monoid            ((<>))
 import Data.String            (IsString(..))
-import Data.Text              (Text, strip, unpack, pack)
+import Data.Text              (Text, strip, unpack, pack, breakOn)
 import Data.Text.Encoding     (decodeUtf8)
 import Data.Time.Clock        (UTCTime)
 import Data.Time.Format       (formatTime, readTime)
@@ -30,6 +31,7 @@ import Network.URI            (URI(..), URIAuth(..), uriToString)
 import System.Locale          (defaultTimeLocale)
 
 import qualified Data.HashMap.Strict as HM
+import qualified Data.Text           as T
 import qualified Database.MongoDB    as Mo
 
 -- *Webby Stuff
@@ -199,3 +201,22 @@ wordsWhen p s =
     "" -> []
     s' -> let (w, s'') = break p s'
          in w : wordsWhen p s''
+
+-- | Zip two sorted lists into pairs, dropping the lesser element when
+-- pairs do not match.
+pairs :: (a -> b -> Bool) -> (a -> b -> Ordering) -> [a] -> [b] -> [(a,b)]
+pairs eq cmp = pairs' where
+  pairs' _ [] = []
+  pairs' [] _ = []
+  pairs' (a:as) (b:bs)
+    | a `eq`  b      = (a,b) : pairs' as bs
+    | a `cmp` b == GT = pairs' (a:as) bs
+    | otherwise      = pairs' as (b:bs)
+
+-- | Apply a function to both elements of a tuple.
+(^*^) :: (a -> b) -> (a, a) -> (b, b)
+f ^*^ x = (f *** f) x
+
+-- | Like breakOn, but strip the delimiter.
+breakOn' :: Text -> Text -> (Text, Text)
+breakOn' delim txt = second (T.drop 1) (breakOn delim txt)
