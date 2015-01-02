@@ -9,6 +9,7 @@ module Yukibot.Plugins.Dedebtifier
   ) where
 
 import Control.Applicative ((<$>), (<*>))
+import Control.Arrow (second)
 import Control.Monad (forM_)
 import Control.Monad.IO.Class (MonadIO)
 import Data.List (transpose, sort)
@@ -21,6 +22,8 @@ import Network.IRC.Client (UnicodeEvent, IRC, reply)
 import Text.PrettyPrint.Boxes (render, hsep, left, vcat, text)
 import Text.Read (readMaybe)
 import Yukibot.Utils
+
+import qualified Data.Text as T
 
 -- * Currency
 
@@ -39,15 +42,19 @@ readCurrency txt =
   else (\a b -> 100*a + b) <$> readMaybe pounds <*> readMaybe pence
 
   where
-    (pounds, pence) = (unpack . defZero) ^*^ breakOn' "." txt
+    (pounds, pence) = (unpack . defZero) ^*^ second pad (breakOn' "." txt)
 
     defZero ""  = "00"
     defZero t   = t
 
+    pad txt = if T.length txt == 1 then txt <> "0" else txt
+
 -- | Display some currency as a string.
 showCurrency :: Currency -> Text
-showCurrency money = pack (show pounds) <> "." <> pack (show pence) where
+showCurrency money = pack (show pounds) <> "." <> pack (pad $ show pence) where
   (pounds, pence) = poundsAndPence money
+  pad ""  = "00"
+  pad txt = if length txt == 1 then "0" <> txt else txt
 
 -- * Commands
 
