@@ -6,9 +6,12 @@
 -- <https://github.com/HackSoc/csbot>
 module Yukibot.Plugins.LinkInfo.Imgur (imgurLinks) where
 
+import Data.Char                       (toLower)
 import Data.Text                       (Text)
 import Network.URI                     (URI(..), URIAuth(..))
 import Yukibot.Plugins.LinkInfo.Common (LinkHandler(..), LinkInfo(..), fetchTitle, liftHandler)
+
+import qualified Data.Text as T
 
 -- *LinkInfo integration
 
@@ -65,5 +68,7 @@ fetchImgurTitle :: URI -> IO (LinkInfo Text)
 fetchImgurTitle uri = do
   title <- liftHandler fetchTitle uri
   case title of
-    Title "imgur: the simple image sharer" -> return NoTitle
+    Title t
+      | T.map toLower t == "imgur" -> return NoTitle
+      | T.map toLower t == "imgur: the simple image sharer" -> return NoTitle
     other -> return other
