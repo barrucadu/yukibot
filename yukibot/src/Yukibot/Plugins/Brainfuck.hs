@@ -50,7 +50,7 @@ consumeElement :: BFElement -> State BFState ()
 consumeElement (P z) = tape.focus += z
 consumeElement L = tape %= left
 consumeElement R = tape %= right
-consumeElement I = tape.focus.enum <~ input %%= fromMaybe ('\0', "") . uncons
+consumeElement I = tape.focus.enum <~ input %%= fromMaybe ('\0', "") . Control.Lens.uncons
 consumeElement O = do
   c <- use (tape.focus)
   output <>= D.singleton (toEnum c)
