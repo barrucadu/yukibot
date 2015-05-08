@@ -22,14 +22,13 @@ import Data.String            (IsString(..))
 import Data.Text              (Text, strip, unpack, pack, breakOn)
 import Data.Text.Encoding     (decodeUtf8)
 import Data.Time.Clock        (UTCTime)
-import Data.Time.Format       (formatTime, readTime)
+import Data.Time.Format       (defaultTimeLocale, formatTime, readTime)
 import Database.MongoDB       (Action, Collection, Document, Label, Order, Selector, Val, access, close, connect, delete, host, master, find, rest, select, sort)
 import Network.IRC.Asakura.Types (Bot, BotState(_config))
 import Network.IRC.Client.Types  (Event(_source), UnicodeEvent, Source(..))
 import Network.HTTP.Client    (HttpException)
 import Network.Wreq           (FormParam(..), Options, Response, auth, basicAuth, defaults, getWith, post, redirects, responseBody, responseHeader, responseStatus, statusCode)
 import Network.URI            (URI(..), URIAuth(..), uriToString)
-import System.Locale          (defaultTimeLocale)
 
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text           as T

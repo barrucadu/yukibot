@@ -38,18 +38,13 @@ import qualified Data.Text as T
 -- This is handled here to avoid cyclic module imports.
 
 instance ToJSON LinkInfoCfg where
-    toJSON cfg = case _soundcloud cfg of
-      Just apikey ->
-        object [ "numLinks" .= _numLinks    cfg
-               , "maxLen"   .= _maxTitleLen cfg
-               , "handlers" .= map _licName (_linkHandlers cfg)
-               , "soundcloud" .= apikey
-               ]
-      Nothing ->
-        object [ "numLinks" .= _numLinks    cfg
-               , "maxLen"   .= _maxTitleLen cfg
-               , "handlers" .= map _licName (_linkHandlers cfg)
-               ]
+    toJSON cfg = object $ catMaybes
+      [ Just $ "numLinks" .= _numLinks    cfg
+      , Just $ "maxLen"   .= _maxTitleLen cfg
+      , Just $ "handlers" .= map _licName (_linkHandlers cfg)
+      , ("soundcloud" .=) <$> _soundcloud cfg
+      , ("youtube"    .=) <$> _youtube cfg
+      ]
 
 instance FromJSON LinkInfoCfg where
   parseJSON (Object v) = do
@@ -57,20 +52,22 @@ instance FromJSON LinkInfoCfg where
     maxLen     <- v .:? "maxLen"   .!= _maxTitleLen def
     handlers   <- v .:? "handlers"
     soundcloud <- v .:? "soundcloud"
+    youtube    <- v .:? "youtube"
 
     let handlers' = case handlers of
-          Just hs -> populateHandlers maxLen soundcloud hs
+          Just hs -> populateHandlers maxLen soundcloud youtube hs
           Nothing -> _linkHandlers def
 
-    return $ LIC numLinks maxLen handlers' soundcloud
+    return $ LIC numLinks maxLen handlers' soundcloud youtube
 
   parseJSON _ = fail "Expected object"
 
 instance Default LinkInfoCfg where
     def = LIC { _numLinks     = 5
               , _maxTitleLen  = 100
-              , _linkHandlers = [imgurLinks, youtubeLinks, pageTitle $ _maxTitleLen def]
+              , _linkHandlers = [imgurLinks, pageTitle $ _maxTitleLen def]
               , _soundcloud   = Nothing
+              , _youtube      = Nothing
               }
 
 -- *Event handler
@@ -120,11 +117,16 @@ fetchLinkInfo cfg url = liftIO $ unempty <$> handler url
 -- *Helpers
 
 -- |Turn a list of names of handlers into a list of handlers.
-populateHandlers :: Int -> Maybe Text -> [Text] -> [LinkHandler]
-populateHandlers maxlen soundcloud = mapMaybe (toHandler . toLower)
+populateHandlers :: Int
+                 -> Maybe Text
+                 -- ^ Soundcloud API key
+                 -> Maybe Text
+                 -- ^ Youtube API key
+                 -> [Text] -> [LinkHandler]
+populateHandlers maxlen soundcloud youtube = mapMaybe (toHandler . toLower)
   where
     toHandler "imgur"      = Just imgurLinks
-    toHandler "youtube"    = Just youtubeLinks
+    toHandler "youtube"    = Just $ youtubeLinks youtube
     toHandler "soundcloud" = Just $ soundcloudLinks soundcloud
     toHandler "pagetitle"  = Just $ pageTitle maxlen
     toHandler _ = Nothing

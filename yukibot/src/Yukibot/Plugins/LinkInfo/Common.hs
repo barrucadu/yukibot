@@ -26,6 +26,9 @@ data LinkInfoCfg = LIC
     , _soundcloud :: Maybe Text
     -- ^Soundcloud API key. If not present, Soundcloud linkinfo is not
     -- available.
+    , _youtube :: Maybe Text
+    -- ^Youtube API key. If not present, Youtube linkinfo is not
+    -- available.
     }
 
 -- *Link handlers

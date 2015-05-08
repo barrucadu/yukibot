@@ -7,11 +7,13 @@ import Control.Applicative ((<$>), (<*>))
 import Control.Lens    ((^?), ix, to)
 import Data.Aeson      (Object)
 import Data.Aeson.Lens (_String, nth)
-import Data.Char       (toLower)
+import Data.Char       (toLower, isDigit)
 import Data.List       (isInfixOf, stripPrefix)
 import Data.Maybe      (isJust, fromMaybe, listToMaybe, mapMaybe)
 import Data.Monoid     ((<>))
 import Data.Text       (Text, unpack, pack)
+import Data.Time.Clock  (UTCTime)
+import Data.Time.Format (parseTimeM, defaultTimeLocale, formatTime)
 import Network.URI     (URI(..), URIAuth(..))
 import Text.Read       (readMaybe)
 import Yukibot.Plugins.LinkInfo.Common
@@ -19,11 +21,11 @@ import Yukibot.Utils
 
 import qualified Data.Text as T
 
-youtubeLinks :: LinkHandler
-youtubeLinks = LinkHandler
+youtubeLinks :: Maybe Text -> LinkHandler
+youtubeLinks apikey = LinkHandler
   { _licName      = "Youtube"
   , _licPredicate = isJust . getVid
-  , _licHandler   = youtube
+  , _licHandler   = youtube apikey
   }
 
 -- |Get the video ID from a URI, if possible.
@@ -50,12 +52,13 @@ getVid uri = case uriAuthority uri of
     splitParams = wordsWhen (=='&') . filter (/='?')
 
 -- |Get linkinfo for a url
-youtube :: URI -> IO (LinkInfo Text)
-youtube uri = maybe (return Failed) getLinkInfo $ getVid uri
+youtube :: Maybe Text -> URI -> IO (LinkInfo Text)
+youtube Nothing _ = return Failed
+youtube (Just apikey) uri = maybe (return Failed) (getLinkInfo apikey) $ getVid uri
 
 -- |Get linkinfo for a video ID
-getLinkInfo :: Text -> IO (LinkInfo Text)
-getLinkInfo vid = do
+getLinkInfo :: Text -> Text -> IO (LinkInfo Text)
+getLinkInfo apikey vid = do
   -- Query the API
   res <- fetchJson apiuri
 
@@ -66,8 +69,9 @@ getLinkInfo vid = do
   return $ maybe Failed Info ytinfo
 
   where
-    apiuri = (makeUri "gdata.youtube.com" ("/feeds/api/videos/" ++ unpack vid) (Just "?alt=json&v=2"))
-      { uriScheme = "https:" }
+    apiuri = (makeUri "www.googleapis.com" "/youtube/v3/videos"
+               (Just $ "?id=" ++ unpack vid ++ "&key=" ++ unpack apikey ++ "&part=snippet,contentDetails,statistics,status"))
+             { uriScheme = "https:" }
 
 -- |Extract the link info from a youtube api json response
 getLinkInfoFromJson :: Object -> Maybe Text
@@ -84,22 +88,36 @@ getLinkInfoFromJson json = formatInfo
     formatInfo title duration uploader time views likes dislikes = T.unwords
       [ "\"" <> title <> "\""
       , "[" <> pack (showSecs duration) <> "]"
-      , "(by " <> uploader <> " at " <> time <> ")"
+      , "(by " <> uploader <> " at " <> pack (formatTime defaultTimeLocale "%F" time) <> ")"
       , "|"
       , "Views: " <> pack (show views)
       , "[+" <> pack (show likes) <> " -" <> pack (show dislikes) <> "]"
       ]
 
-    title    = json ^? ix "entry" . ix "media$group" . ix "media$title" . ix "$t" . _String
-    duration = json ^? ix "entry" . ix "media$group" . ix "yt$duration" . ix "seconds" . _String >>= int
-    uploader = json ^? ix "entry" . ix "author" . nth 0 . ix "name" . ix "$t" . _String
-    time     = json ^? ix "entry" . ix "media$group" . ix "yt$uploaded" . ix "$t" . _String . to (T.takeWhile (/='T'))
-    views    = json ^? ix "entry" . ix "yt$statistics" . ix "viewCount" . _String >>= int
-    likes    = json ^? ix "entry" . ix "yt$rating" . ix "numLikes" . _String >>= int
-    dislikes = json ^? ix "entry" . ix "yt$rating" . ix "numDislikes" . _String >>= int
+    title    = json ^? ix "items" . nth 0 . ix "snippet"        . ix "title"        . _String
+    duration = json ^? ix "items" . nth 0 . ix "contentDetails" . ix "duration"     . _String >>= playtime
+    uploader = json ^? ix "items" . nth 0 . ix "snippet"        . ix "channelTitle" . _String
+    time     = json ^? ix "items" . nth 0 . ix "snippet"        . ix "publishedAt"  . _String >>= utc
+    views    = json ^? ix "items" . nth 0 . ix "statistics"     . ix "viewCount"    . _String >>= int
+    likes    = json ^? ix "items" . nth 0 . ix "statistics"     . ix "likeCount"    . _String >>= int
+    dislikes = json ^? ix "items" . nth 0 . ix "statistics"     . ix "dislikeCount" . _String >>= int
 
     int = readMaybe . unpack :: Text -> Maybe Int
 
+    utc = parseTimeM True defaultTimeLocale "%FT%X.000%Z" . unpack :: Text -> Maybe UTCTime
+
+    playtime :: Text -> Maybe Int
+    playtime t = case T.split (not . isDigit) t of
+      [_,days,_,hours,minutes,seconds,_] -> go <$> int days <*> int hours <*> int minutes <*> int seconds
+      [_,_,hours,minutes,seconds,_] -> go 0 <$> int hours <*> int minutes <*> int seconds
+      [_,_,minutes,seconds,_] -> go 0 0 <$> int minutes <*> int seconds
+      [_,_,seconds,_] -> go 0 0 0 <$> int seconds
+      _ -> Nothing
+
+      where
+      go days hrs mins secs = ((days * 24 + hrs) * 60 + mins) * 60 + secs
+
+    showSecs :: Int -> String
     showSecs secs =
       let (m, s) = secs `divMod` 60
       in show m ++ ":" ++ (if s < 10 then "0" else "") ++ show s
