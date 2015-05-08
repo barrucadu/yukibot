@@ -69,7 +69,7 @@ command = CommandDef { _verb   = ["rule"]
 -- |Read the initial state from a string.
 readState :: String -> Maybe (Zipper Bool)
 readState ss =
-  if all (`elem` "01_") ss
+  if all (`elem` ("01_" :: String)) ss
   then Just . toZip . take 41 $ map (=='1') ss
   else Nothing
 
