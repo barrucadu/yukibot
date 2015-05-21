@@ -271,3 +271,10 @@ sender ev = case _source ev of
 -- no such nick.
 sender' :: UnicodeEvent -> Text
 sender' = fromJust . sender
+
+-- | Show a number, with commas.
+showNum :: (Integral i, Show i) => i -> String
+showNum = reverse . go . reverse . show where
+  go xs = case splitAt 3 xs of
+    (first, [])   -> first
+    (first, rest) -> first ++ "," ++ go rest

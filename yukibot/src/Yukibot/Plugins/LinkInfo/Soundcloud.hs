@@ -62,11 +62,11 @@ getLinkInfoFromJson json = formatInfo
   where
     formatInfo title duration uploader time views likes = T.unwords
       [ "\"" <> title <> "\""
-      , "[" <> pack (showSecs $ duration `div` 1000) <> "]"
+      , "[" <> pack (showDuration . fromIntegral $ duration `div` 1000) <> "]"
       , "(by " <> uploader <> " at " <> time <> ")"
       , "|"
-      , "Views: " <> pack (show views)
-      , "[+" <> pack (show likes) <> "]"
+      , "Views: " <> pack (showNum views)
+      , "[+" <> pack (showNum likes) <> "]"
       ]
 
     title    = json ^? ix "title" . _String

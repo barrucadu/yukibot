@@ -90,8 +90,8 @@ getLinkInfoFromJson json = formatInfo
       , "[" <> pack (showDuration duration) <> "]"
       , "(by " <> uploader <> " at " <> pack (formatTime defaultTimeLocale "%F" time) <> ")"
       , "|"
-      , "Views: " <> pack (show views)
-      , "[+" <> pack (show likes) <> " -" <> pack (show dislikes) <> "]"
+      , "Views: " <> pack (showNum views)
+      , "[+" <> pack (showNum likes) <> " -" <> pack (showNum dislikes) <> "]"
       ]
 
     title    = json ^? ix "items" . nth 0 . ix "snippet"        . ix "title"        . _String
