@@ -90,6 +90,7 @@ runWithState fp ys = do
   registerCommand cs $ BL.wrapsCmd bs "seen"        S.command
   registerCommand cs $ BL.wrapsCmd bs "cellular"    CA.command
   registerCommand cs $ BL.wrapsCmd bs "brainfuck"   BF.command
+  registerCommand cs $ BL.wrapsCmd bs "brainfuck"   BF.command8bit
   registerCommand cs $ BL.wrapsCmd bs "debts"    $  D.oweCmd  ds
   registerCommand cs $ BL.wrapsCmd bs "debts"    $  D.owedCmd ds
   registerCommand cs $ BL.wrapsCmd bs "debts"    $  D.payCmd  ds

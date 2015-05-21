@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Yukibot.Plugins.Brainfuck (command) where
+module Yukibot.Plugins.Brainfuck (brainfuck, command, command8bit) where
 
 import Control.Applicative ((<$), (<$>))
 import Control.Lens hiding (noneOf)
@@ -13,7 +13,8 @@ import Data.Maybe                   (fromMaybe)
 import Data.Text                    (Text)
 import qualified Data.Text as T
 import Network.IRC.Asakura.Commands (CommandDef(..))
-import Network.IRC.Client           (reply)
+import Network.IRC.Asakura.Types    (Bot)
+import Network.IRC.Client           (UnicodeEvent, IRC, IRCState, reply)
 import System.Timeout
 import Text.Parsec hiding (State)
 import Text.Parsec.Text
@@ -46,28 +47,28 @@ defaultBFState = BFState { _tape = Z (repeat 0) 0 (repeat 0)
                          , _output = D.empty
                          }
 
-consumeElement :: BFElement -> State BFState ()
-consumeElement (P z) = tape.focus += z
-consumeElement L = tape %= left
-consumeElement R = tape %= right
-consumeElement I = tape.focus.enum <~ input %%= fromMaybe ('\0', "") . Control.Lens.uncons
-consumeElement O = do
+consumeElement :: Bool -> BFElement -> State BFState ()
+consumeElement is8bit (P z) = tape.focus %= (\x -> let x' = x + z in if is8bit then x' `mod` 256 else x')
+consumeElement _ L = tape %= left
+consumeElement _ R = tape %= right
+consumeElement _ I = tape.focus.enum <~ input %%= fromMaybe ('\0', "") . Control.Lens.uncons
+consumeElement _ O = do
   c <- use (tape.focus)
   output <>= D.singleton (toEnum c)
-consumeElement (Loop l) = go
+consumeElement is8bit (Loop l) = go
   where
     go = do
       c <- use (tape.focus)
       when (c /= 0) $ do
-        mapM_ consumeElement l
+        mapM_ (consumeElement is8bit) l
         go
 
-consumeProgram :: BFProgram -> State BFState ()
-consumeProgram = mapM_ consumeElement
+consumeProgram :: Bool -> BFProgram -> State BFState ()
+consumeProgram is8bit = mapM_ (consumeElement is8bit)
 
-runProgram :: BFProgram -> [Char] -> D.DList Char
-runProgram program i = _output $ execState (consumeProgram program)
-                       defaultBFState {_input = i}
+runProgram :: Bool -> BFProgram -> [Char] -> D.DList Char
+runProgram is8bit program i = _output $
+  execState (consumeProgram is8bit program) defaultBFState {_input = i}
 
 parseProgram :: Parser BFProgram
 parseProgram = (>>) comment $ many $ choice [
@@ -84,20 +85,29 @@ parseProgram = (>>) comment $ many $ choice [
     parseLoop = Loop <$> between (char '[') (char ']') parseProgram
     comment = skipMany (noneOf "+-<>,.[]")
 
-brainfuck :: Text -> Text -> Maybe Text
-brainfuck program i = case parse parseProgram "" program of
+brainfuck :: Bool -> Text -> Text -> Maybe Text
+brainfuck is8bit program i = case parse parseProgram "" program of
   Left _ -> Nothing
-  Right prog -> Just $ T.pack . D.toList . runProgram prog $ T.unpack i
+  Right prog -> Just $ T.pack . D.toList . runProgram is8bit prog $ T.unpack i
 
 command :: CommandDef
-command = CommandDef { _verb   = ["bf"]
-                     , _help   = "<program> - run the given brainfuck program."
-                     , _action = go
-                     }
-  where
-    go [program] ircs ev = go [program, ""] ircs ev
-    go (program:is) _ ev = do
-      o <- liftIO $ timeout 3000000 $ return $! fromMaybe "Sorry, I don't understand that brainfuck program! \
-                                                          \Are brackets matched?" $ brainfuck program (T.unwords is)
-      return . reply ev $ fromMaybe "Timed out." o
-    go _ _ _ = return $ return ()
+command = CommandDef
+  { _verb   = ["bf"]
+  , _help   = "<program> - run the given brainfuck program."
+  , _action = commandAction False
+  }
+
+command8bit :: CommandDef
+command8bit = CommandDef
+  { _verb   = ["bf8"]
+  , _help   = "<program> - run the given brainfuck program with 8-bit cells."
+  , _action = commandAction True
+  }
+
+commandAction :: Bool -> [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
+commandAction is8bit [program] ircs ev = commandAction is8bit [program, ""] ircs ev
+commandAction is8bit (program:is) _ ev = do
+  o <- liftIO $ timeout 3000000 $ return $! fromMaybe "Sorry, I don't understand that brainfuck program! \
+                                                      \Are brackets matched?" $ brainfuck is8bit program (T.unwords is)
+  return . reply ev $ fromMaybe "Timed out." o
+commandAction _ _ _ _ = return $ return ()
