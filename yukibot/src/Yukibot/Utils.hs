@@ -4,7 +4,7 @@
 -- |Common utility functions for plugins.
 module Yukibot.Utils where
 
-import Control.Applicative    ((<$>))
+import Control.Applicative    ((<$>), (<*>))
 import Control.Arrow          ((***), second)
 import Control.Exception      (catch)
 import Control.Lens           ((&), (.~), (^.), (?~), (^?), ix)
@@ -16,19 +16,23 @@ import Data.Aeson.Lens        (_String)
 import Data.Aeson.Types       (emptyObject)
 import Data.ByteString        (ByteString, isInfixOf)
 import Data.ByteString.Lazy   (toStrict, fromStrict)
+import Data.Char              (isDigit)
+import Data.List              (groupBy)
+import Data.Function          (on)
 import Data.Maybe             (fromMaybe, fromJust)
 import Data.Monoid            ((<>))
 import Data.String            (IsString(..))
 import Data.Text              (Text, strip, unpack, pack, breakOn)
 import Data.Text.Encoding     (decodeUtf8)
-import Data.Time.Clock        (UTCTime)
-import Data.Time.Format       (defaultTimeLocale, formatTime, readTime)
+import Data.Time.Clock        (NominalDiffTime, UTCTime)
+import Data.Time.Format       (defaultTimeLocale, formatTime, parseTimeOrError)
 import Database.MongoDB       (Action, Collection, Document, Label, Order, Selector, Val, access, close, connect, delete, host, master, find, rest, select, sort)
 import Network.IRC.Asakura.Types (Bot, BotState(_config))
 import Network.IRC.Client.Types  (Event(_source), UnicodeEvent, Source(..))
 import Network.HTTP.Client    (HttpException)
 import Network.Wreq           (FormParam(..), Options, Response, auth, basicAuth, defaults, getWith, post, redirects, responseBody, responseHeader, responseStatus, statusCode)
 import Network.URI            (URI(..), URIAuth(..), uriToString)
+import Text.Read              (readMaybe)
 
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text           as T
@@ -168,11 +172,46 @@ at' lbl def doc = def `fromMaybe` Mo.lookup lbl doc
 
 -- |The UNIX epoch, a sane default time.
 epoch :: UTCTime
-epoch = readTime defaultTimeLocale "%s" "0"
+epoch = parseTimeOrError True defaultTimeLocale "%s" "0"
 
 -- |Display UTC in a format "HH:MM (YYYY-MM-DD)
 showUtc :: UTCTime -> Text
 showUtc = pack . formatTime defaultTimeLocale "%R (%F)"
+
+-- | Intrepret an ISO 8601 duration string.
+iso8601Duration :: Text -> Maybe NominalDiffTime
+iso8601Duration = fmap fromIntegral . period . groupBy ((==) `on` isDigit) . unpack where
+  period :: [String] -> Maybe Int
+  period ("P":ps)  = period ps
+  period ("PT":ts) = time ts
+  period (ys:"Y":ps)  = (\y r -> r + y * 31536000) <$> readMaybe ys <*> period ps
+  period (ys:"YT":ts) = (\y r -> r + y * 31536000) <$> readMaybe ys <*> time   ts
+  period (ms:"M":ps)  = (\m r -> r + m * 2628000)  <$> readMaybe ms <*> period ps
+  period (ms:"MT":ts) = (\m r -> r + m * 2628000)  <$> readMaybe ms <*> time   ts
+  period (ws:"W":ps)  = (\w r -> r + w * 604800)   <$> readMaybe ws <*> period ps
+  period (ws:"WT":ts) = (\w r -> r + w * 605800)   <$> readMaybe ws <*> time   ts
+  period (ds:"D":ps)  = (\d r -> r + d * 86400)    <$> readMaybe ds <*> period ps
+  period (ds:"DT":ts) = (\d r -> r + d * 86400)    <$> readMaybe ds <*> time   ts
+  period [] = Just 0
+  period _  = Nothing
+
+  time (hs:"H":ts) = (\h r -> r + h * 3600) <$> readMaybe hs <*> time ts
+  time (ms:"M":ts) = (\m r -> r + m * 60)   <$> readMaybe ms <*> time ts
+  time (ss:"S":[]) = readMaybe ss
+  time [] = Just 0
+  time _  = Nothing
+
+-- | Show a duration nicely
+showDuration :: NominalDiffTime -> String
+showDuration dur = sign ++ hours ++ mins ++ ":" ++ secs where
+  sign = if dur < 0 then "-" else ""
+
+  (hrs, dur') = abs (round dur) `quotRem` 3600
+  (ms,  ss)   = dur' `quotRem` 60
+
+  hours = if hrs /= 0 then show hrs ++ ":" else ""
+  mins  = if ms < 10 then "0" ++ show ms else show ms
+  secs  = if ss < 10 then "0" ++ show ss else show ss
 
 -- *Embedded configuration
 

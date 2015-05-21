@@ -87,7 +87,7 @@ getLinkInfoFromJson json = formatInfo
   where
     formatInfo title duration uploader time views likes dislikes = T.unwords
       [ "\"" <> title <> "\""
-      , "[" <> pack (showSecs duration) <> "]"
+      , "[" <> pack (showDuration duration) <> "]"
       , "(by " <> uploader <> " at " <> pack (formatTime defaultTimeLocale "%F" time) <> ")"
       , "|"
       , "Views: " <> pack (show views)
@@ -95,7 +95,7 @@ getLinkInfoFromJson json = formatInfo
       ]
 
     title    = json ^? ix "items" . nth 0 . ix "snippet"        . ix "title"        . _String
-    duration = json ^? ix "items" . nth 0 . ix "contentDetails" . ix "duration"     . _String >>= playtime
+    duration = json ^? ix "items" . nth 0 . ix "contentDetails" . ix "duration"     . _String >>= iso8601Duration
     uploader = json ^? ix "items" . nth 0 . ix "snippet"        . ix "channelTitle" . _String
     time     = json ^? ix "items" . nth 0 . ix "snippet"        . ix "publishedAt"  . _String >>= utc
     views    = json ^? ix "items" . nth 0 . ix "statistics"     . ix "viewCount"    . _String >>= int
@@ -105,19 +105,3 @@ getLinkInfoFromJson json = formatInfo
     int = readMaybe . unpack :: Text -> Maybe Int
 
     utc = parseTimeM True defaultTimeLocale "%FT%X.000%Z" . unpack :: Text -> Maybe UTCTime
-
-    playtime :: Text -> Maybe Int
-    playtime t = case T.split (not . isDigit) t of
-      [_,days,_,hours,minutes,seconds,_] -> go <$> int days <*> int hours <*> int minutes <*> int seconds
-      [_,_,hours,minutes,seconds,_] -> go 0 <$> int hours <*> int minutes <*> int seconds
-      [_,_,minutes,seconds,_] -> go 0 0 <$> int minutes <*> int seconds
-      [_,_,seconds,_] -> go 0 0 0 <$> int seconds
-      _ -> Nothing
-
-      where
-      go days hrs mins secs = ((days * 24 + hrs) * 60 + mins) * 60 + secs
-
-    showSecs :: Int -> String
-    showSecs secs =
-      let (m, s) = secs `divMod` 60
-      in show m ++ ":" ++ (if s < 10 then "0" else "") ++ show s
