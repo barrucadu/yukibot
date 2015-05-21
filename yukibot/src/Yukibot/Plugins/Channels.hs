@@ -9,12 +9,16 @@ module Yukibot.Plugins.Channels
     , partCmd
     , setChanPrefix
     , unsetChanPrefix
+    -- *Events
+    , inviteEv
     ) where
 
-import Control.Applicative          ((<$>))
-import Network.IRC.Asakura.Commands (CommandDef(..), CommandState, setChannelPrefix, unsetChannelPrefix)
-import Network.IRC.Client           (send, reply)
-import Network.IRC.Client.Types     (ConnectionConfig(_server), Event(..), Message(..), Source(..), connectionConfig)
+import Control.Applicative
+import Network.IRC.Asakura.Commands
+import Network.IRC.Asakura.Events
+import Network.IRC.Asakura.Types
+import Network.IRC.Client (Event(..), EventType(..), Message(..), Source(..), reply, send)
+import Network.IRC.Client.Types (ConnectionConfig(..), connectionConfig)
 
 -- |Join a channel. The first argument is the name of the channel to
 -- join.
@@ -70,3 +74,17 @@ unsetChanPrefix cs = CommandDef { _verb   = ["unset", "prefix"]
       case _source ev of
         Channel c _ -> unsetChannelPrefix cs network c
         _           -> reply ev "This isn't a channel!"
+
+-- | Respond to INVITE.
+inviteEv :: AsakuraEventHandler
+inviteEv = AsakuraEventHandler
+  { _description = "Join channels INVITEd to."
+  , _matchType   = EInvite
+  , _eventFunc   = go
+  , _appliesTo   = runEverywhere
+  , _appliesDef  = runAlways
+  }
+
+  where
+    go _ ev = case _message ev of
+      Invite chan _ -> return . send $ Join chan

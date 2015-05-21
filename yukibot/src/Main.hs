@@ -103,6 +103,8 @@ runWithState fp ys = do
   addGlobalEventHandler' state $ BL.wraps bs "linkinfo" $ L.eventHandler ls
   addGlobalEventHandler' state $ BL.wraps bs "triggers"   T.eventHandler
 
+  addGlobalEventHandler' state $ P.wrapsEv ps (P.Trusted 0) CH.inviteEv
+
   -- Connect to networks
   I.initialiseWithState state
 
