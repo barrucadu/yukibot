@@ -4,13 +4,20 @@
 -- bringing it to the objectively cuter Yukibot!
 module Yukibot.Plugins.Mueval
   ( MuevalCfg
-  , command
-  , eventHandler
+  -- * Evaluation
+  , evalCommand
+  , evalEvent
+  -- * Type lookup
+  , typeCommand
+  , kindCommand
+  , typeEvent
+  , kindEvent
   ) where
 
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (newEmptyMVar, takeMVar, putMVar)
 import Control.Exception (evaluate)
+import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
 import Data.Char (isSpace)
@@ -23,7 +30,7 @@ import Network.IRC.Client (reply)
 import Network.IRC.Client.Types (Event(..), EventType(EPrivmsg), Message(Privmsg), UnicodeEvent, IRC)
 import System.Environment (getEnvironment)
 import System.Exit (ExitCode)
-import System.IO (hGetContents, hClose)
+import System.IO (hGetContents, hPutStr, hClose)
 import System.Process (CreateProcess(..), StdStream(CreatePipe), createProcess, proc, waitForProcess)
 import System.Random (randomIO)
 
@@ -58,8 +65,8 @@ defaultMuevalCfg = MC "mueval" "L.hs"
 -- *External usage
 
 -- |Evaluate expressions as a command
-command :: CommandDef
-command = CommandDef
+evalCommand :: CommandDef
+evalCommand = CommandDef
   { _verb = ["eval"]
   , _help = "<expr> - Evaluate the given expression"
   , _action = go
@@ -71,9 +78,37 @@ command = CommandDef
       res <- mueval mc . unpack $ T.intercalate " " args
       return $ replyOrPaste ev res
 
+-- |Get the type of an expression as a command
+typeCommand :: CommandDef
+typeCommand = CommandDef
+  { _verb = ["type"]
+  , _help = "<expr> - Get the type of the given expression"
+  , _action = go
+  }
+
+  where
+    go args _ ev = do
+      mc <- cfgGet' defaultMuevalCfg "mueval"
+      res <- typeOf mc . unpack $ T.intercalate " " args
+      return $ replyOrPaste ev res
+
+-- |Get the kind of an expression as a command
+kindCommand :: CommandDef
+kindCommand = CommandDef
+  { _verb = ["kind"]
+  , _help = "<expr> - Get the kind of the given expression"
+  , _action = go
+  }
+
+  where
+    go args _ ev = do
+      mc <- cfgGet' defaultMuevalCfg "mueval"
+      res <- kindOf mc . unpack $ T.intercalate " " args
+      return $ replyOrPaste ev res
+
 -- |Evaluate expressions in PRIVMSGs starting with a '>'
-eventHandler :: AsakuraEventHandler
-eventHandler = AsakuraEventHandler
+evalEvent :: AsakuraEventHandler
+evalEvent = AsakuraEventHandler
   { _description = pack "A sandboxed evaluator for Haskell expressions."
   , _matchType   = EPrivmsg
   , _eventFunc   = go
@@ -91,6 +126,44 @@ eventHandler = AsakuraEventHandler
           return $ replyOrPaste ev res
         _ -> return $ return ()
 
+-- |Get the type of expressions in PRIVMSGs starting with a ':t'
+typeEvent :: AsakuraEventHandler
+typeEvent = AsakuraEventHandler
+  { _description = pack "Get the type of a Haskell expression."
+  , _matchType = EPrivmsg
+  , _eventFunc = go
+  , _appliesTo = runEverywhere
+  , _appliesDef = runAlways
+  }
+
+  where
+    go _ ev = case _message ev of
+      Privmsg _ (Right msg) | ":t " `isPrefixOf` msg -> do
+        let expr = unpack . T.strip . T.drop 2 $ msg
+        mc <- cfgGet' defaultMuevalCfg "mueval"
+        res <- typeOf mc expr
+        return $ replyOrPaste ev res
+      _ -> return $ return ()
+
+-- |Get the kind of expressions in PRIVMSGs starting with a ':k'
+kindEvent :: AsakuraEventHandler
+kindEvent = AsakuraEventHandler
+  { _description = pack "Get the kind of a Haskell expression."
+  , _matchType = EPrivmsg
+  , _eventFunc = go
+  , _appliesTo = runEverywhere
+  , _appliesDef = runAlways
+  }
+
+  where
+    go _ ev = case _message ev of
+      Privmsg _ (Right msg) | ":k " `isPrefixOf` msg -> do
+        let expr = unpack . T.strip . T.drop 2 $ msg
+        mc <- cfgGet' defaultMuevalCfg "mueval"
+        res <- kindOf mc expr
+        return $ replyOrPaste ev res
+      _ -> return $ return ()
+
 -- *Evaluation
 
 -- |Evaluate an expression and return the result.
@@ -103,9 +176,10 @@ mueval mc expr = liftIO $ do
   let loadfile = _loadfile mc
   let binary   = _mueval mc
   let opts     = muopts loadfile expr'
+  let input    = ""
 
-  muenv  <- (("LC_ALL", "C"):) <$> getEnvironment
-  (_, out, err) <- runProcess binary opts $ Just muenv
+  env  <- (("LC_ALL", "C"):) <$> getEnvironment
+  (_, out, err) <- runProcess binary opts (Just env) input
   return . strip $
     case (out, err) of
       ([], []) -> "Terminated"
@@ -127,12 +201,45 @@ muopts loadfile expr =
   , "+RTS", "-N2", "-RTS"
   ]
 
+-- *Types and Kinds
+
+-- |Get the type of an expression
+typeOf :: MonadIO m => MuevalCfg -> String -> m String
+typeOf = queryGHCi ":t"
+
+-- |Get the kind of an expression
+kindOf :: MonadIO m => MuevalCfg -> String -> m String
+kindOf = queryGHCi ":k"
+
+queryGHCi :: MonadIO m => String -> MuevalCfg -> String -> m String
+queryGHCi cmd mc expr = liftIO $ do
+  let loadfile = _loadfile mc
+  let binary   = "ghci"
+  let opts     = ["-fforce-recomp", "-ignore-dot-ghci"]
+  let input    = ":load " ++ loadfile ++ "\n:m *L\n" ++ cmd ++ " " ++ expr
+
+  env <- (("LC_ALL", "C"):) <$> getEnvironment
+  (_, out, err) <- runProcess binary opts (Just env) input
+  return . strip $
+    case (out, err) of
+      ([], []) -> "Terminated"
+
+      _ -> do
+        let o = strip out
+        let e = strip err
+        case () of
+          _ | null o && null e    -> "Terminated"
+            | L.isInfixOf "::" o -> drop (length ("*L> *L>" :: String)) . unlines . filter (L.isInfixOf "::") $ lines o
+            | otherwise          -> e
+
+-- *Misc
+
 -- |Run a process, returning the exit code, stdout, and stderr.
 --
 -- Copied from 'readProcessWithExitCode', but with environment
 -- setting.
-runProcess :: FilePath -> [String] -> Maybe [(String, String)] -> IO (ExitCode, String, String)
-runProcess cmd args env = do
+runProcess :: FilePath -> [String] -> Maybe [(String, String)] -> String -> IO (ExitCode, String, String)
+runProcess cmd args env input = do
   -- Create the process
   (Just inh, Just outh, Just errh, pid) <-
     createProcess (proc cmd args)
@@ -152,7 +259,8 @@ runProcess cmd args env = do
   err  <- hGetContents errh
   forkIO $ evaluate (length err) >> putMVar outMVar ()
 
-  -- Close stdin
+  -- Write stdin
+  unless (null input) $ hPutStr inh input
   hClose inh
 
   -- Wait on the output
@@ -166,8 +274,6 @@ runProcess cmd args env = do
 
   return (ex, out, err)
 
--- *Misc
-
 -- |Reply (if the output is single line), or upload to sprunge (if
 -- multi-line) and reply with link.
 replyOrPaste :: UnicodeEvent -> String -> IRC ()
@@ -180,9 +286,18 @@ shrink :: String -> String
 shrink str | length str > 80 = take 79 str ++ "…"
 shrink str = str
 
--- |Strip leading and trailing whitespace from a string, as well as
--- dropping a first line starting with \"<hint>\".
+-- |De-indent a multi-line string, as well as dropping a first line
+-- starting with \"<hint>\" or \"<interactive>\".
 strip :: String -> String
-strip = dropSpaces . dropHint where
-  dropHint   = unlines . dropWhile (L.isPrefixOf "<hint>") . lines
+strip = dropSpaces . deIndent . dropComplaint where
+  dropComplaint = unlines . filter (\l -> not $ L.isPrefixOf "<interactive>" l || L.isPrefixOf "<hint>" l) . lines
+  deIndent s = let ls = lines s in unlines $ map (drop $ getMinSpaces ls) ls where
+    getMinSpaces = go Nothing where
+      go s ("":xs) = go s xs
+      go Nothing [] = 0
+      go (Just s) [] = s
+      go Nothing (x:xs) = go (Just $ spaces x) xs
+      go (Just s) (x:xs) = let s' = spaces x in if s < s' then go (Just s) xs else go (Just s') xs
+
+      spaces = length . takeWhile (==' ')
   dropSpaces = reverse . dropWhile isSpace . reverse . dropWhile isSpace
