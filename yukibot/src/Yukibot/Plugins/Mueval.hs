@@ -29,6 +29,7 @@ import System.Random (randomIO)
 
 import Yukibot.Utils
 
+import qualified Data.List as L
 import qualified Data.Text as T
 
 -- *Configuration
@@ -179,6 +180,9 @@ shrink :: String -> String
 shrink str | length str > 80 = take 79 str ++ "…"
 shrink str = str
 
--- |Strip leading and trailing whitespace from a string.
+-- |Strip leading and trailing whitespace from a string, as well as
+-- dropping a first line starting with \"<hint>\".
 strip :: String -> String
-strip = reverse . dropWhile isSpace . reverse . dropWhile isSpace
+strip = dropSpaces . dropHint where
+  dropHint   = unlines . dropWhile (L.isPrefixOf "<hint>") . lines
+  dropSpaces = reverse . dropWhile isSpace . reverse . dropWhile isSpace
