@@ -1,15 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Yukibot.Plugins.LinkInfo.Soundcloud (soundcloudLinks) where
 
-import Control.Applicative ((<$>), (<*>))
-import Control.Lens    ((^?), ix, to)
-import Data.Aeson      (Object)
+import Control.Lens ((^?), ix, to)
+import Data.Aeson (Object)
 import Data.Aeson.Lens (_String, _Integer)
-import Data.Char       (toLower)
-import Data.List       (isInfixOf)
-import Data.Monoid     ((<>))
-import Data.Text       (Text, unpack, pack)
-import Network.URI     (URI(..), URIAuth(..))
+import Data.Char (toLower)
+import Data.List (isInfixOf)
+import Data.Monoid ((<>))
+import Data.Text (Text, unpack, pack)
+import Network.URI (URI(..), URIAuth(..))
+
 import Yukibot.Plugins.LinkInfo.Common
 import Yukibot.Utils
 

@@ -1,6 +1,6 @@
 module Yukibot.Utils.Types where
 
-import Control.Comonad               (Comonad(..))
+import Control.Comonad (Comonad(..))
 import Control.Lens
 
 -- |An infinite zip list, focussing at a single point.

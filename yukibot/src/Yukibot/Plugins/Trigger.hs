@@ -2,38 +2,38 @@
 
 -- |Respond to predefined phrases.
 module Yukibot.Plugins.Trigger
-    ( Response(..)
-    -- *Event handler
-    , eventHandler
-    -- Commands
-    , addTriggerCmd
-    , rmTriggerCmd
-    , listTriggerCmd
-    -- *Updating
-    , addTrigger
-    , removeTrigger
-    ) where
+  ( Response(..)
+  -- *Event handler
+  , eventHandler
+  -- Commands
+  , addTriggerCmd
+  , rmTriggerCmd
+  , listTriggerCmd
+  -- *Updating
+  , addTrigger
+  , removeTrigger
+  ) where
 
-import Control.Applicative        ((<$>))
-import Control.Monad              (filterM)
-import Control.Monad.IO.Class     (MonadIO, liftIO)
-import Data.Maybe                 (fromMaybe, mapMaybe)
-import Data.Monoid                ((<>))
-import Data.Text                  (Text, replace, isPrefixOf, isSuffixOf, strip, pack, unpack)
-import Database.MongoDB           (Document, (=:), insert_)
+import Control.Monad (filterM)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Monoid ((<>))
+import Data.Text (Text, replace, isPrefixOf, isSuffixOf, strip, pack, unpack)
+import Database.MongoDB (Document, (=:), insert_)
 import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
-import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
-import Network.IRC.Client         (ctcp, reply, send)
-import Network.IRC.Client.Types   ( Event(..), EventType(EPrivmsg)
-                                  , IRC, IRCState
-                                  , Message(Privmsg)
-                                  , UnicodeEvent
-                                  , Source(..))
-import System.Random              (randomIO, randomRIO)
-import Text.Read                  (readMaybe)
-import Text.Regex.TDFA            (CompOption(..), defaultCompOpt, defaultExecOpt)
-import Text.Regex.TDFA.String     (Regex, compile, execute)
+import Network.IRC.Asakura.Types (AsakuraEventHandler(..), Bot)
+import Network.IRC.Client (ctcp, reply, send)
+import Network.IRC.Client.Types ( Event(..), EventType(EPrivmsg)
+                                , IRC, IRCState
+                                , Message(Privmsg)
+                                , UnicodeEvent
+                                , Source(..))
+import System.Random (randomIO, randomRIO)
+import Text.Read (readMaybe)
+import Text.Regex.TDFA (CompOption(..), defaultCompOpt, defaultExecOpt)
+import Text.Regex.TDFA.String (Regex, compile, execute)
+
 import Yukibot.Utils
 
 import qualified Data.Text as T
@@ -72,22 +72,20 @@ eventFunc _ ev = do
 
 -- Find the triggers matching this message.
 findTriggers :: Text -> [Document] -> [Response]
-findTriggers target = mapMaybe findTrigger'
-  where
-    findTrigger' trig =
-      let trig' = at' "trigger" "" trig
-      in case tryRegex trig' of
-          Just r  | r =~ target -> Just $ extract trig
-                  | otherwise -> Nothing
-          Nothing | T.toLower trig' == T.toLower target -> Just $ extract trig
-                  | otherwise -> Nothing
+findTriggers target = mapMaybe findTrigger' where
+  findTrigger' trig =
+    let trig' = at' "trigger" "" trig
+    in case tryRegex trig' of
+        Just r  | r =~ target -> Just $ extract trig
+                | otherwise -> Nothing
+        Nothing | T.toLower trig' == T.toLower target -> Just $ extract trig
+                | otherwise -> Nothing
 
-    r =~ txt =
-      case execute r (T.unpack txt) of
-        Right (Just _) -> True
-        _ -> False
+  r =~ txt = case execute r (T.unpack txt) of
+    Right (Just _) -> True
+    _ -> False
 
-    extract trig = TR (at' "response" "I am so triggered right now." trig) (at' "probability" 1 trig)
+  extract trig = TR (at' "response" "I am so triggered right now." trig) (at' "probability" 1 trig)
 
 -- |Pick a random response and send it
 respond :: UnicodeEvent -> [Response] -> IRC ()
@@ -191,9 +189,8 @@ listTriggerCmd = CommandDef
 
 -- |Add a new trigger
 addTrigger :: MonadIO m => Mongo -> Text -> Response -> m ()
-addTrigger mongo trig resp = doMongo mongo add
-  where
-    add c = insert_ c ["trigger" =: trig, "response" =: _response resp, "probability" =: _probability resp]
+addTrigger mongo trig resp = doMongo mongo add where
+  add c = insert_ c ["trigger" =: trig, "response" =: _response resp, "probability" =: _probability resp]
 
 -- |Remove a trigger
 removeTrigger :: MonadIO m => Mongo -> Text -> m ()

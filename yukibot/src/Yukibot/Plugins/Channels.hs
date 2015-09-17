@@ -4,16 +4,15 @@
 --
 -- TODO: Persist the list of connected channels.
 module Yukibot.Plugins.Channels
-    ( -- *Commands
-      joinCmd
-    , partCmd
-    , setChanPrefix
-    , unsetChanPrefix
-    -- *Events
-    , inviteEv
-    ) where
+  ( -- *Commands
+    joinCmd
+  , partCmd
+  , setChanPrefix
+  , unsetChanPrefix
+  -- *Events
+  , inviteEv
+  ) where
 
-import Control.Applicative
 import Network.IRC.Asakura.Commands
 import Network.IRC.Asakura.Events
 import Network.IRC.Asakura.Types
@@ -23,10 +22,11 @@ import Network.IRC.Client.Types (ConnectionConfig(..), connectionConfig)
 -- |Join a channel. The first argument is the name of the channel to
 -- join.
 joinCmd :: CommandDef
-joinCmd = CommandDef { _verb   = ["join"]
-                     , _help   = "Join a named channel."
-                     , _action = go
-                     }
+joinCmd = CommandDef
+  { _verb   = ["join"]
+  , _help   = "Join a named channel."
+  , _action = go
+  }
 
   where
     go (chan:_) _ _ = return . send $ Join chan
@@ -34,10 +34,11 @@ joinCmd = CommandDef { _verb   = ["join"]
 
 -- |Part a channel.
 partCmd :: CommandDef
-partCmd = CommandDef { _verb   = ["part"]
-                     , _help   = "Leave the current channel."
-                     , _action = go
-                     }
+partCmd = CommandDef
+  { _verb   = ["part"]
+  , _help   = "Leave the current channel."
+  , _action = go
+  }
 
   where
     go _ _ ev = return $
@@ -48,10 +49,11 @@ partCmd = CommandDef { _verb   = ["part"]
 
 -- |Set the channel-specific prefix
 setChanPrefix :: CommandState -> CommandDef
-setChanPrefix cs = CommandDef { _verb   = ["set", "prefix"]
-                              , _help   = "Set the command prefix for this channel."
-                              , _action = go
-                              }
+setChanPrefix cs = CommandDef
+  { _verb   = ["set", "prefix"]
+  , _help   = "Set the command prefix for this channel."
+  , _action = go
+  }
 
   where
     go (pref:_) _ ev = return $ do
@@ -63,10 +65,11 @@ setChanPrefix cs = CommandDef { _verb   = ["set", "prefix"]
 
 -- |Unset the channel-specific prefix
 unsetChanPrefix :: CommandState -> CommandDef
-unsetChanPrefix cs = CommandDef { _verb   = ["unset", "prefix"]
-                                , _help   = "Remove the command prefix for this channel."
-                                , _action = go
-                                }
+unsetChanPrefix cs = CommandDef
+  { _verb   = ["unset", "prefix"]
+  , _help   = "Remove the command prefix for this channel."
+  , _action = go
+  }
 
   where
     go _ _ ev = return $ do

@@ -6,10 +6,11 @@
 -- <https://github.com/HackSoc/csbot>
 module Yukibot.Plugins.LinkInfo.Imgur (imgurLinks) where
 
-import Data.Char                       (toLower)
-import Data.Text                       (Text)
-import Network.URI                     (URI(..), URIAuth(..))
-import Yukibot.Plugins.LinkInfo.Common (LinkHandler(..), LinkInfo(..), fetchTitle, liftHandler)
+import Data.Char (toLower)
+import Data.Text (Text)
+import Network.URI (URI(..), URIAuth(..))
+
+import Yukibot.Plugins.LinkInfo.Common
 
 import qualified Data.Text as T
 
@@ -17,10 +18,10 @@ import qualified Data.Text as T
 
 imgurLinks :: LinkHandler
 imgurLinks = LinkHandler
-             { _licName      = "Imgur"
-             , _licPredicate = licPredicate
-             , _licHandler   = licHandler
-             }
+  { _licName      = "Imgur"
+  , _licPredicate = licPredicate
+  , _licHandler   = licHandler
+  }
 
 -- |LinkInfo predicate: handle any URLs for the domains "imgur.com" or
 -- "i.imgur.com".
@@ -31,36 +32,35 @@ licPredicate uri = isGalleryUri uri || isImageUri uri
 -- page title and, in all cases, return no title if it's the default
 -- one.
 licHandler :: URI -> IO (LinkInfo Text)
-licHandler uri | isImageUri   uri = fetchImgurTitle $ toGalleryUri uri
-               | isGalleryUri uri = fetchImgurTitle uri
-               | otherwise        = return Failed
+licHandler uri
+  | isImageUri   uri = fetchImgurTitle $ toGalleryUri uri
+  | isGalleryUri uri = fetchImgurTitle uri
+  | otherwise        = return Failed
 
 -- *Utilities
 
 -- |Check if a URI is for a gallery page
 isGalleryUri :: URI -> Bool
 isGalleryUri uri = case uriAuthority uri of
-                     Just auth -> uriRegName auth == "imgur.com"
-                     Nothing   -> False
+  Just auth -> uriRegName auth == "imgur.com"
+  Nothing   -> False
 
 -- |Check if a URI is for an image
 isImageUri :: URI -> Bool
 isImageUri uri = case uriAuthority uri of
-                   Just auth -> uriRegName auth == "i.imgur.com"
-                   Nothing   -> False
+  Just auth -> uriRegName auth == "i.imgur.com"
+  Nothing   -> False
 
 -- |Convert an image URI to a gallery URI
 toGalleryUri :: URI -> URI
-toGalleryUri uri = uri { uriAuthority = Just newauth
-                       , uriPath      = newpath
-                       }
-    where newauth = case uriAuthority uri of
-                      Just auth -> auth    { uriRegName  = "imgur.com" }
-                      Nothing   -> URIAuth { uriUserInfo = ""
-                                          , uriRegName  = "imgur.com"
-                                          , uriPort     = ""
-                                          }
-          newpath = takeWhile (/='.') $ uriPath uri
+toGalleryUri uri = uri { uriAuthority = Just newauth, uriPath = newpath } where
+  newauth = case uriAuthority uri of
+    Just auth -> auth    { uriRegName  = "imgur.com" }
+    Nothing   -> URIAuth { uriUserInfo = ""
+                        , uriRegName  = "imgur.com"
+                        , uriPort     = ""
+                        }
+  newpath = takeWhile (/='.') $ uriPath uri
 
 -- |Fetch the title of an imgur gallery page, returning Nothing if
 -- it's the default title.

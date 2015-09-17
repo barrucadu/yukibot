@@ -2,34 +2,33 @@
 
 -- |Fetch and display information about links in messages.
 module Yukibot.Plugins.LinkInfo
-    (-- *Configuration
-     LinkInfoCfg
-    , defaultLinkInfoCfg
-    -- *Event handler
-    , eventHandler
-    -- *External usage
-    , fetchLinkInfo
-    , fetchTitle
-    ) where
+  (-- *Configuration
+   LinkInfoCfg
+  , defaultLinkInfoCfg
+  -- *Event handler
+  , eventHandler
+  -- *External usage
+  , fetchLinkInfo
+  , fetchTitle
+  ) where
 
-import Control.Applicative        ((<$>))
-import Control.Monad.IO.Class     (MonadIO, liftIO)
-import Data.Aeson                 (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
-import Data.Maybe                 (catMaybes, mapMaybe)
-import Data.Monoid                ((<>))
-import Data.Text                  (Text, pack, unpack, isPrefixOf, toLower, strip)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Aeson (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
+import Data.Maybe (catMaybes, mapMaybe)
+import Data.Monoid ((<>))
+import Data.Text (Text, pack, unpack, isPrefixOf, toLower, strip)
 import Network.IRC.Asakura.Events (runAlways, runEverywhere)
-import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
-import Network.IRC.Client         (reply)
-import Network.IRC.Client.Types   (Event(..), EventType(EPrivmsg), IRC, Message(..), UnicodeEvent, IRCState)
-import Network.URI                (URI, parseURI)
-import Yukibot.Utils              (showUri)
+import Network.IRC.Asakura.Types (AsakuraEventHandler(..), Bot)
+import Network.IRC.Client (reply)
+import Network.IRC.Client.Types (Event(..), EventType(EPrivmsg), IRC, Message(..), UnicodeEvent, IRCState)
+import Network.URI (URI, parseURI)
 
 import Yukibot.Plugins.LinkInfo.Common
 import Yukibot.Plugins.LinkInfo.Imgur
 import Yukibot.Plugins.LinkInfo.PageTitle
 import Yukibot.Plugins.LinkInfo.Soundcloud
 import Yukibot.Plugins.LinkInfo.Youtube
+import Yukibot.Utils
 
 import qualified Data.Text as T
 
@@ -38,13 +37,13 @@ import qualified Data.Text as T
 -- This is handled here to avoid cyclic module imports.
 
 instance ToJSON LinkInfoCfg where
-    toJSON cfg = object $ catMaybes
-      [ Just $ "numLinks" .= _numLinks    cfg
-      , Just $ "maxLen"   .= _maxTitleLen cfg
-      , Just $ "handlers" .= map _licName (_linkHandlers cfg)
-      , ("soundcloud" .=) <$> _soundcloud cfg
-      , ("youtube"    .=) <$> _youtube cfg
-      ]
+  toJSON cfg = object $ catMaybes
+    [ Just $ "numLinks" .= _numLinks    cfg
+    , Just $ "maxLen"   .= _maxTitleLen cfg
+    , Just $ "handlers" .= map _licName (_linkHandlers cfg)
+    , ("soundcloud" .=) <$> _soundcloud cfg
+    , ("youtube"    .=) <$> _youtube cfg
+    ]
 
 instance FromJSON LinkInfoCfg where
   parseJSON (Object v) = do
@@ -77,12 +76,12 @@ defaultLinkInfoCfg = LIC
 
 eventHandler :: LinkInfoCfg -> AsakuraEventHandler
 eventHandler cfg = AsakuraEventHandler
-                   { _description = pack "Display information on links which come up in chat."
-                   , _matchType   = EPrivmsg
-                   , _eventFunc   = eventFunc cfg
-                   , _appliesTo   = runEverywhere
-                   , _appliesDef  = runAlways
-                   }
+  { _description = pack "Display information on links which come up in chat."
+  , _matchType   = EPrivmsg
+  , _eventFunc   = eventFunc cfg
+  , _appliesTo   = runEverywhere
+  , _appliesDef  = runAlways
+  }
 
 -- |Split a message up into words, and display information on the
 -- first `numLinks` links.
@@ -107,15 +106,14 @@ eventFunc cfg _ ev = return $ do
 
 -- |Try to fetch information on a URL.
 fetchLinkInfo :: MonadIO m => LinkInfoCfg -> URI -> m (LinkInfo Text)
-fetchLinkInfo cfg url = liftIO $ unempty <$> handler url
-  where
-    -- Get the handler, or a fallback if none exists
-    handler = maybe (\_ -> return NoTitle) _licHandler $ getLinkHandler cfg url
+fetchLinkInfo cfg url = liftIO $ unempty <$> handler url where
+  -- Get the handler, or a fallback if none exists
+  handler = maybe (\_ -> return NoTitle) _licHandler $ getLinkHandler cfg url
 
-    -- Strip out empty titles
-    unempty (Title t) | strip t == "" = NoTitle
-    unempty (Info  i) | strip i == "" = NoTitle
-    unempty t = t
+  -- Strip out empty titles
+  unempty (Title t) | strip t == "" = NoTitle
+  unempty (Info  i) | strip i == "" = NoTitle
+  unempty t = t
 
 -- *Helpers
 
@@ -126,10 +124,9 @@ populateHandlers :: Int
                  -> Maybe Text
                  -- ^ Youtube API key
                  -> [Text] -> [LinkHandler]
-populateHandlers maxlen soundcloud youtube = mapMaybe (toHandler . toLower)
-  where
-    toHandler "imgur"      = Just imgurLinks
-    toHandler "youtube"    = Just $ youtubeLinks youtube
-    toHandler "soundcloud" = Just $ soundcloudLinks soundcloud
-    toHandler "pagetitle"  = Just $ pageTitle maxlen
-    toHandler _ = Nothing
+populateHandlers maxlen soundcloud youtube = mapMaybe (toHandler . toLower) where
+  toHandler "imgur"      = Just imgurLinks
+  toHandler "youtube"    = Just $ youtubeLinks youtube
+  toHandler "soundcloud" = Just $ soundcloudLinks soundcloud
+  toHandler "pagetitle"  = Just $ pageTitle maxlen
+  toHandler _ = Nothing

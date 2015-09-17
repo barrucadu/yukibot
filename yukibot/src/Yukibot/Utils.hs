@@ -4,35 +4,34 @@
 -- |Common utility functions for plugins.
 module Yukibot.Utils where
 
-import Control.Applicative    ((<$>), (<*>))
-import Control.Arrow          ((***), second)
-import Control.Exception      (catch)
-import Control.Lens           ((&), (.~), (^.), (?~), (^?), ix)
-import Control.Monad          (guard)
+import Control.Arrow ((***), second)
+import Control.Exception (catch)
+import Control.Lens ((&), (.~), (^.), (?~), (^?), ix)
+import Control.Monad (guard)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ask)
-import Data.Aeson             (FromJSON, Object, Value(Object), decode', encode)
-import Data.Aeson.Lens        (_String)
-import Data.Aeson.Types       (emptyObject)
-import Data.ByteString        (ByteString, isInfixOf)
-import Data.ByteString.Lazy   (toStrict, fromStrict)
-import Data.Char              (isDigit)
-import Data.List              (groupBy)
-import Data.Function          (on)
-import Data.Maybe             (fromMaybe, fromJust)
-import Data.Monoid            ((<>))
-import Data.String            (IsString(..))
-import Data.Text              (Text, strip, unpack, pack, breakOn)
-import Data.Text.Encoding     (decodeUtf8)
-import Data.Time.Clock        (NominalDiffTime, UTCTime)
-import Data.Time.Format       (defaultTimeLocale, formatTime, parseTimeOrError)
-import Database.MongoDB       (Action, Collection, Document, Label, Order, Selector, Val, access, close, connect, delete, host, master, find, rest, select, sort)
+import Data.Aeson (FromJSON, Object, Value(Object), decode', encode)
+import Data.Aeson.Lens (_String)
+import Data.Aeson.Types (emptyObject)
+import Data.ByteString (ByteString, isInfixOf)
+import Data.ByteString.Lazy (toStrict, fromStrict)
+import Data.Char (isDigit)
+import Data.List (groupBy)
+import Data.Function (on)
+import Data.Maybe (fromMaybe, fromJust)
+import Data.Monoid ((<>))
+import Data.String (IsString(..))
+import Data.Text (Text, strip, unpack, pack, breakOn)
+import Data.Text.Encoding (decodeUtf8)
+import Data.Time.Clock (NominalDiffTime, UTCTime)
+import Data.Time.Format (defaultTimeLocale, formatTime, parseTimeOrError)
+import Database.MongoDB (Action, Collection, Document, Label, Order, Selector, Val, access, close, connect, delete, host, master, find, rest, select, sort)
 import Network.IRC.Asakura.Types (Bot, BotState(_config))
-import Network.IRC.Client.Types  (Event(_source), UnicodeEvent, Source(..))
-import Network.HTTP.Client    (HttpException)
-import Network.Wreq           (FormParam(..), Options, Response, auth, basicAuth, defaults, getWith, post, redirects, responseBody, responseHeader, responseStatus, statusCode)
-import Network.URI            (URI(..), URIAuth(..), uriToString)
-import Text.Read              (readMaybe)
+import Network.IRC.Client.Types (Event(_source), UnicodeEvent, Source(..))
+import Network.HTTP.Client (HttpException)
+import Network.Wreq (FormParam(..), Options, Response, auth, basicAuth, defaults, getWith, post, redirects, responseBody, responseHeader, responseStatus, statusCode)
+import Network.URI (URI(..), URIAuth(..), uriToString)
+import Text.Read (readMaybe)
 
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text           as T
@@ -53,8 +52,8 @@ fetchHtml = flip fetchHtml' defaults
 -- This decodes the result as UTF-8. If another encoding is desired,
 -- use 'fetchHttp' directly.
 fetchHtmlWithCreds :: MonadIO m => URI -> String -> String -> m (Maybe String)
-fetchHtmlWithCreds url user pass = fetchHtml' url opts
-    where opts = defaults & auth ?~ basicAuth (fromString user) (fromString pass)
+fetchHtmlWithCreds url user pass = fetchHtml' url opts where
+  opts = defaults & auth ?~ basicAuth (fromString user) (fromString pass)
 
 -- |Like 'fetchHtml', but takes options (in addition to following
 -- redirects).
@@ -90,37 +89,40 @@ fetchHttp = flip fetchHttp' defaults
 -- |Like 'fetchHttp', but also takes options (in addition to following
 -- redirects).
 fetchHttp' :: MonadIO m => URI -> Options -> m (Maybe (Response ByteString))
-fetchHttp' url opts = liftIO $ fetch `catch` handler
-    where fetch = do
-            res <- getWith (opts & redirects .~ 10) $ showUri url
+fetchHttp' url opts = liftIO $ fetch `catch` handler where
+  fetch = do
+    res <- getWith (opts & redirects .~ 10) $ showUri url
 
-            return $ if res ^. responseStatus . statusCode == 200
-                     then Just $ toStrict <$> res
-                     else Nothing
+    return $ if res ^. responseStatus . statusCode == 200
+             then Just $ toStrict <$> res
+             else Nothing
 
-          handler = const $ return Nothing :: HttpException -> IO (Maybe (Response ByteString))
+  handler = const $ return Nothing :: HttpException -> IO (Maybe (Response ByteString))
 
 -- |Convert a URI into a string-like thing.
 showUri :: IsString s => URI -> s
 showUri uri = fromString $ uriToString id uri ""
 
 -- |Construct a URI
-makeUri :: String
-        -- ^The domain
-        -> String
-        -- ^The path
-        -> Maybe String
-        -- ^The query string
-        -> URI
-makeUri domain path query = URI { uriScheme    = "http:"
-                                , uriAuthority = Just URIAuth { uriUserInfo = ""
-                                                              , uriRegName  = domain
-                                                              , uriPort     = ""
-                                                              }
-                                , uriPath      = path
-                                , uriQuery     = fromMaybe "" query
-                                , uriFragment  = ""
-                                }
+makeUri ::
+    String
+  -- ^The domain
+  -> String
+  -- ^The path
+  -> Maybe String
+  -- ^The query string
+  -> URI
+makeUri domain path query = URI
+  { uriScheme    = "http:"
+  , uriAuthority = Just URIAuth
+    { uriUserInfo = ""
+    , uriRegName  = domain
+    , uriPort     = ""
+    }
+  , uriPath      = path
+  , uriQuery     = fromMaybe "" query
+  , uriFragment  = ""
+  }
 
 -- |Upload some text to sprunge and return the response body (the URI)
 paste :: MonadIO m => String -> m Text
