@@ -29,7 +29,7 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime, getCurrentTime)
 import Database.MongoDB (Document, (=:), insertMany_)
-import Network.IRC.Asakura.Commands (CommandDef(..))
+import Network.IRC.Bot.Commands (CommandDef(..))
 import Network.IRC.Client (reply)
 import Network.IRC.Client.Types  (ConnectionConfig(..), Event(..), Source(..), connectionConfig)
 

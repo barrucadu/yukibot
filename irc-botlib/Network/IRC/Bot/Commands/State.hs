@@ -3,7 +3,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 
 -- |Internal state for the command runner module.
-module Network.IRC.Asakura.Commands.State where
+module Network.IRC.Bot.Commands.State where
 
 import Control.Concurrent.STM (TVar, newTVar, readTVar)
 import Data.Aeson (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
@@ -13,9 +13,9 @@ import Data.Map (Map)
 import Data.Text (Text)
 import Network.IRC.Client (UnicodeEvent, IRC, IRCState)
 
-import Network.IRC.Asakura.State
-import Network.IRC.Asakura.Utils
-import Network.IRC.Asakura.Types
+import Network.IRC.Bot.State
+import Network.IRC.Bot.Utils
+import Network.IRC.Bot.Types
 
 import qualified Data.Map as M
 

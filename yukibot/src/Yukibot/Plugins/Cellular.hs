@@ -11,7 +11,7 @@ import Data.Monoid ((<>))
 import Data.Text (pack, unpack)
 import Data.Word (Word8)
 import Text.Read (readMaybe)
-import Network.IRC.Asakura.Commands (CommandDef(..))
+import Network.IRC.Bot.Commands (CommandDef(..))
 import Network.IRC.Client (reply)
 
 import Yukibot.Utils.Types

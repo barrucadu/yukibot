@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 
 -- |Blacklist plugins on a per-channel basis
-module Network.IRC.Asakura.Blacklist 
+module Network.IRC.Bot.Blacklist
   ( -- *State
     BlacklistState
   , BlacklistStateSnapshot
@@ -32,9 +32,9 @@ import Network.IRC.Client.Types ( ConnectionConfig(_server)
                                 , connectionConfig
                                 , getConnectionConfig)
 
-import Network.IRC.Asakura.Blacklist.State
-import Network.IRC.Asakura.Commands
-import Network.IRC.Asakura.Types
+import Network.IRC.Bot.Blacklist.State
+import Network.IRC.Bot.Commands
+import Network.IRC.Bot.Types
 
 import qualified Data.Map as M
 
@@ -96,7 +96,7 @@ ifNotBlacklisted bs plugin network channel = liftIO . atomically $ do
     netw bl = M.empty `fromMaybe` M.lookup network bl
 
 -- |Produce a new event handler which respects the blacklist
-wraps :: BlacklistState -> Text -> AsakuraEventHandler -> AsakuraEventHandler
+wraps :: BlacklistState -> Text -> EventHandler -> EventHandler
 wraps bs plugin evh = evh { _appliesTo = ifNotBlacklisted bs plugin }
 
 -- |Produce a new command which respects the blacklist

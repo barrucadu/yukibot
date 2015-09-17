@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Network.IRC.Asakura.Help (helpCmd) where
+module Network.IRC.Bot.Help (helpCmd) where
 
 import Control.Concurrent.STM (atomically, readTVar)
 import Control.Monad (liftM)
@@ -7,8 +7,9 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.List (sort)
 import Data.Monoid ((<>))
 import Data.Text (Text, intercalate)
-import Network.IRC.Asakura.Commands.State (CommandDef(..), CommandState(..))
 import Network.IRC.Client (reply)
+
+import Network.IRC.Bot.Commands.State
 
 import qualified Data.Text as T
 

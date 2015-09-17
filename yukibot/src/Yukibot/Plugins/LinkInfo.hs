@@ -17,8 +17,8 @@ import Data.Aeson (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), obje
 import Data.Maybe (catMaybes, mapMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text, pack, unpack, isPrefixOf, toLower, strip)
-import Network.IRC.Asakura.Events (runAlways, runEverywhere)
-import Network.IRC.Asakura.Types (AsakuraEventHandler(..), Bot)
+import Network.IRC.Bot.Events (runAlways, runEverywhere)
+import Network.IRC.Bot.Types (EventHandler(..), Bot)
 import Network.IRC.Client (reply)
 import Network.IRC.Client.Types (Event(..), EventType(EPrivmsg), IRC, Message(..), UnicodeEvent, IRCState)
 import Network.URI (URI, parseURI)
@@ -74,8 +74,8 @@ defaultLinkInfoCfg = LIC
 
 -- *Event handler
 
-eventHandler :: LinkInfoCfg -> AsakuraEventHandler
-eventHandler cfg = AsakuraEventHandler
+eventHandler :: LinkInfoCfg -> EventHandler
+eventHandler cfg = EventHandler
   { _description = pack "Display information on links which come up in chat."
   , _matchType   = EPrivmsg
   , _eventFunc   = eventFunc cfg

@@ -1,5 +1,5 @@
 -- |Functions for dealing with event handlers.
-module Network.IRC.Asakura.Events
+module Network.IRC.Bot.Events
  ( -- *Adding event handlers
    addGlobalEventHandler
  , addGlobalEventHandler'
@@ -15,9 +15,9 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ask, runReaderT)
 import Data.ByteString (ByteString)
 import Data.Text (Text)
-import Network.IRC.Client.Types (Event(..), EventHandler, ConnectionConfig(..), InstanceConfig(..), IRCState, Source(..))
+import Network.IRC.Client.Types (Event(..), ConnectionConfig(..), InstanceConfig(..), IRCState, Source(..))
 
-import Network.IRC.Asakura.Types
+import Network.IRC.Bot.Types
 
 import qualified Network.IRC.Client.Types as IT
 
@@ -25,14 +25,14 @@ import qualified Network.IRC.Client.Types as IT
 
 -- |Add a new event handler to all networks, and to the list of event
 -- handlers added to new connections by default.
-addGlobalEventHandler :: AsakuraEventHandler -> Bot ()
+addGlobalEventHandler :: EventHandler -> Bot ()
 addGlobalEventHandler h = do
   state  <- ask
   addGlobalEventHandler' state h
 
 -- |Like 'addGlobalEventHandler', but takes the bot state as a
 -- parameter and runs in IO.
-addGlobalEventHandler' :: MonadIO m => BotState -> AsakuraEventHandler -> m ()
+addGlobalEventHandler' :: MonadIO m => BotState -> EventHandler -> m ()
 addGlobalEventHandler' state h = liftIO . atomically $ addGlobalEventHandlerSTM state h
 
 -- |Add the default handlers to an IRC client.
@@ -44,7 +44,7 @@ addDefaultHandlers ircstate = do
     mapM_ (\h -> addLocalEventHandler (demote state h) ircstate) defaults
 
 -- |Add an event handler to all networks.
-addGlobalEventHandlerSTM :: BotState -> AsakuraEventHandler -> STM ()
+addGlobalEventHandlerSTM :: BotState -> EventHandler -> STM ()
 addGlobalEventHandlerSTM state h = do
   -- Atomically get all current networks, add the handler to them, and
   -- then add it to the defaults.
@@ -56,7 +56,7 @@ addGlobalEventHandlerSTM state h = do
   writeTVar (_defHandlers state) $ h : defaults
 
 -- |Add an event handler to a single IRC client state
-addLocalEventHandler :: (IRCState -> EventHandler) -> IRCState -> STM ()
+addLocalEventHandler :: (IRCState -> IT.EventHandler) -> IRCState -> STM ()
 addLocalEventHandler h state = do
   -- Get the instance config of the specific IRC client
   let tvarIC = IT.getInstanceConfig state
@@ -67,7 +67,7 @@ addLocalEventHandler h state = do
   writeTVar tvarIC iconf'
 
 -- |Demote an Asakura event handler to an irc-client event handler.
-demote :: BotState -> AsakuraEventHandler -> IRCState -> EventHandler
+demote :: BotState -> EventHandler -> IRCState -> IT.EventHandler
 demote state h ircstate = IT.EventHandler
   { IT._description = _description h
   , IT._matchType   = _matchType h

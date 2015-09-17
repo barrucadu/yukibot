@@ -9,15 +9,15 @@ import Data.Aeson (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), obje
 import Data.Aeson.Types (emptyObject)
 import Data.Aeson.Encode.Pretty (Config(..), encodePretty')
 import Data.ByteString.Lazy (ByteString)
-import Network.IRC.Asakura.State
+import Network.IRC.Bot.State
 import System.Directory (doesFileExist)
 
-import qualified Data.ByteString.Lazy            as B
-import qualified Data.HashMap.Strict             as HM
-import qualified Network.IRC.Asakura.Commands    as C
-import qualified Network.IRC.Asakura.Permissions as P
-import qualified Network.IRC.Asakura.Blacklist   as BL
-import qualified Yukibot.Plugins.LinkInfo        as L
+import qualified Data.ByteString.Lazy        as B
+import qualified Data.HashMap.Strict         as HM
+import qualified Network.IRC.Bot.Commands    as C
+import qualified Network.IRC.Bot.Permissions as P
+import qualified Network.IRC.Bot.Blacklist   as BL
+import qualified Yukibot.Plugins.LinkInfo    as L
 
 -- *Live State
 

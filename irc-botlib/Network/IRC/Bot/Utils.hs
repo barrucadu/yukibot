@@ -1,5 +1,5 @@
 -- |Utility functions
-module Network.IRC.Asakura.Utils where
+module Network.IRC.Bot.Utils where
 
 import Data.List (sortBy)
 import Data.Ord (comparing)

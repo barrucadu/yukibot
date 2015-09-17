@@ -9,8 +9,8 @@ import Control.Monad.IO.Class
 import Control.Monad.Trans.State (State, execState)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
-import Network.IRC.Asakura.Commands (CommandDef(..))
-import Network.IRC.Asakura.Types (Bot)
+import Network.IRC.Bot.Commands (CommandDef(..))
+import Network.IRC.Bot.Types (Bot)
 import Network.IRC.Client (UnicodeEvent, IRC, IRCState, reply)
 import System.Timeout
 import Text.Parsec hiding (State)

@@ -2,7 +2,7 @@
 {-# LANGUAGE MultiParamTypeClasses  #-}
 
 -- |Typeclasses for STM-y state which can be snapshotted and restored.
-module Network.IRC.Asakura.State where
+module Network.IRC.Bot.State where
 
 import Control.Concurrent.STM (STM, atomically)
 import Control.Monad.IO.Class (MonadIO, liftIO)

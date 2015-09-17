@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |Per-channel and per-network permission settings.
-module Network.IRC.Asakura.Permissions
+module Network.IRC.Bot.Permissions
   ( -- *Permission levels
     PermissionLevel(..)
   -- *State
@@ -29,9 +29,9 @@ import Data.Maybe (catMaybes, listToMaybe)
 import Data.Text (Text)
 import Network.IRC.Client (ConnectionConfig(..), Event(..), Source(..), getConnectionConfig, reply)
 
-import Network.IRC.Asakura.Commands
-import Network.IRC.Asakura.Permissions.State
-import Network.IRC.Asakura.Types
+import Network.IRC.Bot.Commands
+import Network.IRC.Bot.Permissions.State
+import Network.IRC.Bot.Types
 
 -- *Integration
 
@@ -59,7 +59,7 @@ wrapsCmd pstate perm cdef = cdef { _action = wrapped $ _action cdef } where
 -- |Take as input an event handler, and produce a new event handler
 -- which will only run if the user meets the required minimum
 -- permission.
-wrapsEv :: PermissionState -> PermissionLevel -> AsakuraEventHandler -> AsakuraEventHandler
+wrapsEv :: PermissionState -> PermissionLevel -> EventHandler -> EventHandler
 wrapsEv pstate perm edef = edef { _eventFunc = wrapped $ _eventFunc edef } where
   wrapped f ircstate ev = do
     allowed <- isAllowed ircstate ev

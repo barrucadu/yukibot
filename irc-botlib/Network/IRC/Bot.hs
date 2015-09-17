@@ -1,6 +1,6 @@
 -- |Functions for dealing with a client connected to multiple IRC
 -- networks.
-module Network.IRC.Asakura
+module Network.IRC.Bot
   ( -- *Blocking
     block
   , blockWithState
@@ -22,8 +22,8 @@ import Data.ByteString (ByteString)
 import Network.IRC.Client (start')
 import Network.IRC.Client.Types (ConnectionConfig(..), InstanceConfig(..), IRCState, newIRCState)
 
-import Network.IRC.Asakura.Events
-import Network.IRC.Asakura.Types
+import Network.IRC.Bot.Events
+import Network.IRC.Bot.Types
 
 -- *Blocking
 

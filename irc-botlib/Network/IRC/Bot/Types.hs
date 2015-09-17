@@ -1,5 +1,5 @@
 -- |Types for IRC bots.
-module Network.IRC.Asakura.Types where
+module Network.IRC.Bot.Types where
 
 import Control.Concurrent.STM (TVar, atomically, newTVar)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -22,11 +22,11 @@ data BotState = BotState
   --
   -- Furthermore, this is behind a TVar so we can connect to new
   -- things at runtime.
-  , _defHandlers :: TVar [AsakuraEventHandler]
+  , _defHandlers :: TVar [EventHandler]
   -- ^Default event handlers added to all new connections.
   , _config :: Value
   -- ^Read-only parsed global configuration.
-    }
+  }
 
 -- |Construct a new bot state
 newBotState :: MonadIO m => m BotState
@@ -43,7 +43,7 @@ newBotState' cfg = do
 
 -- |An irc-client event handler, lifted to run in the Asakura
 -- context. Fields are as in irc-client.
-data AsakuraEventHandler = AsakuraEventHandler
+data EventHandler = EventHandler
   { _description :: Text
   , _matchType   :: EventType
   , _eventFunc   :: IRCState -> UnicodeEvent -> Bot (IRC ())

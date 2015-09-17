@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 
 -- |Internal state for the permissions module
-module Network.IRC.Asakura.Permissions.State where
+module Network.IRC.Bot.Permissions.State where
 
 import Control.Applicative ((<|>))
 import Control.Concurrent.STM (TVar, newTVar, readTVar)
@@ -13,8 +13,8 @@ import Data.Map (Map)
 import Data.Ord (Down(..), comparing)
 import Data.Text (Text)
 
-import Network.IRC.Asakura.State
-import Network.IRC.Asakura.Utils
+import Network.IRC.Bot.State
+import Network.IRC.Bot.Utils
 
 import qualified Data.Map as M
 

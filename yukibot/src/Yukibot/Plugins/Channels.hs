@@ -13,9 +13,9 @@ module Yukibot.Plugins.Channels
   , inviteEv
   ) where
 
-import Network.IRC.Asakura.Commands
-import Network.IRC.Asakura.Events
-import Network.IRC.Asakura.Types
+import Network.IRC.Bot.Commands
+import Network.IRC.Bot.Events
+import Network.IRC.Bot.Types
 import Network.IRC.Client (Event(..), EventType(..), Message(..), Source(..), reply, send)
 import Network.IRC.Client.Types (ConnectionConfig(..), connectionConfig)
 
@@ -79,8 +79,8 @@ unsetChanPrefix cs = CommandDef
         _           -> reply ev "This isn't a channel!"
 
 -- | Respond to INVITE.
-inviteEv :: AsakuraEventHandler
-inviteEv = AsakuraEventHandler
+inviteEv :: EventHandler
+inviteEv = EventHandler
   { _description = "Join channels INVITEd to."
   , _matchType   = EInvite
   , _eventFunc   = go

@@ -1,6 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Network.IRC.Asakura.Blacklist.State where
+module Network.IRC.Bot.Blacklist.State where
 
 import Control.Arrow (first)
 import Control.Concurrent.STM (TVar, newTVar, readTVar)
@@ -10,7 +10,8 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Char8 (pack, unpack)
 import Data.Map (Map)
 import Data.Text (Text)
-import Network.IRC.Asakura.State (Snapshot(..), Rollback(..))
+
+import Network.IRC.Bot.State
 
 import qualified Data.Map as M
 

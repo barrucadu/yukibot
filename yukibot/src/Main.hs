@@ -5,10 +5,10 @@ module Main where
 
 import Control.Concurrent.STM (atomically, readTVar)
 import Control.Monad.Trans.Reader (runReaderT)
-import Network.IRC.Asakura
-import Network.IRC.Asakura.Commands (CommandDef(..), registerCommand)
-import Network.IRC.Asakura.State (rollback)
-import Network.IRC.Asakura.Types
+import Network.IRC.Bot
+import Network.IRC.Bot.Commands (CommandDef(..), registerCommand)
+import Network.IRC.Bot.State (rollback)
+import Network.IRC.Bot.Types
 import Network.IRC.Client
 import System.Directory (doesFileExist)
 import System.Environment (getArgs)
@@ -18,20 +18,20 @@ import System.Posix.Signals (Handler(..), installHandler, sigINT, sigTERM)
 import Yukibot.State
 import Yukibot.Utils
 
-import qualified Network.IRC.Asakura.Blacklist   as BL
-import qualified Network.IRC.Asakura.Commands    as C
-import qualified Network.IRC.Asakura.Help        as H
-import qualified Network.IRC.Asakura.Permissions as P
-import qualified Yukibot.Plugins.Brainfuck       as BF
-import qualified Yukibot.Plugins.Cellular        as CA
-import qualified Yukibot.Plugins.Channels        as CH
-import qualified Yukibot.Plugins.Dedebtifier     as D
-import qualified Yukibot.Plugins.Initialise      as I
-import qualified Yukibot.Plugins.LinkInfo        as L
-import qualified Yukibot.Plugins.Memory          as M
-import qualified Yukibot.Plugins.Mueval          as Mu
-import qualified Yukibot.Plugins.Seen            as S
-import qualified Yukibot.Plugins.Trigger         as T
+import qualified Network.IRC.Bot.Blacklist   as BL
+import qualified Network.IRC.Bot.Commands    as C
+import qualified Network.IRC.Bot.Help        as H
+import qualified Network.IRC.Bot.Permissions as P
+import qualified Yukibot.Plugins.Brainfuck   as BF
+import qualified Yukibot.Plugins.Cellular    as CA
+import qualified Yukibot.Plugins.Channels    as CH
+import qualified Yukibot.Plugins.Dedebtifier as D
+import qualified Yukibot.Plugins.Initialise  as I
+import qualified Yukibot.Plugins.LinkInfo    as L
+import qualified Yukibot.Plugins.Memory      as M
+import qualified Yukibot.Plugins.Mueval      as Mu
+import qualified Yukibot.Plugins.Seen        as S
+import qualified Yukibot.Plugins.Trigger     as T
 
 -- |Default configuration file name
 defaultConfigFile :: FilePath

@@ -1,6 +1,6 @@
 flags: {}
 packages:
 - yukibot/
-- asakura/
+- irc-botlib/
 extra-deps: []
 resolver: nightly-2015-09-13

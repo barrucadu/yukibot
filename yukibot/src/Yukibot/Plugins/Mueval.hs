@@ -23,9 +23,9 @@ import Data.Aeson (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), obje
 import Data.Char (isSpace)
 import Data.Monoid ((<>))
 import Data.Text (isPrefixOf, unpack, pack)
-import Network.IRC.Asakura.Commands (CommandDef(..))
-import Network.IRC.Asakura.Events (runAlways, runEverywhere)
-import Network.IRC.Asakura.Types (AsakuraEventHandler(..))
+import Network.IRC.Bot.Commands (CommandDef(..))
+import Network.IRC.Bot.Events (runAlways, runEverywhere)
+import Network.IRC.Bot.Types (EventHandler(..))
 import Network.IRC.Client (reply)
 import Network.IRC.Client.Types (Event(..), EventType(EPrivmsg), Message(Privmsg), UnicodeEvent, IRC)
 import System.Environment (getEnvironment)
@@ -107,8 +107,8 @@ kindCommand = CommandDef
       return $ replyOrPaste ev res
 
 -- |Evaluate expressions in PRIVMSGs starting with a '>'
-evalEvent :: AsakuraEventHandler
-evalEvent = AsakuraEventHandler
+evalEvent :: EventHandler
+evalEvent = EventHandler
   { _description = pack "A sandboxed evaluator for Haskell expressions."
   , _matchType   = EPrivmsg
   , _eventFunc   = go
@@ -127,8 +127,8 @@ evalEvent = AsakuraEventHandler
         _ -> return $ return ()
 
 -- |Get the type of expressions in PRIVMSGs starting with a ':t'
-typeEvent :: AsakuraEventHandler
-typeEvent = AsakuraEventHandler
+typeEvent :: EventHandler
+typeEvent = EventHandler
   { _description = pack "Get the type of a Haskell expression."
   , _matchType = EPrivmsg
   , _eventFunc = go
@@ -146,8 +146,8 @@ typeEvent = AsakuraEventHandler
       _ -> return $ return ()
 
 -- |Get the kind of expressions in PRIVMSGs starting with a ':k'
-kindEvent :: AsakuraEventHandler
-kindEvent = AsakuraEventHandler
+kindEvent :: EventHandler
+kindEvent = EventHandler
   { _description = pack "Get the kind of a Haskell expression."
   , _matchType = EPrivmsg
   , _eventFunc = go

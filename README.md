@@ -14,13 +14,19 @@ Haskell.
 
     cd yukibot
     cabal sandbox init
-    cabal sandbox add-source ../asakura
+    cabal sandbox add-source ../irc-botlib
     cabal install --only-dependencies
     cabal build
 
 ## Components
 
-### asakura: IRC bot library
+### yukibot: IRC bot
+
+ - See `Yukibot.Plugins` for current functionality.
+
+Note: The evaluation plugin depends on mueval and show
+
+### irc-botlib: IRC bot library
 
  - Handles connecting to a collection of IRC servers.
 
@@ -28,9 +34,3 @@ Haskell.
    constructs can be built.
 
  - Provides typeclasses for serialisable shared state.
-
-### yukibot: IRC bot
-
- - See `Yukibot.Plugins` for current functionality.
-
-Note: The evaluation plugin depends on mueval and show

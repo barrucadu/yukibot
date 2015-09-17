@@ -84,7 +84,7 @@ executable yukibot
   build-depends:       base         >=4.7 && <5
                      , aeson        >=0.8
                      , aeson-pretty >=0.7
-                     , asakura      >=0.2.5
+                     , irc-botlib   >=0.2.5
                      , boxes        >=0.1
                      , bytestring   >=0.10
                      , comonad      >=4.2

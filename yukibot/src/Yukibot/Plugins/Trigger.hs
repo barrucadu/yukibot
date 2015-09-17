@@ -20,9 +20,9 @@ import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text, replace, isPrefixOf, isSuffixOf, strip, pack, unpack)
 import Database.MongoDB (Document, (=:), insert_)
-import Network.IRC.Asakura.Commands (CommandDef(..))
-import Network.IRC.Asakura.Events (runAlways, runEverywhere)
-import Network.IRC.Asakura.Types (AsakuraEventHandler(..), Bot)
+import Network.IRC.Bot.Commands (CommandDef(..))
+import Network.IRC.Bot.Events (runAlways, runEverywhere)
+import Network.IRC.Bot.Types (EventHandler(..), Bot)
 import Network.IRC.Client (ctcp, reply, send)
 import Network.IRC.Client.Types ( Event(..), EventType(EPrivmsg)
                                 , IRC, IRCState
@@ -52,8 +52,8 @@ data Response = TR
 --
 -- Triggers are matched by stripping leading and trailing whitespace
 -- and by ignoring case.
-eventHandler :: AsakuraEventHandler
-eventHandler = AsakuraEventHandler
+eventHandler :: EventHandler
+eventHandler = EventHandler
   { _description = "Respond to messages consisting of trigger phrases."
   , _matchType   = EPrivmsg
   , _eventFunc   = eventFunc

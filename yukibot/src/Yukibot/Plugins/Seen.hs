@@ -9,9 +9,9 @@ module Yukibot.Plugins.Seen
   ) where
 
 import Data.Monoid ((<>))
-import Network.IRC.Asakura.Commands (CommandDef(..))
-import Network.IRC.Asakura.Events (runEverywhere)
-import Network.IRC.Asakura.Types (AsakuraEventHandler(..), Bot)
+import Network.IRC.Bot.Commands (CommandDef(..))
+import Network.IRC.Bot.Events (runEverywhere)
+import Network.IRC.Bot.Types (EventHandler(..), Bot)
 import Network.IRC.Client (reply)
 import Network.IRC.Client.Types ( ConnectionConfig(_server)
                                 , Event(..), EventType(EPrivmsg)
@@ -26,8 +26,8 @@ import Yukibot.Utils
 
 -- *Event handler
 
-eventHandler :: AsakuraEventHandler
-eventHandler = AsakuraEventHandler
+eventHandler :: EventHandler
+eventHandler = EventHandler
   { _description = "Keep track of the last thing a person said"
   , _matchType   = EPrivmsg
   , _eventFunc   = eventFunc

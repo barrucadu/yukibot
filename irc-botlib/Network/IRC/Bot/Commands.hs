@@ -2,7 +2,7 @@
 
 -- |An abstraction over named event handlers which take an argument
 -- list.
-module Network.IRC.Asakura.Commands
+module Network.IRC.Bot.Commands
   ( -- *State
     CommandState
   , CommandStateSnapshot(..)
@@ -32,9 +32,9 @@ import Network.IRC.Client.Types ( ConnectionConfig(..)
                                 , Message(..), Source(..)
                                 , getConnectionConfig, getInstanceConfig)
 
-import Network.IRC.Asakura.Commands.State
-import Network.IRC.Asakura.Events
-import Network.IRC.Asakura.Types
+import Network.IRC.Bot.Commands.State
+import Network.IRC.Bot.Events
+import Network.IRC.Bot.Types
 
 import qualified Data.Text as T
 
@@ -42,8 +42,8 @@ import qualified Data.Text as T
 
 -- |Construct an event handler which will run commands registered in
 -- this state.
-eventRunner :: CommandState -> AsakuraEventHandler
-eventRunner state = AsakuraEventHandler
+eventRunner :: CommandState -> EventHandler
+eventRunner state = EventHandler
   { _description = "Run named commands from PRIVMSGs"
   , _matchType   = EPrivmsg
   , _eventFunc   = runCmd state
