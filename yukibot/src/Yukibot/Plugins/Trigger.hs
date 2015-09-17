@@ -197,7 +197,7 @@ addTrigger mongo trig resp = doMongo mongo add
 
 -- |Remove a trigger
 removeTrigger :: MonadIO m => Mongo -> Text -> m ()
-removeTrigger mongo trig = deleteMongo mongo ["trigger" =: T.toLower trig]
+removeTrigger mongo trig = deleteMongo mongo ["trigger" =: trig]
 
 -- *Utils
 
