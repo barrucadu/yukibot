@@ -108,7 +108,7 @@ executable yukibot
                      , transformers >=0.3
                      , unix         >=2.7
                      , unordered-containers >=0.2
-                     , wreq-sb      >=0.3
+                     , wreq         >=0.4
 
   -- Directories containing source files.
   hs-source-dirs:      src
