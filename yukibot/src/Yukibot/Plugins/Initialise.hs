@@ -19,7 +19,7 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import Network.IRC.Asakura (addNetwork)
 import Network.IRC.Asakura.Types (Bot, BotState)
-import Network.IRC.Client (Message(Numeric, Privmsg, Join), connect, connectWithTLS, defaultIRCConf, send)
+import Network.IRC.Client (Message(Numeric, Privmsg, Join), connect', connectWithTLS', defaultIRCConf, send, stdoutLogger)
 import Network.IRC.Client.Types (EventType(ENumeric), Event(_message), EventHandler(..), InstanceConfig(_eventHandlers))
 
 import Yukibot.Utils
@@ -69,9 +69,7 @@ initialise :: Bot ()
 initialise = cfgGet' (_networks defaultInitialCfg) "initial" >>= mapM_ goN . M.toList where
   goN (hostname, ns) = do
     -- Connect to the network
-    cconf <- if _tls ns
-            then connectWithTLS (pack hostname) (_port ns) 1
-            else connect        (pack hostname) (_port ns) 1
+    cconf <- (if _tls ns then connectWithTLS' else connect') stdoutLogger (pack hostname) (_port ns) 1
 
     let iconf  = defaultIRCConf $ _nick ns
     let iconf' = iconf { _eventHandlers = onWelcome ns : _eventHandlers iconf }

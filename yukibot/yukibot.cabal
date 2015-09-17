@@ -94,7 +94,7 @@ executable yukibot
                      , http-client  >=0.3
                      , hxt          >=9.3
                      , hxt-tagsoup  >=9.1
-                     , irc-client   >=0.2.2.1
+                     , irc-client   >=0.2.4.0
                      , lens         >=4.0
                      , lens-aeson   >=1.0
                      , mongoDB      >=2.0
