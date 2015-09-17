@@ -7,6 +7,7 @@ module Network.IRC.Asakura.Commands
       CommandState
     , CommandStateSnapshot(..)
     , CommandDef(..)
+    , defaultCommandState
     -- *Events
     , eventRunner
     -- *Registering commands

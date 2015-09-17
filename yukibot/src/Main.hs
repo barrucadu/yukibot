@@ -6,7 +6,6 @@ module Main where
 import Control.Applicative    ((<$>))
 import Control.Concurrent.STM (atomically, readTVar)
 import Control.Monad.Trans.Reader (runReaderT)
-import Data.Default.Class     (def)
 import Network.IRC.Asakura
 import Network.IRC.Asakura.Commands (CommandDef(..), registerCommand)
 import Network.IRC.Asakura.State (rollback)
@@ -50,7 +49,7 @@ main = do
   confExists <- doesFileExist configFile
   ys <- if confExists
        then stateFromFile configFile
-       else Just <$> rollback def
+       else Just <$> rollback defaultBotState
 
   case ys of
     Just ys' -> runWithState configFile ys'

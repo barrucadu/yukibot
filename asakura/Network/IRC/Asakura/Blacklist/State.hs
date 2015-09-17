@@ -8,7 +8,6 @@ import Control.Monad             (liftM)
 import Data.Aeson                (FromJSON(..), ToJSON(..))
 import Data.ByteString           (ByteString)
 import Data.ByteString.Char8     (pack, unpack)
-import Data.Default.Class        (Default(..))
 import Data.Map                  (Map)
 import Data.Text                 (Text)
 import Network.IRC.Asakura.State (Snapshot(..), Rollback(..))
@@ -23,6 +22,10 @@ newtype BlacklistState = BS { _blacklist :: TVar (Map ByteString (Map Text [Text
 
 newtype BlacklistStateSnapshot = BSS { _ssBlacklist :: Map String (Map Text [Text]) }
 
+-- | Nothing blacklisted.
+defaultBlacklistState :: BlacklistStateSnapshot
+defaultBlacklistState = BSS M.empty
+
 instance FromJSON BlacklistStateSnapshot where
     parseJSON = fmap BSS . parseJSON
 
@@ -36,6 +39,3 @@ instance Snapshot BlacklistState BlacklistStateSnapshot where
 instance Rollback BlacklistStateSnapshot BlacklistState where
     rollbackSTM bss = liftM BS (newTVar . fromStr $ _ssBlacklist bss)
         where fromStr = M.fromList . map (first pack) . M.toList
-
-instance Default BlacklistStateSnapshot where
-    def = BSS M.empty

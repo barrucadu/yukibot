@@ -4,6 +4,7 @@
 -- channels.
 module Yukibot.Plugins.Initialise
     ( InitialCfg
+    , defaultInitialCfg
     , initialise
     , initialiseWithState
     ) where
@@ -13,7 +14,6 @@ import Control.Monad              (when, void)
 import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (runReaderT)
 import Data.Aeson                 (FromJSON(..), Value(..), (.:), (.:?), (.!=))
-import Data.Default.Class         (Default(..))
 import Data.ByteString.Char8      (pack)
 import Data.Map                   (Map)
 import Data.Monoid                ((<>))
@@ -33,14 +33,16 @@ newtype InitialCfg = IS { _networks :: Map String NetworkState }
 instance FromJSON InitialCfg where
     parseJSON = fmap IS . parseJSON
 
-instance Default InitialCfg where
-    def = IS $ M.fromList [("irc.freenode.net", freenode)]
-        where freenode = NS { _nick     = "yukibot"
-                            , _port     = 7000
-                            , _tls      = True
-                            , _nickserv = Nothing
-                            , _channels = []
-                            }
+-- | SSL connection to Freenode using the nick 'yukibot', not joining
+-- any channels.
+defaultInitialCfg :: InitialCfg
+defaultInitialCfg = IS $ M.fromList [("irc.freenode.net", freenode)] where
+  freenode = NS { _nick     = "yukibot"
+                , _port     = 7000
+                , _tls      = True
+                , _nickserv = Nothing
+                , _channels = []
+                }
 
 data NetworkState = NS
     { _nick     :: Text
@@ -63,7 +65,7 @@ instance FromJSON NetworkState where
 -- |Connect to all default networks, auth with nickservs, and join
 -- channels.
 initialise :: Bot ()
-initialise = cfgGet' def "initial" >>= mapM_ goN . M.toList
+initialise = cfgGet' (_networks defaultInitialCfg) "initial" >>= mapM_ goN . M.toList
     where goN (hostname, ns) = do
             -- Connect to the network
             cconf <- if _tls ns

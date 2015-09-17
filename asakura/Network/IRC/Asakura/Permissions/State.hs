@@ -9,7 +9,6 @@ import Control.Concurrent.STM (TVar, newTVar, readTVar)
 import Data.Aeson             (FromJSON(..), ToJSON(..), Value(..), (.=), (.:), (.:?), (.!=), object)
 import Data.ByteString        (ByteString)
 import Data.ByteString.Char8  (pack, unpack)
-import Data.Default.Class     (Default(..))
 import Data.Map               (Map)
 import Data.Ord               (Down(..), comparing)
 import Data.Text              (Text)
@@ -72,14 +71,14 @@ data PermissionState = PermissionState
 
 -- *Snapshotting
 
-data PermissionStateSnapshot = PermissionStateSnapshot
+data PermissionStateSnapshot = PSS
     { _ssPermissions :: Map String (Map Text UserPermissions)
     -- ^host -> nick -> (network permission, channel -> channel permission)
     }
 
-instance Default PermissionStateSnapshot where
-    -- |No specific permissions
-    def = PermissionStateSnapshot { _ssPermissions = M.empty }
+-- |No specific permissions
+defaultPermissionState :: PermissionStateSnapshot
+defaultPermissionState = PSS { _ssPermissions = M.empty }
 
 -- |The permissions of a single user
 data UserPermissions = UserPermissions (Maybe PermissionLevel) (Map Text PermissionLevel)
@@ -102,13 +101,12 @@ instance ToJSON PermissionStateSnapshot where
     toJSON ss = toJSON . _ssPermissions $ ss
 
 instance FromJSON PermissionStateSnapshot where
-    parseJSON v = PermissionStateSnapshot
-                    <$> parseJSON v
+    parseJSON v = PSS <$> parseJSON v
 
 instance Snapshot PermissionState PermissionStateSnapshot where
     snapshotSTM state = do
       perms <- readTVar . _permissions $ state
-      return PermissionStateSnapshot { _ssPermissions = toPermTree perms }
+      return PSS { _ssPermissions = toPermTree perms }
 
       where toPermTree = fmap (fmap mergeUserPermissions . M.fromList . collect) . M.fromList . collect . map extractBits
 

@@ -11,7 +11,6 @@ import Data.Aeson               (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?
 import Data.Aeson.Types         (emptyObject)
 import Data.Aeson.Encode.Pretty (Config(..), encodePretty')
 import Data.ByteString.Lazy     (ByteString)
-import Data.Default.Class       (Default(..))
 import Network.IRC.Asakura.State
 import System.Directory         (doesFileExist)
 
@@ -44,8 +43,14 @@ data YukibotStateSnapshot = YSS
   , _originalSnapshot   :: Value
   }
 
-instance Default YukibotStateSnapshot where
-  def = YSS def def def def emptyObject
+defaultBotState :: YukibotStateSnapshot
+defaultBotState = YSS
+  { _commandSnapshot    = C.defaultCommandState
+  , _permissionSnapshot = P.defaultPermissionState
+  , _linkinfoSnapshot   = L.defaultLinkInfoCfg
+  , _blacklistSnapshot  = BL.defaultBlacklistState
+  , _originalSnapshot   = emptyObject
+  }
 
 instance Snapshot YukibotState YukibotStateSnapshot where
   snapshotSTM ys = do
@@ -91,10 +96,10 @@ instance ToJSON YukibotStateSnapshot where
 
 instance FromJSON YukibotStateSnapshot where
   parseJSON o@(Object v) = YSS
-    <$> v .:? "prefixes"    .!= def
-    <*> v .:? "permissions" .!= def
-    <*> v .:? "linkinfo"    .!= def
-    <*> v .:? "blacklist"   .!= def
+    <$> v .:? "prefixes"    .!= _commandSnapshot    defaultBotState
+    <*> v .:? "permissions" .!= _permissionSnapshot defaultBotState
+    <*> v .:? "linkinfo"    .!= _linkinfoSnapshot   defaultBotState
+    <*> v .:? "blacklist"   .!= _blacklistSnapshot  defaultBotState
     <*> pure o
 
   parseJSON _ = fail "Expected object"
