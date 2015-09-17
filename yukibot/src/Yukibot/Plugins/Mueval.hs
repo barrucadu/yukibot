@@ -8,25 +8,25 @@ module Yukibot.Plugins.Mueval
   , eventHandler
   ) where
 
-import Control.Applicative          ((<$>), (<*>))
-import Control.Concurrent           (forkIO)
-import Control.Concurrent.MVar      (newEmptyMVar, takeMVar, putMVar)
-import Control.Exception            (evaluate)
-import Control.Monad.IO.Class       (MonadIO, liftIO)
-import Data.Aeson                   (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
-import Data.Char                    (isSpace)
-import Data.Monoid                  ((<>))
-import Data.Text                    (isPrefixOf, unpack, pack)
+import Control.Concurrent (forkIO)
+import Control.Concurrent.MVar (newEmptyMVar, takeMVar, putMVar)
+import Control.Exception (evaluate)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Aeson (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
+import Data.Char (isSpace)
+import Data.Monoid ((<>))
+import Data.Text (isPrefixOf, unpack, pack)
 import Network.IRC.Asakura.Commands (CommandDef(..))
-import Network.IRC.Asakura.Events   (runAlways, runEverywhere)
-import Network.IRC.Asakura.Types    (AsakuraEventHandler(..))
-import Network.IRC.Client           (reply)
-import Network.IRC.Client.Types     (Event(..), EventType(EPrivmsg), Message(Privmsg), UnicodeEvent, IRC)
-import System.Environment           (getEnvironment)
-import System.Exit                  (ExitCode)
-import System.IO                    (hGetContents, hClose)
-import System.Process               (CreateProcess(..), StdStream(CreatePipe), createProcess, proc, waitForProcess)
-import System.Random                (randomIO)
+import Network.IRC.Asakura.Events (runAlways, runEverywhere)
+import Network.IRC.Asakura.Types (AsakuraEventHandler(..))
+import Network.IRC.Client (reply)
+import Network.IRC.Client.Types (Event(..), EventType(EPrivmsg), Message(Privmsg), UnicodeEvent, IRC)
+import System.Environment (getEnvironment)
+import System.Exit (ExitCode)
+import System.IO (hGetContents, hClose)
+import System.Process (CreateProcess(..), StdStream(CreatePipe), createProcess, proc, waitForProcess)
+import System.Random (randomIO)
+
 import Yukibot.Utils
 
 import qualified Data.Text as T
@@ -34,11 +34,11 @@ import qualified Data.Text as T
 -- *Configuration
 
 data MuevalCfg = MC
-    { _mueval :: String
-    -- ^Path to the mueval binary
-    , _loadfile :: String
-    -- ^Path to the load file
-    }
+  { _mueval :: String
+  -- ^Path to the mueval binary
+  , _loadfile :: String
+  -- ^Path to the load file
+  }
 
 instance ToJSON MuevalCfg where
   toJSON mc = object [ "mueval"   .= _mueval   mc
@@ -46,8 +46,9 @@ instance ToJSON MuevalCfg where
                      ]
 
 instance FromJSON MuevalCfg where
-  parseJSON (Object v) = MC <$> v .:? "mueval"   .!= _mueval   defaultMuevalCfg
-                            <*> v .:? "loadfile" .!= _loadfile defaultMuevalCfg
+  parseJSON (Object v) = MC
+    <$> v .:? "mueval"   .!= _mueval   defaultMuevalCfg
+    <*> v .:? "loadfile" .!= _loadfile defaultMuevalCfg
   parseJSON _ = fail "Expected object"
 
 defaultMuevalCfg :: MuevalCfg
@@ -58,10 +59,11 @@ defaultMuevalCfg = MC "mueval" "L.hs"
 -- |Evaluate expressions as a command
 command :: CommandDef
 command = CommandDef
-             { _verb = ["eval"]
-             , _help = "<expr> - Evaluate the given expression"
-             , _action = go
-             }
+  { _verb = ["eval"]
+  , _help = "<expr> - Evaluate the given expression"
+  , _action = go
+  }
+
   where
     go args _ ev = do
       mc <- cfgGet' defaultMuevalCfg "mueval"
@@ -71,12 +73,13 @@ command = CommandDef
 -- |Evaluate expressions in PRIVMSGs starting with a '>'
 eventHandler :: AsakuraEventHandler
 eventHandler = AsakuraEventHandler
-                  { _description = pack "A sandboxed evaluator for Haskell expressions."
-                  , _matchType   = EPrivmsg
-                  , _eventFunc   = go
-                  , _appliesTo   = runEverywhere
-                  , _appliesDef  = runAlways
-                  }
+  { _description = pack "A sandboxed evaluator for Haskell expressions."
+  , _matchType   = EPrivmsg
+  , _eventFunc   = go
+  , _appliesTo   = runEverywhere
+  , _appliesDef  = runAlways
+  }
+
   where
     go _ ev =
       case _message ev of
@@ -167,8 +170,9 @@ runProcess cmd args env = do
 -- |Reply (if the output is single line), or upload to sprunge (if
 -- multi-line) and reply with link.
 replyOrPaste :: UnicodeEvent -> String -> IRC ()
-replyOrPaste ev txt | '\n' `elem` txt = paste txt >>= \p -> reply ev $ "Multi-line result: " <> p
-                    | otherwise       = reply ev . pack $ shrink txt
+replyOrPaste ev txt
+  | '\n' `elem` txt = paste txt >>= \p -> reply ev $ "Multi-line result: " <> p
+  | otherwise       = reply ev . pack $ shrink txt
 
 -- |Shrink a long output and add an ellipsis
 shrink :: String -> String
