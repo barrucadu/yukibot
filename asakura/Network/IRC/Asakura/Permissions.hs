@@ -7,6 +7,7 @@ module Network.IRC.Asakura.Permissions
     -- *State
     , PermissionState
     , PermissionStateSnapshot(..)
+    , defaultPermissionState
     -- *Integration
     , wrapsCmd
     , wrapsEv

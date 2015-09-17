@@ -5,8 +5,8 @@
 module Network.IRC.Asakura.Blacklist 
     ( -- *State
       BlacklistState
-    -- *Snapshotting
     , BlacklistStateSnapshot
+    , defaultBlacklistState
       -- *Commands
     , blacklistCmd
     , whitelistCmd

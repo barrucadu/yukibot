@@ -10,7 +10,6 @@ import Control.Concurrent.STM    (TVar, newTVar, readTVar)
 import Data.Aeson                (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
 import Data.ByteString           (ByteString)
 import Data.ByteString.Char8     (pack, unpack)
-import Data.Default.Class        (Default(..))
 import Data.Map                  (Map)
 import Data.Text                 (Text)
 import Network.IRC.Client        (UnicodeEvent, IRC, IRCState)
@@ -53,17 +52,17 @@ data CommandDef = CommandDef
 
 -- |A snapshot of the private command state, containing all the
 -- prefixes.
-data CommandStateSnapshot = CommandStateSnapshot
+data CommandStateSnapshot = CSS
     { _ssDefPrefix    :: Text
     , _ssChanPrefixes :: Map String (Map Text Text)
     }
 
-instance Default CommandStateSnapshot where
-    -- |Prefix of "!", no channel prefixes.
-    def = CommandStateSnapshot
-            { _ssDefPrefix    = "!"
-            , _ssChanPrefixes = M.empty
-            }
+-- |Prefix of "!", no channel prefixes.
+defaultCommandState :: CommandStateSnapshot
+defaultCommandState = CSS
+  { _ssDefPrefix    = "!"
+  , _ssChanPrefixes = M.empty
+  }
 
 instance ToJSON CommandStateSnapshot where
     toJSON ss | M.null (_ssChanPrefixes ss) = object [ "defaultPrefix"  .= _ssDefPrefix ss ]
@@ -72,9 +71,9 @@ instance ToJSON CommandStateSnapshot where
                                    ]
 
 instance FromJSON CommandStateSnapshot where
-    parseJSON (Object v) = CommandStateSnapshot
-                             <$> v .:? "defaultPrefix"   .!= _ssDefPrefix    def
-                             <*> v .:? "channelPrefixes" .!= _ssChanPrefixes def
+    parseJSON (Object v) = CSS
+      <$> v .:? "defaultPrefix"   .!= _ssDefPrefix    defaultCommandState
+      <*> v .:? "channelPrefixes" .!= _ssChanPrefixes defaultCommandState
     parseJSON _ = fail "Bad type"
 
 instance Snapshot CommandState CommandStateSnapshot where
@@ -82,9 +81,9 @@ instance Snapshot CommandState CommandStateSnapshot where
       defPrefix    <- readTVar . _commandPrefix   $ state
       chanPrefixes <- readTVar . _channelPrefixes $ state
 
-      return CommandStateSnapshot { _ssDefPrefix    = defPrefix
-                                  , _ssChanPrefixes = toPrefixTree chanPrefixes
-                                  }
+      return CSS { _ssDefPrefix    = defPrefix
+                 , _ssChanPrefixes = toPrefixTree chanPrefixes
+                 }
 
       where toPrefixTree = fmap M.fromList . M.fromList . collect . map flipTuple
 

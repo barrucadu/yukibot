@@ -4,6 +4,7 @@
 module Yukibot.Plugins.LinkInfo
     (-- *Configuration
      LinkInfoCfg
+    , defaultLinkInfoCfg
     -- *Event handler
     , eventHandler
     -- *External usage
@@ -14,7 +15,6 @@ module Yukibot.Plugins.LinkInfo
 import Control.Applicative        ((<$>))
 import Control.Monad.IO.Class     (MonadIO, liftIO)
 import Data.Aeson                 (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
-import Data.Default.Class         (Default(..))
 import Data.Maybe                 (catMaybes, mapMaybe)
 import Data.Monoid                ((<>))
 import Data.Text                  (Text, pack, unpack, isPrefixOf, toLower, strip)
@@ -48,27 +48,30 @@ instance ToJSON LinkInfoCfg where
 
 instance FromJSON LinkInfoCfg where
   parseJSON (Object v) = do
-    numLinks   <- v .:? "numLinks" .!= _numLinks def
-    maxLen     <- v .:? "maxLen"   .!= _maxTitleLen def
+    numLinks   <- v .:? "numLinks" .!= _numLinks defaultLinkInfoCfg
+    maxLen     <- v .:? "maxLen"   .!= _maxTitleLen defaultLinkInfoCfg
     handlers   <- v .:? "handlers"
     soundcloud <- v .:? "soundcloud"
     youtube    <- v .:? "youtube"
 
     let handlers' = case handlers of
           Just hs -> populateHandlers maxLen soundcloud youtube hs
-          Nothing -> _linkHandlers def
+          Nothing -> _linkHandlers defaultLinkInfoCfg
 
     return $ LIC numLinks maxLen handlers' soundcloud youtube
 
   parseJSON _ = fail "Expected object"
 
-instance Default LinkInfoCfg where
-    def = LIC { _numLinks     = 5
-              , _maxTitleLen  = 100
-              , _linkHandlers = [imgurLinks, pageTitle $ _maxTitleLen def]
-              , _soundcloud   = Nothing
-              , _youtube      = Nothing
-              }
+-- | Limit of 5 links, title limit of 100 characters, using imgur and
+-- page title only.
+defaultLinkInfoCfg :: LinkInfoCfg
+defaultLinkInfoCfg = LIC
+  { _numLinks     = 5
+  , _maxTitleLen  = 100
+  , _linkHandlers = [imgurLinks, pageTitle $ _maxTitleLen defaultLinkInfoCfg]
+  , _soundcloud   = Nothing
+  , _youtube      = Nothing
+  }
 
 -- *Event handler
 

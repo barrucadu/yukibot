@@ -77,7 +77,6 @@ library
                      , aeson        >=0.8
                      , bytestring   >=0.10
                      , containers   >=0.5
-                     , data-default-class >=0.0.1
                      , irc-client   >=0.2
                      , stm          >=2.4
                      , text         >=1.1
