@@ -3,7 +3,6 @@
 
 module Main where
 
-import Control.Applicative    ((<$>))
 import Control.Concurrent.STM (atomically, readTVar)
 import Control.Monad.Trans.Reader (runReaderT)
 import Network.IRC.Asakura
@@ -11,10 +10,11 @@ import Network.IRC.Asakura.Commands (CommandDef(..), registerCommand)
 import Network.IRC.Asakura.State (rollback)
 import Network.IRC.Asakura.Types
 import Network.IRC.Client
-import System.Directory       (doesFileExist)
-import System.Environment     (getArgs)
-import System.Exit            (exitFailure)
-import System.Posix.Signals   (Handler(..), installHandler, sigINT, sigTERM)
+import System.Directory (doesFileExist)
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
+import System.Posix.Signals (Handler(..), installHandler, sigINT, sigTERM)
+
 import Yukibot.State
 import Yukibot.Utils
 
@@ -115,7 +115,7 @@ runWithState fp ys = do
 
 -- |Handle a signal by disconnecting from every IRC network.
 handler :: BotState -> IO ()
-handler botstate = (atomically . readTVar . _connections $ botstate) >>= mapM_ (runReaderT dc . snd)
-    where dc = do
-            send . Quit $ Just "Process interrupted."
-            disconnect
+handler botstate = (atomically . readTVar . _connections $ botstate) >>= mapM_ (runReaderT dc . snd) where
+  dc = do
+    send . Quit $ Just "Process interrupted."
+    disconnect

@@ -2,26 +2,26 @@
 
 -- |Keep track of the last time we saw someone
 module Yukibot.Plugins.Seen
-    ( -- *Event handler
-      eventHandler
-      -- *Command
-    , command
-    ) where
+  ( -- *Event handler
+    eventHandler
+    -- *Command
+  , command
+  ) where
 
-import Control.Applicative        ((<$>))
-import Data.Monoid                ((<>))
+import Data.Monoid ((<>))
 import Network.IRC.Asakura.Commands (CommandDef(..))
 import Network.IRC.Asakura.Events (runEverywhere)
-import Network.IRC.Asakura.Types  (AsakuraEventHandler(..), Bot)
-import Network.IRC.Client         (reply)
-import Network.IRC.Client.Types   ( ConnectionConfig(_server)
-                                  , Event(..), EventType(EPrivmsg)
-                                  , IRC, IRCState
-                                  , Message(..)
-                                  , Source(Channel)
-                                  , UnicodeEvent
-                                  , connectionConfig)
-import Yukibot.Plugins.Memory     (getFactValue, setFactValues)
+import Network.IRC.Asakura.Types (AsakuraEventHandler(..), Bot)
+import Network.IRC.Client (reply)
+import Network.IRC.Client.Types ( ConnectionConfig(_server)
+                                , Event(..), EventType(EPrivmsg)
+                                , IRC, IRCState
+                                , Message(..)
+                                , Source(Channel)
+                                , UnicodeEvent
+                                , connectionConfig)
+
+import Yukibot.Plugins.Memory
 import Yukibot.Utils
 
 -- *Event handler

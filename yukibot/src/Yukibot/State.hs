@@ -1,18 +1,16 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE TupleSections         #-}
 
 module Yukibot.State where
 
-import Control.Applicative      ((<$>), (<*>), pure)
-import Control.Monad            (join)
-import Control.Monad.IO.Class   (MonadIO, liftIO)
-import Data.Aeson               (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object, decode')
-import Data.Aeson.Types         (emptyObject)
+import Control.Monad (join)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Aeson (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object, decode')
+import Data.Aeson.Types (emptyObject)
 import Data.Aeson.Encode.Pretty (Config(..), encodePretty')
-import Data.ByteString.Lazy     (ByteString)
+import Data.ByteString.Lazy (ByteString)
 import Network.IRC.Asakura.State
-import System.Directory         (doesFileExist)
+import System.Directory (doesFileExist)
 
 import qualified Data.ByteString.Lazy            as B
 import qualified Data.HashMap.Strict             as HM
@@ -108,10 +106,9 @@ instance FromJSON YukibotStateSnapshot where
 
 -- |Attempt to load a state from a lazy ByteString.
 stateFromByteString :: (Functor m, MonadIO m) => ByteString -> m (Maybe YukibotState)
-stateFromByteString bs =
-  case decode' bs :: Maybe YukibotStateSnapshot of
-    Just yss' -> Just <$> rollback yss'
-    _ -> return Nothing
+stateFromByteString bs = case decode' bs :: Maybe YukibotStateSnapshot of
+  Just yss' -> Just <$> rollback yss'
+  _ -> return Nothing
 
 -- |Attempt to load a state from a file.
 stateFromFile :: MonadIO m => FilePath -> m (Maybe YukibotState)
@@ -129,6 +126,5 @@ save fp ys = join $ saveSnapshot fp <$> snapshot ys
 
 -- |Save a snapshot of the state to disk.
 saveSnapshot :: MonadIO m => FilePath -> YukibotStateSnapshot -> m ()
-saveSnapshot fp yss = liftIO $ B.writeFile fp bs
-  where
-    bs = encodePretty' (Config 4 compare) yss
+saveSnapshot fp yss = liftIO $ B.writeFile fp bs where
+  bs = encodePretty' (Config 4 compare) yss

@@ -8,7 +8,6 @@ module Yukibot.Plugins.Dedebtifier
   , listCmd
   ) where
 
-import Control.Applicative ((<$>), (<*>))
 import Control.Arrow (second)
 import Control.Monad (forM_)
 import Control.Monad.IO.Class (MonadIO)

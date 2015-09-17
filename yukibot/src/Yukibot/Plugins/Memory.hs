@@ -2,47 +2,48 @@
 
 -- |Remember facts about nicks.
 module Yukibot.Plugins.Memory
-    ( -- *Querying
-      getFactValue
-    , getFactValues
-    , getFacts
-    -- *Updating
-    , addFactValue
-    , setFactValues
-    , delFact
-    -- *Integration with other things
-    , SimpleFactStore(..)
-    , simpleFactStore
-    , simpleSetCommand
-    , simpleGetCommand
-    ) where
+  ( -- *Querying
+    getFactValue
+  , getFactValues
+  , getFacts
+  -- *Updating
+  , addFactValue
+  , setFactValues
+  , delFact
+  -- *Integration with other things
+  , SimpleFactStore(..)
+  , simpleFactStore
+  , simpleSetCommand
+  , simpleGetCommand
+  ) where
 
-import Control.Applicative       ((<$>))
-import Control.Arrow             ((&&&))
-import Control.Monad             (liftM)
-import Control.Monad.IO.Class    (MonadIO, liftIO)
-import Data.ByteString           (ByteString)
-import Data.ByteString.Char8     (unpack)
-import Data.List                 (groupBy)
-import Data.Function             (on)
-import Data.Maybe                (fromMaybe, listToMaybe)
-import Data.Monoid               ((<>))
-import Data.Text                 (Text)
-import Data.Time.Clock           (UTCTime, getCurrentTime)
-import Database.MongoDB          (Document, (=:), insertMany_)
+import Control.Arrow ((&&&))
+import Control.Monad (liftM)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.ByteString (ByteString)
+import Data.ByteString.Char8 (unpack)
+import Data.List (groupBy)
+import Data.Function (on)
+import Data.Maybe (fromMaybe, listToMaybe)
+import Data.Monoid ((<>))
+import Data.Text (Text)
+import Data.Time.Clock (UTCTime, getCurrentTime)
+import Database.MongoDB (Document, (=:), insertMany_)
 import Network.IRC.Asakura.Commands (CommandDef(..))
-import Network.IRC.Client        (reply)
+import Network.IRC.Client (reply)
 import Network.IRC.Client.Types  (ConnectionConfig(..), Event(..), Source(..), connectionConfig)
+
 import Yukibot.Utils
 
 import qualified Data.Text as T
 
 atFact      :: Document -> Text
-atValue     :: Document -> Text
-atTimestamp :: Document -> UTCTime
-
 atFact      = at' "fact"      ""
+
+atValue     :: Document -> Text
 atValue     = at' "value"     ""
+
+atTimestamp :: Document -> UTCTime
 atTimestamp = at' "timestamp" epoch
 
 -- *Querying
@@ -50,26 +51,24 @@ atTimestamp = at' "timestamp" epoch
 -- |Get the first value for a fact associated with a user and the time
 -- at which it was stored.
 getFactValue :: MonadIO m => Mongo -> ByteString -> Text -> Text -> m (Maybe (Text, UTCTime))
-getFactValue ms network nick fact = liftM listToMaybe facts
-    where facts = getFactValues ms network nick fact
+getFactValue ms network nick fact = liftM listToMaybe facts where
+  facts = getFactValues ms network nick fact
 
 -- |Get all values for a fact associated with a nick and the time at
 -- which they were stored.
 getFactValues :: MonadIO m => Mongo -> ByteString -> Text -> Text -> m [(Text, UTCTime)]
-getFactValues mongo network nick fact = map (atValue &&& atTimestamp) `liftM` queryMongo mongo selector ordering
-  where
-    selector = ["network" =: unpack network, "nick" =: nick, "fact" =: fact]
-    ordering = ["timestamp" =: (-1 :: Int)]
+getFactValues mongo network nick fact = map (atValue &&& atTimestamp) `liftM` queryMongo mongo selector ordering where
+  selector = ["network" =: unpack network, "nick" =: nick, "fact" =: fact]
+  ordering = ["timestamp" =: (-1 :: Int)]
 
 -- |Get all facts associated with a nick. There is no meaningful
 -- distinction between a user not having any facts, and a user having
 -- an empty list of facts, so this doesn't return a Maybe.
 getFacts :: MonadIO m => Mongo -> ByteString -> Text -> m [(Text, [(Text, UTCTime)])]
-getFacts mongo network nick = toFactList `liftM` queryMongo mongo selector ordering
-  where
-    selector = ["network" =: unpack network, "nick" =: nick]
-    ordering = ["fact" =: (1 :: Int), "timestamp" =: (-1 :: Int)]
-    toFactList = map (\fs@(f:_) -> (atFact f, map (atValue &&& atTimestamp) fs)) . groupBy ((==) `on` atFact)
+getFacts mongo network nick = toFactList `liftM` queryMongo mongo selector ordering where
+  selector = ["network" =: unpack network, "nick" =: nick]
+  ordering = ["fact" =: (1 :: Int), "timestamp" =: (-1 :: Int)]
+  toFactList = map (\fs@(f:_) -> (atFact f, map (atValue &&& atTimestamp) fs)) . groupBy ((==) `on` atFact)
 
 -- *Updating
 
@@ -109,11 +108,11 @@ alterFacts mongo f network nick fact = liftIO $ do
 
 -- |A fact store tied to one particular fact.
 data SimpleFactStore = SimpleFactStore
-    { getSimpleValue :: ByteString -> Text -> IO (Maybe Text)
-    -- ^Get the value of the fact
-    , setSimpleValue :: ByteString -> Text -> Text -> IO ()
-    -- ^Set the value of the fact
-    }
+  { getSimpleValue :: ByteString -> Text -> IO (Maybe Text)
+  -- ^Get the value of the fact
+  , setSimpleValue :: ByteString -> Text -> Text -> IO ()
+  -- ^Set the value of the fact
+  }
 
 -- |Construct a simple fact store.
 simpleFactStore :: Mongo -> Text -> SimpleFactStore
@@ -127,10 +126,11 @@ simpleFactStore ms fact = SimpleFactStore
 --
 -- syntax: <prefix><command name> [nick]
 simpleGetCommand :: SimpleFactStore -> CommandDef
-simpleGetCommand sfs = CommandDef { _verb   = ["get"]
-                                  , _help   = "<nick> - Look up the value associated with the nick."
-                                  , _action = go
-                                  }
+simpleGetCommand sfs = CommandDef
+  { _verb   = ["get"]
+  , _help   = "<nick> - Look up the value associated with the nick."
+  , _action = go
+  }
 
   where
     go args _ ev = return $ do
@@ -151,10 +151,11 @@ simpleGetCommand sfs = CommandDef { _verb   = ["get"]
 --
 -- Syntax: <prefix><command name> value
 simpleSetCommand :: SimpleFactStore -> CommandDef
-simpleSetCommand sfs = CommandDef { _verb   = ["set"]
-                                  , _help   = "<value> - Update the value associated with your nick."
-                                  , _action = go
-                                  }
+simpleSetCommand sfs = CommandDef
+  { _verb   = ["set"]
+  , _help   = "<value> - Update the value associated with your nick."
+  , _action = go
+  }
 
   where
     go args _ ev = return $ do

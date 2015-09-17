@@ -3,22 +3,23 @@
 
 module Yukibot.Plugins.Brainfuck (brainfuck, command, command8bit) where
 
-import Control.Applicative ((<$), (<$>))
 import Control.Lens hiding (noneOf)
-import Control.Monad                (when)
+import Control.Monad (when)
 import Control.Monad.IO.Class
-import Control.Monad.Trans.State    (State, execState)
-import qualified Data.DList as D
-import Data.Maybe                   (fromMaybe)
-import Data.Text                    (Text)
-import qualified Data.Text as T
+import Control.Monad.Trans.State (State, execState)
+import Data.Maybe (fromMaybe)
+import Data.Text (Text)
 import Network.IRC.Asakura.Commands (CommandDef(..))
-import Network.IRC.Asakura.Types    (Bot)
-import Network.IRC.Client           (UnicodeEvent, IRC, IRCState, reply)
+import Network.IRC.Asakura.Types (Bot)
+import Network.IRC.Client (UnicodeEvent, IRC, IRCState, reply)
 import System.Timeout
 import Text.Parsec hiding (State)
 import Text.Parsec.Text
-import Yukibot.Utils.Types          (Zipper(..), left, right, focus)
+
+import Yukibot.Utils.Types
+
+import qualified Data.DList as D
+import qualified Data.Text  as T
 
 {-# ANN module ("HLint: ignore Use String" :: String) #-}
 
@@ -35,17 +36,19 @@ data BFElement = L | R | P Int | I | O | Loop [BFElement]
 type BFProgram = [BFElement]
 
 -- |The state of a brainfuck program is its tape, its input, and its output.
-data BFState = BFState { _tape   :: Zipper Int
-                       , _input  :: [Char]
-                       , _output :: D.DList Char
-                       }
+data BFState = BFState
+  { _tape   :: Zipper Int
+  , _input  :: [Char]
+  , _output :: D.DList Char
+  }
 makeLenses ''BFState
 
 defaultBFState :: BFState
-defaultBFState = BFState { _tape = Z (repeat 0) 0 (repeat 0)
-                         , _input = ""
-                         , _output = D.empty
-                         }
+defaultBFState = BFState
+  { _tape = Z (repeat 0) 0 (repeat 0)
+  , _input = ""
+  , _output = D.empty
+  }
 
 consumeElement :: Bool -> BFElement -> State BFState ()
 consumeElement is8bit (P z) = tape.focus %= (\x -> let x' = x + z in if is8bit then x' `mod` 256 else x')
@@ -55,13 +58,12 @@ consumeElement _ I = tape.focus.enum <~ input %%= fromMaybe ('\0', "") . Control
 consumeElement _ O = do
   c <- use (tape.focus)
   output <>= D.singleton (toEnum c)
-consumeElement is8bit (Loop l) = go
-  where
-    go = do
-      c <- use (tape.focus)
-      when (c /= 0) $ do
-        mapM_ (consumeElement is8bit) l
-        go
+consumeElement is8bit (Loop l) = go where
+  go = do
+    c <- use (tape.focus)
+    when (c /= 0) $ do
+      mapM_ (consumeElement is8bit) l
+      go
 
 consumeProgram :: Bool -> BFProgram -> State BFState ()
 consumeProgram is8bit = mapM_ (consumeElement is8bit)
