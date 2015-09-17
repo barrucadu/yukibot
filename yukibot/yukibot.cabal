@@ -70,6 +70,7 @@ executable yukibot
                      , Yukibot.Plugins.LinkInfo.Soundcloud
                      , Yukibot.Plugins.LinkInfo.Youtube
                      , Yukibot.Plugins.Memory
+                     , Yukibot.Plugins.Mueval
                      , Yukibot.Plugins.Seen
                      , Yukibot.Plugins.Trigger
                      , Yukibot.Utils
@@ -99,6 +100,7 @@ executable yukibot
                      , mongoDB      >=2.0
                      , network-uri  >=2.5
                      , parsec       >=3.0.0
+                     , process      >=1.2
                      , random       >=1.0
                      , regex-tdfa   >=1.2
                      , stm          >=2.4

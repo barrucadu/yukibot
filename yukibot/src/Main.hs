@@ -29,6 +29,7 @@ import qualified Yukibot.Plugins.Dedebtifier     as D
 import qualified Yukibot.Plugins.Initialise      as I
 import qualified Yukibot.Plugins.LinkInfo        as L
 import qualified Yukibot.Plugins.Memory          as M
+import qualified Yukibot.Plugins.Mueval          as Mu
 import qualified Yukibot.Plugins.Seen            as S
 import qualified Yukibot.Plugins.Trigger         as T
 
@@ -94,13 +95,19 @@ runWithState fp ys = do
   registerCommand cs $ BL.wrapsCmd bs "debts"    $  D.owedCmd ds
   registerCommand cs $ BL.wrapsCmd bs "debts"    $  D.payCmd  ds
   registerCommand cs $ BL.wrapsCmd bs "debts"    $  D.listCmd ds
+  registerCommand cs $ BL.wrapsCmd bs "eval"        Mu.evalCommand
+  registerCommand cs $ BL.wrapsCmd bs "type"        Mu.typeCommand
+  registerCommand cs $ BL.wrapsCmd bs "kind"        Mu.kindCommand
 
   -- Register event handlers
   addGlobalEventHandler' state $ C.eventRunner cs
 
-  addGlobalEventHandler' state $ BL.wraps bs "seen"       S.eventHandler
-  addGlobalEventHandler' state $ BL.wraps bs "linkinfo" $ L.eventHandler ls
-  addGlobalEventHandler' state $ BL.wraps bs "triggers"   T.eventHandler
+  addGlobalEventHandler' state $ BL.wraps bs "seen"          S.eventHandler
+  addGlobalEventHandler' state $ BL.wraps bs "linkinfo"    $ L.eventHandler ls
+  addGlobalEventHandler' state $ BL.wraps bs "triggers"      T.eventHandler
+  addGlobalEventHandler' state $ BL.wraps bs "inline-eval"   Mu.evalEvent
+  addGlobalEventHandler' state $ BL.wraps bs "inline-eval"   Mu.typeEvent
+  addGlobalEventHandler' state $ BL.wraps bs "inline-eval"   Mu.kindEvent
 
   addGlobalEventHandler' state $ P.wrapsEv ps (P.Trusted 0) CH.inviteEv
 

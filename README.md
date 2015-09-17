@@ -31,3 +31,5 @@ is pulled in at the moment as a git submodule.
 ### yukibot: IRC bot
 
  - See `Yukibot.Plugins` for current functionality.
+
+Note: The evaluation plugin depends on mueval and show
