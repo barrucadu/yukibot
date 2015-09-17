@@ -76,7 +76,7 @@ eventHandler = AsakuraEventHandler
   where
     go _ ev =
       case _message ev of
-        Privmsg _ (Right msg) | ">" `isPrefixOf` msg -> do
+        Privmsg _ (Right msg) | "> " `isPrefixOf` msg -> do
           let expr = T.strip . T.drop 1 $ msg
           mc <- cfgGet' defaultMuevalCfg "mueval"
           res <- mueval mc expr
