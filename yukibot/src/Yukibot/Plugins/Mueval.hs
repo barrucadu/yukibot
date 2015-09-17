@@ -14,7 +14,6 @@ import Control.Monad.IO.Class       (MonadIO, liftIO)
 import Data.Aeson                   (FromJSON(..), ToJSON(..), Value(..), (.=), (.:?), (.!=), object)
 import Data.ByteString.Lazy         (toStrict)
 import Data.Char                    (isSpace)
-import Data.Default.Class           (Default(..))
 import Data.Text                    (Text, isPrefixOf, unpack, pack)
 import Data.Text.Encoding           (decodeUtf8)
 import Network.IRC.Asakura.Commands (CommandDef(..))
@@ -43,12 +42,12 @@ instance ToJSON MuevalCfg where
                      ]
 
 instance FromJSON MuevalCfg where
-  parseJSON (Object v) = MC <$> v .:? "mueval"   .!= _mueval   def
-                            <*> v .:? "loadfile" .!= _loadfile def
+  parseJSON (Object v) = MC <$> v .:? "mueval"   .!= _mueval   defaultMuevalCfg
+                            <*> v .:? "loadfile" .!= _loadfile defaultMuevalCfg
   parseJSON _ = fail "Expected object"
 
-instance Default MuevalCfg where
-  def = MC "mueval" "L.hs"
+defaultMuevalCfg :: MuevalCfg
+defaultMuevalCfg = MC "mueval" "L.hs"
 
 -- *External usage
 
@@ -61,7 +60,7 @@ command = CommandDef
              }
   where
     go args _ ev = do
-      mc <- cfgGet' def "mueval"
+      mc <- cfgGet' defaultMuevalCfg "mueval"
       res <- mueval mc $ T.intercalate " " args
       return $ replyOrPaste ev res
 
@@ -79,7 +78,7 @@ eventHandler = AsakuraEventHandler
       case _message ev of
         Privmsg _ (Right msg) | ">" `isPrefixOf` msg -> do
           let expr = T.strip . T.drop 1 $ msg
-          mc <- cfgGet' def "mueval"
+          mc <- cfgGet' defaultMuevalCfg "mueval"
           res <- mueval mc expr
           return $ replyOrPaste ev res
         _ -> return $ return ()
