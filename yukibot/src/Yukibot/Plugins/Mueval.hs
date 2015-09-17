@@ -111,7 +111,7 @@ mueval mc expr = liftIO $ do
 
       _ -> do
         let o = strip out
-        let e = strip out
+        let e = strip err
         case () of
           _ | null o && null e -> "Terminated"
             | null o          -> e
