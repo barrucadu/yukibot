@@ -1,0 +1,7 @@
+flags: {}
+packages:
+- yukibot/
+- asakura/
+extra-deps:
+- wreq-sb-0.4.0.0
+resolver: nightly-2015-09-13

@@ -1,3 +1,0 @@
-[submodule "irc-client"]
-	path = irc-client
-	url = https://github.com/barrucadu/irc-client.git
