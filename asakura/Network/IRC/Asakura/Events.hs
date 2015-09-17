@@ -9,14 +9,15 @@ module Network.IRC.Asakura.Events
  , runAlways
  ) where
 
-import Control.Concurrent.STM     (STM, atomically, readTVar, writeTVar)
-import Control.Monad              (join)
-import Control.Monad.IO.Class     (MonadIO, liftIO)
+import Control.Concurrent.STM (STM, atomically, readTVar, writeTVar)
+import Control.Monad (join)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ask, runReaderT)
-import Data.ByteString            (ByteString)
-import Data.Text                  (Text)
+import Data.ByteString (ByteString)
+import Data.Text (Text)
+import Network.IRC.Client.Types (Event(..), EventHandler, ConnectionConfig(..), InstanceConfig(..), IRCState, Source(..))
+
 import Network.IRC.Asakura.Types
-import Network.IRC.Client.Types   (Event(..), EventHandler, ConnectionConfig(..), InstanceConfig(..), IRCState, Source(..))
 
 import qualified Network.IRC.Client.Types as IT
 
@@ -68,19 +69,22 @@ addLocalEventHandler h state = do
 -- |Demote an Asakura event handler to an irc-client event handler.
 demote :: BotState -> AsakuraEventHandler -> IRCState -> EventHandler
 demote state h ircstate = IT.EventHandler
-                            { IT._description = _description h
-                            , IT._matchType   = _matchType h
-                            , IT._eventFunc   = \e -> join . liftIO $ runReaderT (demoted e) state
-                            }
-    where network = _server $ IT.getConnectionConfig ircstate
-          demoted ev = do
-            active <- case _source ev of
-                       Channel c _ -> _appliesTo h network c
-                       _           -> _appliesDef h network
+  { IT._description = _description h
+  , IT._matchType   = _matchType h
+  , IT._eventFunc   = \e -> join . liftIO $ runReaderT (demoted e) state
+  }
 
-            if active
-            then _eventFunc h ircstate ev
-            else return $ return ()
+  where
+    network = _server $ IT.getConnectionConfig ircstate
+
+    demoted ev = do
+      active <- case _source ev of
+                 Channel c _ -> _appliesTo h network c
+                 _           -> _appliesDef h network
+
+      if active
+      then _eventFunc h ircstate ev
+      else return $ return ()
 
 -- *Constructing event handlers
 

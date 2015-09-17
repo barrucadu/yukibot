@@ -1,28 +1,29 @@
 -- |Functions for dealing with a client connected to multiple IRC
 -- networks.
 module Network.IRC.Asakura
-    ( -- *Blocking
-      block
-    , blockWithState
-    -- *Networks
-    , addNetwork
-    -- *Events
-    , addGlobalEventHandler
-    , addGlobalEventHandler'
-    , runEverywhere
-    , runAlways
-    ) where
+  ( -- *Blocking
+    block
+  , blockWithState
+  -- *Networks
+  , addNetwork
+  -- *Events
+  , addGlobalEventHandler
+  , addGlobalEventHandler'
+  , runEverywhere
+  , runAlways
+  ) where
 
-import Control.Concurrent         (forkIO)
-import Control.Concurrent.STM     (TVar, atomically, readTVar, retry, writeTVar)
-import Control.Monad              (unless)
-import Control.Monad.IO.Class     (MonadIO, liftIO)
+import Control.Concurrent (forkIO)
+import Control.Concurrent.STM (TVar, atomically, readTVar, retry, writeTVar)
+import Control.Monad (unless)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ask, runReaderT)
-import Data.ByteString            (ByteString)
-import Network.IRC.Asakura.Events (addDefaultHandlers, addGlobalEventHandler, addGlobalEventHandler', runEverywhere, runAlways)
+import Data.ByteString (ByteString)
+import Network.IRC.Client (start')
+import Network.IRC.Client.Types (ConnectionConfig(..), InstanceConfig(..), IRCState, newIRCState)
+
+import Network.IRC.Asakura.Events
 import Network.IRC.Asakura.Types
-import Network.IRC.Client         (start')
-import Network.IRC.Client.Types   (ConnectionConfig(..), InstanceConfig(..), IRCState, newIRCState)
 
 -- *Blocking
 

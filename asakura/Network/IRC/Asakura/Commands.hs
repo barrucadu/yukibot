@@ -3,38 +3,38 @@
 -- |An abstraction over named event handlers which take an argument
 -- list.
 module Network.IRC.Asakura.Commands
-    ( -- *State
-      CommandState
-    , CommandStateSnapshot(..)
-    , CommandDef(..)
-    , defaultCommandState
-    -- *Events
-    , eventRunner
-    -- *Registering commands
-    , registerCommand
-    -- *Miscellaneous
-    , setPrefix
-    , setChannelPrefix
-    , unsetChannelPrefix
-    ) where
+  ( -- *State
+    CommandState
+  , CommandStateSnapshot(..)
+  , CommandDef(..)
+  , defaultCommandState
+  -- *Events
+  , eventRunner
+  -- *Registering commands
+  , registerCommand
+  -- *Miscellaneous
+  , setPrefix
+  , setChannelPrefix
+  , unsetChannelPrefix
+  ) where
 
-import Control.Applicative        ((<$>))
-import Control.Concurrent.STM     (atomically, readTVar, writeTVar)
-import Control.Monad.IO.Class     (MonadIO, liftIO)
-import Data.ByteString            (ByteString)
-import Data.Maybe                 (fromMaybe, mapMaybe)
-import Data.Monoid                ((<>))
-import Data.List                  (stripPrefix)
-import Data.Text                  (Text, isPrefixOf, splitOn)
+import Control.Concurrent.STM (atomically, readTVar, writeTVar)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.ByteString (ByteString)
+import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Monoid ((<>))
+import Data.List (stripPrefix)
+import Data.Text (Text, isPrefixOf, splitOn)
+import Network.IRC.Client (send)
+import Network.IRC.Client.Types ( ConnectionConfig(..)
+                                , Event(..), UnicodeEvent, EventType(..)
+                                , InstanceConfig(..), IRC, IRCState
+                                , Message(..), Source(..)
+                                , getConnectionConfig, getInstanceConfig)
+
 import Network.IRC.Asakura.Commands.State
-import Network.IRC.Asakura.Events (runAlways, runEverywhere)
+import Network.IRC.Asakura.Events
 import Network.IRC.Asakura.Types
-import Network.IRC.Client         (send)
-import Network.IRC.Client.Types   ( ConnectionConfig(..)
-                                  , Event(..), UnicodeEvent, EventType(..)
-                                  , InstanceConfig(..), IRC, IRCState
-                                  , Message(..), Source(..)
-                                  , getConnectionConfig, getInstanceConfig)
 
 import qualified Data.Text as T
 
@@ -44,12 +44,12 @@ import qualified Data.Text as T
 -- this state.
 eventRunner :: CommandState -> AsakuraEventHandler
 eventRunner state = AsakuraEventHandler
-                      { _description = "Run named commands from PRIVMSGs"
-                      , _matchType   = EPrivmsg
-                      , _eventFunc   = runCmd state
-                      , _appliesTo   = runEverywhere
-                      , _appliesDef  = runAlways
-                      }
+  { _description = "Run named commands from PRIVMSGs"
+  , _matchType   = EPrivmsg
+  , _eventFunc   = runCmd state
+  , _appliesTo   = runEverywhere
+  , _appliesDef  = runAlways
+  }
 
 -- |Check if a PRIVMSG is calling a known command and, if so, run it i
 -- the user has appropriate permissions.
@@ -78,58 +78,60 @@ runCmd state ircstate ev = do
 
   -- Try to find a matching command
   case splitCommand nick ev prefix of
-    Just bits -> case findCommand bits commands of
-                  [(_, args, cdef)] -> _action cdef args ircstate ev
-                  [] -> return $ return ()
-                  _ -> return $ ambiguous ev
+    Just bits ->
+      case findCommand bits commands of
+        [(_, args, cdef)] -> _action cdef args ircstate ev
+        [] -> return $ return ()
+        _ -> return $ ambiguous ev
 
     Nothing -> return $ return ()
 
 -- |Strip a command prefix and split it up into parts
 splitCommand :: Text -> UnicodeEvent -> Text -> Maybe [Text]
 splitCommand nick ev prefix = case _source ev of
-                                Channel _ _ -> mapFirst stripPrefix $ prefixes prefix nick
+  Channel _ _ -> mapFirst stripPrefix $ prefixes prefix nick
 
-                              -- The empty string is a valid prefix in queries.
-                                User _      -> mapFirst stripPrefix $ prefixes prefix nick ++ [""]
+  -- The empty string is a valid prefix in queries.
+  User _      -> mapFirst stripPrefix $ prefixes prefix nick ++ [""]
 
-                                _  -> Nothing
+  _  -> Nothing
 
-    where Privmsg _ (Right msg) = _message ev
+  where
+    Privmsg _ (Right msg) = _message ev
 
-          -- Map a Maybe-producing function over a list, returning the
-          -- first Just.
-          mapFirst f (x:xs) = case f x of
-                                Just x' -> Just x'
-                                Nothing -> mapFirst f xs
-          mapFirst _ []     = Nothing
+    -- Map a Maybe-producing function over a list, returning the first
+    -- Just.
+    mapFirst f (x:xs) = maybe (mapFirst f xs) Just $ f x
+    mapFirst _ []     = Nothing
 
-          -- Check if the command has a given prefix and, if so, strip
-          -- it off.
-          stripPrefix pref | pref `isPrefixOf` msg = Just . splitOn " " . T.strip . T.drop (T.length pref) $ msg
-                           | otherwise = Nothing
+    -- Check if the command has a given prefix and, if so, strip it
+    -- off.
+    stripPrefix pref
+      | pref `isPrefixOf` msg = Just . splitOn " " . T.strip . T.drop (T.length pref) $ msg
+      | otherwise = Nothing
 
-          -- List of accepted command prefixes.
-          prefixes pref nck = [ nck <> ":"
-                              , nck <> ","
-                              , "@" <> nck
-                              , nck
-                              , pref
-                              ]
+    -- List of accepted command prefixes.
+    prefixes pref nck =
+      [ nck <> ":"
+      , nck <> ","
+      , "@" <> nck
+      , nck
+      , pref
+      ]
 
 -- |Find all commands which could match this instruction.
 findCommand :: [Text] -> [([Text], CommandDef)] -> [([Text], [Text], CommandDef)]
-findCommand msg = mapMaybe matchCmd
-    where matchCmd (cmd, cdef) = flip ((,,) cmd) cdef <$> stripPrefix cmd msg
+findCommand msg = mapMaybe matchCmd where
+  matchCmd (cmd, cdef) = flip ((,,) cmd) cdef <$> stripPrefix cmd msg
 
 -- |Complain about a command being ambigious.
 --
 -- TODO: Make the response configurable.
 ambiguous :: UnicodeEvent -> IRC ()
 ambiguous ev = case _source ev of
-                 Channel c _ -> send . Privmsg c . Right $ "Ambiguous command: tell off my master."
-                 User    n   -> send . Privmsg n . Right $ "Ambiguous command: tell off my master."
-                 _ -> return ()
+  Channel c _ -> send . Privmsg c . Right $ "Ambiguous command: tell off my master."
+  User    n   -> send . Privmsg n . Right $ "Ambiguous command: tell off my master."
+  _ -> return ()
 
 -- *Registering commands
 
@@ -140,11 +142,11 @@ ambiguous ev = case _source ev of
 -- saves the common case of needing to do so manually in the command
 -- body.
 registerCommand :: MonadIO m
-                => CommandState
-                -- ^The initialised state
-                -> CommandDef
-                -- ^The command handler
-                -> m ()
+  => CommandState
+  -- ^The initialised state
+  -> CommandDef
+  -- ^The command handler
+  -> m ()
 registerCommand state cdef = liftIO . atomically $ do
   let tvarL = _commandList state
 
