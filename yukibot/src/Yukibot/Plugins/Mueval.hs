@@ -278,8 +278,9 @@ runProcess cmd args env input = do
 -- multi-line) and reply with link.
 replyOrPaste :: UnicodeEvent -> String -> IRC ()
 replyOrPaste ev txt
-  | '\n' `elem` txt = paste txt >>= \p -> reply ev $ "Multi-line result: " <> p
-  | otherwise       = reply ev . pack $ shrink txt
+  | length (lines txt) == 1 = reply ev . pack $ shrink txt
+  | length (lines txt) == 2 = reply ev $ pack txt
+  | otherwise = paste txt >>= \p -> reply ev $ "Multi-line result: " <> p
 
 -- |Shrink a long output and add an ellipsis
 shrink :: String -> String
