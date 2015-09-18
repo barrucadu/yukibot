@@ -24,7 +24,6 @@ import Data.ByteString (ByteString)
 import Data.Map (Map)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, isPrefixOf)
-import Network.IRC.Client (reply)
 import Network.IRC.Client.Types ( ConnectionConfig(_server)
                                 , Event(..)
                                 , IRC, IRCState, Source(..)
@@ -35,6 +34,7 @@ import Network.IRC.Client.Types ( ConnectionConfig(_server)
 import Network.IRC.Bot.Blacklist.State
 import Network.IRC.Bot.Commands
 import Network.IRC.Bot.Types
+import Network.IRC.Bot.Utils
 
 import qualified Data.Map as M
 

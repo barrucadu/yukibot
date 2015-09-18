@@ -10,8 +10,9 @@ import Control.Monad.Trans.State (State, execState)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Network.IRC.Bot.Commands (CommandDef(..))
+import Network.IRC.Bot.Events (reply)
 import Network.IRC.Bot.Types (Bot)
-import Network.IRC.Client (UnicodeEvent, IRC, IRCState, reply)
+import Network.IRC.Client (UnicodeEvent, IRC, IRCState)
 import System.Timeout
 import Text.Parsec hiding (State)
 import Text.Parsec.Text

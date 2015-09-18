@@ -10,9 +10,8 @@ module Yukibot.Plugins.Seen
 
 import Data.Monoid ((<>))
 import Network.IRC.Bot.Commands (CommandDef(..))
-import Network.IRC.Bot.Events (runEverywhere)
+import Network.IRC.Bot.Events (reply, runEverywhere)
 import Network.IRC.Bot.Types (EventHandler(..), Bot)
-import Network.IRC.Client (reply)
 import Network.IRC.Client.Types ( ConnectionConfig(_server)
                                 , Event(..), EventType(EPrivmsg)
                                 , IRC, IRCState

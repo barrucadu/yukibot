@@ -7,6 +7,8 @@ module Network.IRC.Bot.Events
   -- *Constructing event handlers
  , runEverywhere
  , runAlways
+ -- *Utils
+ , reply
  ) where
 
 import Control.Concurrent.STM (STM, atomically, readTVar, writeTVar)
@@ -18,6 +20,7 @@ import Data.Text (Text)
 import Network.IRC.Client.Types (Event(..), ConnectionConfig(..), InstanceConfig(..), IRCState, Source(..))
 
 import Network.IRC.Bot.Types
+import Network.IRC.Bot.Utils
 
 import qualified Network.IRC.Client.Types as IT
 

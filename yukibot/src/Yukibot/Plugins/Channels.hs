@@ -16,7 +16,7 @@ module Yukibot.Plugins.Channels
 import Network.IRC.Bot.Commands
 import Network.IRC.Bot.Events
 import Network.IRC.Bot.Types
-import Network.IRC.Client (Event(..), EventType(..), Message(..), Source(..), reply, send)
+import Network.IRC.Client (Event(..), EventType(..), Message(..), Source(..), send)
 import Network.IRC.Client.Types (ConnectionConfig(..), connectionConfig)
 
 -- |Join a channel. The first argument is the name of the channel to

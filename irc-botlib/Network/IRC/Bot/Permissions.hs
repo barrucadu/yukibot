@@ -27,11 +27,12 @@ import Data.ByteString (ByteString)
 import Data.List (sort)
 import Data.Maybe (catMaybes, listToMaybe)
 import Data.Text (Text)
-import Network.IRC.Client (ConnectionConfig(..), Event(..), Source(..), getConnectionConfig, reply)
+import Network.IRC.Client (ConnectionConfig(..), Event(..), Source(..), getConnectionConfig)
 
 import Network.IRC.Bot.Commands
 import Network.IRC.Bot.Permissions.State
 import Network.IRC.Bot.Types
+import Network.IRC.Bot.Utils
 
 -- *Integration
 

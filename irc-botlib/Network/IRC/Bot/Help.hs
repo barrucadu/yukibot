@@ -7,9 +7,9 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.List (sort)
 import Data.Monoid ((<>))
 import Data.Text (Text, intercalate)
-import Network.IRC.Client (reply)
 
 import Network.IRC.Bot.Commands.State
+import Network.IRC.Bot.Utils
 
 import qualified Data.Text as T
 
