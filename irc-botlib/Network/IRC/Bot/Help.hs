@@ -15,7 +15,7 @@ import qualified Data.Text as T
 
 -- |Reply to the command with a list of all commands, or the
 -- description of a command if one is given.
-helpCmd :: CommandState -> CommandDef
+helpCmd :: CommandState s -> CommandDef s
 helpCmd cs = CommandDef
   { _verb   = ["help"]
   , _help   = "[<command>] - Display a list of commands, or information about one command."
@@ -27,13 +27,13 @@ helpCmd cs = CommandDef
     go vs _ ev = liftM (reply ev) $ commandDesc cs vs
 
 -- |Get a list of all commands.
-listCommands :: MonadIO m => CommandState -> m Text
+listCommands :: MonadIO m => CommandState s -> m Text
 listCommands cs = do
   commands <- liftIO . atomically . readTVar . _commandList $ cs
   return $ "Commands: " <> intercalate ", " (sort $ map (T.unwords . fst) commands)
 
 -- |Get the description for a command.
-commandDesc :: MonadIO m => CommandState -> [Text] -> m Text
+commandDesc :: MonadIO m => CommandState s -> [Text] -> m Text
 commandDesc cs verb = do
   commands <- liftIO . atomically . readTVar . _commandList $ cs
   return . maybe "I can't find that command" _help $ lookup verb commands

@@ -21,7 +21,7 @@ import Network.IRC.Client.Types (ConnectionConfig(..), connectionConfig)
 
 -- |Join a channel. The first argument is the name of the channel to
 -- join.
-joinCmd :: CommandDef
+joinCmd :: CommandDef s
 joinCmd = CommandDef
   { _verb   = ["join"]
   , _help   = "Join a named channel."
@@ -33,7 +33,7 @@ joinCmd = CommandDef
     go _ _ ev = return $ reply ev "Tell me which channel!"
 
 -- |Part a channel.
-partCmd :: CommandDef
+partCmd :: CommandDef s
 partCmd = CommandDef
   { _verb   = ["part"]
   , _help   = "Leave the current channel."
@@ -48,7 +48,7 @@ partCmd = CommandDef
         _           -> return ()
 
 -- |Set the channel-specific prefix
-setChanPrefix :: CommandState -> CommandDef
+setChanPrefix :: CommandState s -> CommandDef s
 setChanPrefix cs = CommandDef
   { _verb   = ["set", "prefix"]
   , _help   = "Set the command prefix for this channel."
@@ -64,7 +64,7 @@ setChanPrefix cs = CommandDef
     go [] _ ev = return . reply ev $ "You need to give me a new prefix!"
 
 -- |Unset the channel-specific prefix
-unsetChanPrefix :: CommandState -> CommandDef
+unsetChanPrefix :: CommandState s -> CommandDef s
 unsetChanPrefix cs = CommandDef
   { _verb   = ["unset", "prefix"]
   , _help   = "Remove the command prefix for this channel."
@@ -79,7 +79,7 @@ unsetChanPrefix cs = CommandDef
         _           -> reply ev "This isn't a channel!"
 
 -- | Respond to INVITE.
-inviteEv :: EventHandler
+inviteEv :: EventHandler s
 inviteEv = EventHandler
   { _description = "Join channels INVITEd to."
   , _matchType   = EInvite

@@ -6,6 +6,7 @@ module Network.IRC.Bot
   , blockWithState
   -- *Networks
   , addNetwork
+  , addNetworkStateful
   -- *Events
   , addGlobalEventHandler
   , addGlobalEventHandler'
@@ -32,11 +33,11 @@ block :: MonadIO m => m ()
 block = newBotState >>= blockWithState
 
 -- |Run the supplied bot configuration
-blockWithState :: MonadIO m => BotState -> m ()
+blockWithState :: MonadIO m => BotState s -> m ()
 blockWithState = liftIO . runReaderT block'
 
 -- |Block until all networks have been disconnected from
-block' :: Bot ()
+block' :: StatefulBot s ()
 block' = do
   state <- ask
 
@@ -49,15 +50,19 @@ block' = do
 
 -- |Add an initialised network to the bot: give it the default event
 -- handlers and set up the disconnect handler.
-addNetwork :: ConnectionConfig -> InstanceConfig -> Bot IRCState
-addNetwork cconf iconf = do
+addNetwork :: ConnectionConfig () -> InstanceConfig () -> Bot (IRCState ())
+addNetwork cconf iconf = addNetworkStateful cconf iconf ()
+
+-- | Like  'addNetwork' but for clients with state.
+addNetworkStateful :: ConnectionConfig s -> InstanceConfig s -> s -> StatefulBot s (IRCState s)
+addNetworkStateful cconf iconf s = do
   let network = _server cconf
 
   state <- ask
 
   -- Construct the initial state
   let cconf' = cconf { _disconnect = liftIO . asakuraDisconnectHandler network . _connections $ state }
-  ircstate <- newIRCState cconf' iconf
+  ircstate <- newIRCState cconf' iconf s
   addDefaultHandlers ircstate
 
   -- Fork off the client into its own thread

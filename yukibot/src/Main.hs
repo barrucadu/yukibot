@@ -121,7 +121,7 @@ runWithState fp ys = do
   save fp ys
 
 -- |Handle a signal by disconnecting from every IRC network.
-handler :: BotState -> IO ()
+handler :: BotState () -> IO ()
 handler botstate = (atomically . readTVar . _connections $ botstate) >>= mapM_ (runReaderT dc . snd) where
   dc = do
     send . Quit $ Just "Process interrupted."

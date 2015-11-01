@@ -37,7 +37,7 @@ rulebits rnum = reverse [testBit rnum i | i <- [0..7]]
 
 -- *Command
 
-command :: CommandDef
+command :: CommandDef s
 command = CommandDef
   { _verb   = ["rule"]
   , _help   = "<rule> [[<steps>] <initial>] - run the given cellular automaton."

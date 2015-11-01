@@ -26,7 +26,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text, isPrefixOf)
 import Network.IRC.Client.Types ( ConnectionConfig(_server)
                                 , Event(..)
-                                , IRC, IRCState, Source(..)
+                                , StatefulIRC, IRCState, Source(..)
                                 , UnicodeEvent
                                 , connectionConfig
                                 , getConnectionConfig)
@@ -42,7 +42,7 @@ import qualified Data.Map as M
 
 -- |Usage: "<command> <plugin>" in channel, or "<command> <channel>
 -- <plugin>" in query
-blacklistCmd :: BlacklistState -> CommandDef
+blacklistCmd :: BlacklistState -> CommandDef s
 blacklistCmd bs = CommandDef
   { _verb   = ["blacklist"]
   , _help   = "Prevent a named entity from running."
@@ -50,14 +50,14 @@ blacklistCmd bs = CommandDef
   }
 
 -- |Same usage as 'blacklistCmd'.
-whitelistCmd :: BlacklistState -> CommandDef
+whitelistCmd :: BlacklistState -> CommandDef s
 whitelistCmd bs = CommandDef
   { _verb   = ["whitelist"]
   , _help   = "Remove a named entity from the blacklist."
   , _action = doCmd (whitelist bs)
   }
 
-doCmd :: (ByteString -> Text -> Text -> IRC ()) -> [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
+doCmd :: (ByteString -> Text -> Text -> StatefulIRC s ()) -> [Text] -> IRCState s -> UnicodeEvent -> StatefulBot s (StatefulIRC s ())
 doCmd f (x:xs) _ ev = return $ do
   network <- _server <$> connectionConfig
 
@@ -96,11 +96,11 @@ ifNotBlacklisted bs plugin network channel = liftIO . atomically $ do
     netw bl = M.empty `fromMaybe` M.lookup network bl
 
 -- |Produce a new event handler which respects the blacklist
-wraps :: BlacklistState -> Text -> EventHandler -> EventHandler
+wraps :: BlacklistState -> Text -> EventHandler s -> EventHandler s
 wraps bs plugin evh = evh { _appliesTo = ifNotBlacklisted bs plugin }
 
 -- |Produce a new command which respects the blacklist
-wrapsCmd :: BlacklistState -> Text -> CommandDef -> CommandDef
+wrapsCmd :: BlacklistState -> Text -> CommandDef s -> CommandDef s
 wrapsCmd bs name cdef = cdef { _action = wrapped $ _action cdef } where
   wrapped f args ircstate ev = do
     let network = _server $ getConnectionConfig ircstate

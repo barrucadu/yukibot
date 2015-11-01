@@ -23,7 +23,7 @@ import qualified Yukibot.Plugins.LinkInfo    as L
 
 -- |The live state of the bot.
 data YukibotState = YS
-  { _commandState    :: C.CommandState
+  { _commandState    :: C.CommandState ()
   , _permissionState :: P.PermissionState
   , _linkinfoState   :: L.LinkInfoCfg
   , _blacklistState  :: BL.BlacklistState
@@ -34,7 +34,7 @@ data YukibotState = YS
 
 -- |A snapshot of the bot.
 data YukibotStateSnapshot = YSS
-  { _commandSnapshot    :: C.CommandStateSnapshot
+  { _commandSnapshot    :: C.CommandStateSnapshot ()
   , _permissionSnapshot :: P.PermissionStateSnapshot
   , _linkinfoSnapshot   :: L.LinkInfoCfg
   , _blacklistSnapshot  :: BL.BlacklistStateSnapshot

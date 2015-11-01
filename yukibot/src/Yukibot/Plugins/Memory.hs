@@ -125,7 +125,7 @@ simpleFactStore ms fact = SimpleFactStore
 -- the named user (or the suer themselves, if no nick was given).
 --
 -- syntax: <prefix><command name> [nick]
-simpleGetCommand :: SimpleFactStore -> CommandDef
+simpleGetCommand :: SimpleFactStore -> CommandDef s
 simpleGetCommand sfs = CommandDef
   { _verb   = ["get"]
   , _help   = "<nick> - Look up the value associated with the nick."
@@ -150,7 +150,7 @@ simpleGetCommand sfs = CommandDef
 -- |Allow users to set the fact value on themselves.
 --
 -- Syntax: <prefix><command name> value
-simpleSetCommand :: SimpleFactStore -> CommandDef
+simpleSetCommand :: SimpleFactStore -> CommandDef s
 simpleSetCommand sfs = CommandDef
   { _verb   = ["set"]
   , _help   = "<value> - Update the value associated with your nick."

@@ -28,18 +28,18 @@ import qualified Network.IRC.Client.Types as IT
 
 -- |Add a new event handler to all networks, and to the list of event
 -- handlers added to new connections by default.
-addGlobalEventHandler :: EventHandler -> Bot ()
+addGlobalEventHandler :: EventHandler s -> StatefulBot s ()
 addGlobalEventHandler h = do
   state  <- ask
   addGlobalEventHandler' state h
 
 -- |Like 'addGlobalEventHandler', but takes the bot state as a
 -- parameter and runs in IO.
-addGlobalEventHandler' :: MonadIO m => BotState -> EventHandler -> m ()
+addGlobalEventHandler' :: MonadIO m => BotState s -> EventHandler s -> m ()
 addGlobalEventHandler' state h = liftIO . atomically $ addGlobalEventHandlerSTM state h
 
 -- |Add the default handlers to an IRC client.
-addDefaultHandlers :: IRCState -> Bot ()
+addDefaultHandlers :: IRCState s -> StatefulBot s ()
 addDefaultHandlers ircstate = do
   state <- ask
   liftIO . atomically $ do
@@ -47,7 +47,7 @@ addDefaultHandlers ircstate = do
     mapM_ (\h -> addLocalEventHandler (demote state h) ircstate) defaults
 
 -- |Add an event handler to all networks.
-addGlobalEventHandlerSTM :: BotState -> EventHandler -> STM ()
+addGlobalEventHandlerSTM :: BotState s -> EventHandler s -> STM ()
 addGlobalEventHandlerSTM state h = do
   -- Atomically get all current networks, add the handler to them, and
   -- then add it to the defaults.
@@ -59,7 +59,7 @@ addGlobalEventHandlerSTM state h = do
   writeTVar (_defHandlers state) $ h : defaults
 
 -- |Add an event handler to a single IRC client state
-addLocalEventHandler :: (IRCState -> IT.EventHandler) -> IRCState -> STM ()
+addLocalEventHandler :: (IRCState s -> IT.EventHandler s) -> IRCState s -> STM ()
 addLocalEventHandler h state = do
   -- Get the instance config of the specific IRC client
   let tvarIC = IT.getInstanceConfig state
@@ -70,7 +70,7 @@ addLocalEventHandler h state = do
   writeTVar tvarIC iconf'
 
 -- |Demote an Asakura event handler to an irc-client event handler.
-demote :: BotState -> EventHandler -> IRCState -> IT.EventHandler
+demote :: BotState s -> EventHandler s -> IRCState s -> IT.EventHandler s
 demote state h ircstate = IT.EventHandler
   { IT._description = _description h
   , IT._matchType   = _matchType h
@@ -92,10 +92,10 @@ demote state h ircstate = IT.EventHandler
 -- *Constructing event handlers
 
 -- |Helper for when you want an event handler to run in all channels.
-runEverywhere :: ByteString -> Text -> Bot Bool
+runEverywhere :: ByteString -> Text -> StatefulBot s Bool
 runEverywhere _ _ = return True
 
 -- |Helper for when you want an event handler to run always outside of
 -- channels.
-runAlways :: ByteString -> Bot Bool
+runAlways :: ByteString -> StatefulBot s Bool
 runAlways _ = return True

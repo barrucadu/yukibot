@@ -38,7 +38,7 @@ import Network.IRC.Bot.Utils
 
 -- |Take as input a command, and produce a new command which will only
 -- run if the user meets the required minimum permission.
-wrapsCmd :: PermissionState -> PermissionLevel -> CommandDef -> CommandDef
+wrapsCmd :: PermissionState -> PermissionLevel -> CommandDef s -> CommandDef s
 wrapsCmd pstate perm cdef = cdef { _action = wrapped $ _action cdef } where
   wrapped f args ircstate ev = do
     allowed <- isAllowed ircstate ev
@@ -60,7 +60,7 @@ wrapsCmd pstate perm cdef = cdef { _action = wrapped $ _action cdef } where
 -- |Take as input an event handler, and produce a new event handler
 -- which will only run if the user meets the required minimum
 -- permission.
-wrapsEv :: PermissionState -> PermissionLevel -> EventHandler -> EventHandler
+wrapsEv :: PermissionState -> PermissionLevel -> EventHandler s -> EventHandler s
 wrapsEv pstate perm edef = edef { _eventFunc = wrapped $ _eventFunc edef } where
   wrapped f ircstate ev = do
     allowed <- isAllowed ircstate ev

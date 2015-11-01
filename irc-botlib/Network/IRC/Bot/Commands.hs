@@ -28,7 +28,7 @@ import Data.Text (Text, isPrefixOf, splitOn)
 import Network.IRC.Client (send)
 import Network.IRC.Client.Types ( ConnectionConfig(..)
                                 , Event(..), UnicodeEvent, EventType(..)
-                                , InstanceConfig(..), IRC, IRCState
+                                , InstanceConfig(..), StatefulIRC, IRCState
                                 , Message(..), Source(..)
                                 , getConnectionConfig, getInstanceConfig)
 
@@ -42,7 +42,7 @@ import qualified Data.Text as T
 
 -- |Construct an event handler which will run commands registered in
 -- this state.
-eventRunner :: CommandState -> EventHandler
+eventRunner :: CommandState s -> EventHandler s
 eventRunner state = EventHandler
   { _description = "Run named commands from PRIVMSGs"
   , _matchType   = EPrivmsg
@@ -53,7 +53,7 @@ eventRunner state = EventHandler
 
 -- |Check if a PRIVMSG is calling a known command and, if so, run it i
 -- the user has appropriate permissions.
-runCmd :: CommandState -> IRCState -> UnicodeEvent -> Bot (IRC ())
+runCmd :: CommandState s -> IRCState s -> UnicodeEvent -> StatefulBot s (StatefulIRC s ())
 runCmd state ircstate ev = do
   -- Extract the channel name, if there is one, so we can use the
   -- channel-specific prefix.
@@ -120,14 +120,14 @@ splitCommand nick ev prefix = case _source ev of
       ]
 
 -- |Find all commands which could match this instruction.
-findCommand :: [Text] -> [([Text], CommandDef)] -> [([Text], [Text], CommandDef)]
+findCommand :: [Text] -> [([Text], CommandDef s)] -> [([Text], [Text], CommandDef s)]
 findCommand msg = mapMaybe matchCmd where
   matchCmd (cmd, cdef) = flip ((,,) cmd) cdef <$> stripPrefix cmd msg
 
 -- |Complain about a command being ambigious.
 --
 -- TODO: Make the response configurable.
-ambiguous :: UnicodeEvent -> IRC ()
+ambiguous :: UnicodeEvent -> StatefulIRC s ()
 ambiguous ev = case _source ev of
   Channel c _ -> send . Privmsg c . Right $ "Ambiguous command: tell off my master."
   User    n   -> send . Privmsg n . Right $ "Ambiguous command: tell off my master."
@@ -142,9 +142,9 @@ ambiguous ev = case _source ev of
 -- saves the common case of needing to do so manually in the command
 -- body.
 registerCommand :: MonadIO m
-  => CommandState
+  => CommandState s
   -- ^The initialised state
-  -> CommandDef
+  -> CommandDef s
   -- ^The command handler
   -> m ()
 registerCommand state cdef = liftIO . atomically $ do
@@ -156,11 +156,11 @@ registerCommand state cdef = liftIO . atomically $ do
 -- *Miscellaneous
 
 -- |Change the command prefix.
-setPrefix :: MonadIO m => CommandState -> Text -> m ()
+setPrefix :: MonadIO m => CommandState s -> Text -> m ()
 setPrefix state prefix = liftIO . atomically $ writeTVar (_commandPrefix state) prefix
 
 -- |Change the command prefix for a specific channel.
-setChannelPrefix :: MonadIO m => CommandState -> ByteString -> Text -> Text -> m ()
+setChannelPrefix :: MonadIO m => CommandState s -> ByteString -> Text -> Text -> m ()
 setChannelPrefix state network channel prefix = liftIO . atomically $ do
   let tvarCP = _channelPrefixes state
 
@@ -168,7 +168,7 @@ setChannelPrefix state network channel prefix = liftIO . atomically $ do
   writeTVar tvarCP $ ((network, channel), prefix) : filter ((/=(network, channel)) . fst) prefixes
 
 -- |Remove the command prefix for a specific channel.
-unsetChannelPrefix :: MonadIO m => CommandState -> ByteString -> Text -> m ()
+unsetChannelPrefix :: MonadIO m => CommandState s -> ByteString -> Text -> m ()
 unsetChannelPrefix state network channel = liftIO . atomically $ do
   let tvarCP = _channelPrefixes state
 

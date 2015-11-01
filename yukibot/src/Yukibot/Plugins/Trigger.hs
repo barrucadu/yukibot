@@ -52,7 +52,7 @@ data Response = TR
 --
 -- Triggers are matched by stripping leading and trailing whitespace
 -- and by ignoring case.
-eventHandler :: EventHandler
+eventHandler :: EventHandler ()
 eventHandler = EventHandler
   { _description = "Respond to messages consisting of trigger phrases."
   , _matchType   = EPrivmsg
@@ -61,7 +61,7 @@ eventHandler = EventHandler
   , _appliesDef  = runAlways
   }
 
-eventFunc :: IRCState -> UnicodeEvent -> Bot (IRC ())
+eventFunc :: IRCState () -> UnicodeEvent -> Bot (IRC ())
 eventFunc _ ev = do
   mongo    <- defaultMongo "triggers"
   triggers <- queryMongo mongo [] []
@@ -117,7 +117,7 @@ respond ev rs = do
 --
 -- Because triggers can be arbitrary text, " <reply> " is used to
 -- delimit the trigger and the response.
-addTriggerCmd :: CommandDef
+addTriggerCmd :: CommandDef ()
 addTriggerCmd = CommandDef
   { _verb = ["add", "trigger"]
   , _help = "<trigger> \\<reply\\> <response> -- add a trigger, as triggers can be arbitrary text, '<reply>' is used to delimit the trigger and the response. Regex triggers start and end with '/'. \\<reply <num>\\> can be used to set the probability (0 to 1)."
@@ -150,7 +150,7 @@ addTriggerCmd = CommandDef
         return $ return ()
 
 -- Remove a trigger
-rmTriggerCmd :: CommandDef
+rmTriggerCmd :: CommandDef ()
 rmTriggerCmd = CommandDef
   { _verb = ["remove", "trigger"]
   , _help = "<trigger> - remove the named trigger"
@@ -164,7 +164,7 @@ rmTriggerCmd = CommandDef
       return $ return ()
 
 -- |List all triggers, by uploading to sprunge
-listTriggerCmd :: CommandDef
+listTriggerCmd :: CommandDef ()
 listTriggerCmd = CommandDef
   { _verb = ["list", "triggers"]
   , _help = "List all the current triggers"

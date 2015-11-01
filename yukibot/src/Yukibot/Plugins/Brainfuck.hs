@@ -11,8 +11,8 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Network.IRC.Bot.Commands (CommandDef(..))
 import Network.IRC.Bot.Events (reply)
-import Network.IRC.Bot.Types (Bot)
-import Network.IRC.Client (UnicodeEvent, IRC, IRCState)
+import Network.IRC.Bot.Types (StatefulBot)
+import Network.IRC.Client (UnicodeEvent, StatefulIRC, IRCState)
 import System.Timeout
 import Text.Parsec hiding (State)
 import Text.Parsec.Text
@@ -93,21 +93,21 @@ brainfuck is8bit program i = case parse parseProgram "" program of
   Left _ -> Nothing
   Right prog -> Just $ T.pack . D.toList . runProgram is8bit prog $ T.unpack i
 
-command :: CommandDef
+command :: CommandDef s
 command = CommandDef
   { _verb   = ["bf"]
   , _help   = "<program> - run the given brainfuck program."
   , _action = commandAction False
   }
 
-command8bit :: CommandDef
+command8bit :: CommandDef s
 command8bit = CommandDef
   { _verb   = ["bf8"]
   , _help   = "<program> - run the given brainfuck program with 8-bit cells."
   , _action = commandAction True
   }
 
-commandAction :: Bool -> [Text] -> IRCState -> UnicodeEvent -> Bot (IRC ())
+commandAction :: Bool -> [Text] -> IRCState s -> UnicodeEvent -> StatefulBot s (StatefulIRC s ())
 commandAction is8bit [program] ircs ev = commandAction is8bit [program, ""] ircs ev
 commandAction is8bit (program:is) _ ev = do
   o <- liftIO $ timeout 3000000 $ return $! fromMaybe "Sorry, I don't understand that brainfuck program! \

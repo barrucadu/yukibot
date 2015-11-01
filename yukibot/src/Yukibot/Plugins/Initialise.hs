@@ -96,5 +96,5 @@ initialise = cfgGet' (_networks defaultInitialCfg) "initial" >>= mapM_ goN . M.t
       mapM_ (send . Join) $ _channels ns
 
 -- |Initialise with the provided bot state
-initialiseWithState :: MonadIO m => BotState -> m ()
+initialiseWithState :: MonadIO m => BotState () -> m ()
 initialiseWithState bs = liftIO . flip runReaderT bs $ initialise

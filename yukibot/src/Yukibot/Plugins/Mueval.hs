@@ -64,7 +64,7 @@ defaultMuevalCfg = MC "mueval" "L.hs"
 -- *External usage
 
 -- |Evaluate expressions as a command
-evalCommand :: CommandDef
+evalCommand :: CommandDef ()
 evalCommand = CommandDef
   { _verb = ["eval"]
   , _help = "<expr> - Evaluate the given expression"
@@ -78,7 +78,7 @@ evalCommand = CommandDef
       return $ replyOrPaste ev res
 
 -- |Get the type of an expression as a command
-typeCommand :: CommandDef
+typeCommand :: CommandDef ()
 typeCommand = CommandDef
   { _verb = ["type"]
   , _help = "<expr> - Get the type of the given expression"
@@ -92,7 +92,7 @@ typeCommand = CommandDef
       return $ replyOrPaste ev res
 
 -- |Get the kind of an expression as a command
-kindCommand :: CommandDef
+kindCommand :: CommandDef ()
 kindCommand = CommandDef
   { _verb = ["kind"]
   , _help = "<expr> - Get the kind of the given expression"
@@ -106,7 +106,7 @@ kindCommand = CommandDef
       return $ replyOrPaste ev res
 
 -- |Evaluate expressions in PRIVMSGs starting with a '>'
-evalEvent :: EventHandler
+evalEvent :: EventHandler ()
 evalEvent = EventHandler
   { _description = pack "A sandboxed evaluator for Haskell expressions."
   , _matchType   = EPrivmsg
@@ -126,7 +126,7 @@ evalEvent = EventHandler
         _ -> return $ return ()
 
 -- |Get the type of expressions in PRIVMSGs starting with a ':t'
-typeEvent :: EventHandler
+typeEvent :: EventHandler ()
 typeEvent = EventHandler
   { _description = pack "Get the type of a Haskell expression."
   , _matchType = EPrivmsg
@@ -145,7 +145,7 @@ typeEvent = EventHandler
       _ -> return $ return ()
 
 -- |Get the kind of expressions in PRIVMSGs starting with a ':k'
-kindEvent :: EventHandler
+kindEvent :: EventHandler ()
 kindEvent = EventHandler
   { _description = pack "Get the kind of a Haskell expression."
   , _matchType = EPrivmsg

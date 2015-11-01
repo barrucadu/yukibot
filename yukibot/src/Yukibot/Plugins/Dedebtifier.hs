@@ -18,7 +18,7 @@ import Data.Text (Text, pack, unpack)
 import Database.MongoDB (Document, (=:), insert_)
 import Network.IRC.Bot.Commands (CommandDef(..))
 import Network.IRC.Bot.Events (reply)
-import Network.IRC.Client (UnicodeEvent, IRC)
+import Network.IRC.Client (UnicodeEvent, StatefulIRC)
 import Text.PrettyPrint.Boxes (render, hsep, left, vcat, text)
 import Text.Read (readMaybe)
 import Yukibot.Utils
@@ -59,7 +59,7 @@ showCurrency money = pack (show pounds) <> "." <> pack (pad $ show pence) where
 -- * Commands
 
 -- | Add a new debt from yourself to another person.
-oweCmd :: Mongo -> CommandDef
+oweCmd :: Mongo -> CommandDef s
 oweCmd mongo = CommandDef
   { _verb   = ["owe"]
   , _help   = "owe <name> <amount> -- record that you owe money to someone."
@@ -67,7 +67,7 @@ oweCmd mongo = CommandDef
   }
 
 -- | Add a new debt from another person to yourself.
-owedCmd :: Mongo -> CommandDef
+owedCmd :: Mongo -> CommandDef s
 owedCmd mongo = CommandDef
   { _verb   = ["owed"]
   , _help   = "owed <name> <amount> -- record that you are owed money by someone."
@@ -75,7 +75,7 @@ owedCmd mongo = CommandDef
   }
 
 -- | Helper function for 'oweCmd' and 'owedCmd'
-debtCmd :: Monad m => (Text -> Text -> Currency -> IRC ()) -> [Text] -> a -> UnicodeEvent -> m (IRC ())
+debtCmd :: Monad m => (Text -> Text -> Currency -> StatefulIRC s ()) -> [Text] -> a -> UnicodeEvent -> m (StatefulIRC s ())
 debtCmd f [target, amount] _ ev = return $ case readCurrency amount of
   Just amount'
     | amount' <= 0 -> reply ev "Stop being silly."
@@ -88,7 +88,7 @@ debtCmd f [target, amount] _ ev = return $ case readCurrency amount of
 debtCmd _ _ _ ev = return $ reply ev "Expected two arguments."
 
 -- | Pay someone money.
-payCmd :: Mongo -> CommandDef
+payCmd :: Mongo -> CommandDef s
 payCmd mongo = CommandDef
   { _verb   = ["pay"]
   , _help   = "pay <name> <amount> -- pay someone some money, this is a synonym for 'owed'."
@@ -96,7 +96,7 @@ payCmd mongo = CommandDef
   }
 
 -- | List (simplified) debts in the system.
-listCmd :: Mongo -> CommandDef
+listCmd :: Mongo -> CommandDef s
 listCmd mongo = CommandDef
   { _verb   = ["debts"]
   , _help   = "debts -- list all your debts and credits."

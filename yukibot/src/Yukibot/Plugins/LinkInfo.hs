@@ -73,7 +73,7 @@ defaultLinkInfoCfg = LIC
 
 -- *Event handler
 
-eventHandler :: LinkInfoCfg -> EventHandler
+eventHandler :: LinkInfoCfg -> EventHandler ()
 eventHandler cfg = EventHandler
   { _description = pack "Display information on links which come up in chat."
   , _matchType   = EPrivmsg
@@ -84,7 +84,7 @@ eventHandler cfg = EventHandler
 
 -- |Split a message up into words, and display information on the
 -- first `numLinks` links.
-eventFunc :: LinkInfoCfg -> IRCState -> UnicodeEvent -> Bot (IRC ())
+eventFunc :: LinkInfoCfg -> IRCState () -> UnicodeEvent -> Bot (IRC ())
 eventFunc cfg _ ev = return $ do
   let Privmsg _ (Right msg) = _message ev
   let urls = mapMaybe toUri . T.words $ msg

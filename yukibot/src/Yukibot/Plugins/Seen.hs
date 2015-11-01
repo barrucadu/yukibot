@@ -25,7 +25,7 @@ import Yukibot.Utils
 
 -- *Event handler
 
-eventHandler :: EventHandler
+eventHandler :: EventHandler ()
 eventHandler = EventHandler
   { _description = "Keep track of the last thing a person said"
   , _matchType   = EPrivmsg
@@ -34,7 +34,7 @@ eventHandler = EventHandler
   , _appliesDef  = const $ return False
   }
 
-eventFunc :: IRCState -> UnicodeEvent -> Bot (IRC ())
+eventFunc :: IRCState () -> UnicodeEvent -> Bot (IRC ())
 eventFunc _ ev = do
   let Channel channel nick  = _source ev
   let Privmsg _ (Right msg) = _message ev
@@ -47,7 +47,7 @@ eventFunc _ ev = do
 
 -- *Command
 
-command :: CommandDef
+command :: CommandDef ()
 command = CommandDef
   { _verb   = ["seen"]
   , _help = "<nick> - Get the last thing said by that nick in this channel."
