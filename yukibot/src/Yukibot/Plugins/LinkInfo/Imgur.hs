@@ -69,6 +69,5 @@ fetchImgurTitle uri = do
   title <- liftHandler fetchTitle uri
   case title of
     Title t
-      | T.map toLower t == "imgur" -> return NoTitle
-      | T.map toLower t == "imgur: the simple image sharer" -> return NoTitle
+      | "imgur:" `T.isPrefixOf` T.toLower t -> return NoTitle
     other -> return other
