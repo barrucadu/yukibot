@@ -4,4 +4,4 @@ packages:
 - irc-botlib/
 extra-deps:
 - irc-client-0.2.5.0
-resolver: nightly-2015-09-13
+resolver: nightly-2016-01-26
