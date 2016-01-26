@@ -19,7 +19,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text, replace, isPrefixOf, isSuffixOf, strip, pack, unpack)
-import Database.MongoDB (Document, (=:), insert_)
+import Database.MongoDB (Document, Selector, (=:), insert_)
 import Network.IRC.Bot.Commands (CommandDef(..))
 import Network.IRC.Bot.Events (reply, runAlways, runEverywhere)
 import Network.IRC.Bot.Types (EventHandler(..), Bot)
@@ -64,7 +64,7 @@ eventHandler = EventHandler
 eventFunc :: IRCState () -> UnicodeEvent -> Bot (IRC ())
 eventFunc _ ev = do
   mongo    <- defaultMongo "triggers"
-  triggers <- queryMongo mongo [] []
+  triggers <- queryMongo mongo (triggerSel ev) []
 
   return $ do
     let Privmsg _ (Right msg) = _message ev
@@ -125,29 +125,31 @@ addTriggerCmd = CommandDef
   }
 
   where
-    go vs _ _ = case () of
+    go vs _ ev = case () of
       _ | "<reply>" `elem` vs ->
           case break (=="<reply>") vs of
-            (pref, "<reply>":suf) -> go' (T.unwords pref) (T.unwords suf) 1
+            (pref, "<reply>":suf) -> go' (T.unwords pref) (T.unwords suf) 1 ev
             _ -> return $ return ()
 
         | "<reply" `elem` vs ->
           case break (=="<reply") vs of
-            (pref, "<reply":prob:suf) -> go' (T.unwords pref) (T.unwords suf) $ fromMaybe 1 . readMaybe . filter (/='>') . unpack $ prob
+            (pref, "<reply":prob:suf) -> go' (T.unwords pref) (T.unwords suf) (fromMaybe 1 . readMaybe . filter (/='>') . unpack $ prob) ev
             _ -> return $ return ()
 
         | otherwise -> return $ return ()
 
-    go' trig resp prob =
-      let trig' = strip trig
-          resp' = TR
-            { _response    = strip resp
-            , _probability = if prob > 1 || prob < 0 then 1 else prob
-            }
-      in do
-        mongo <- defaultMongo "triggers"
-        addTrigger mongo trig' resp'
-        return $ return ()
+    go' trig resp prob ev = case _source ev of
+      Channel c _ ->
+        let trig' = strip trig
+            resp' = TR
+              { _response    = strip resp
+              , _probability = if prob > 1 || prob < 0 then 1 else prob
+              }
+        in do
+          mongo <- defaultMongo "triggers"
+          addTrigger mongo trig' resp' c
+          return $ return ()
+      _ -> return $ reply ev "Can only add triggers in a channel."
 
 -- Remove a trigger
 rmTriggerCmd :: CommandDef ()
@@ -158,28 +160,30 @@ rmTriggerCmd = CommandDef
   }
 
   where
-    go vs _ _ = do
-      mongo <- defaultMongo "triggers"
-      removeTrigger mongo . strip $ T.unwords vs
-      return $ return ()
+    go vs _ ev = case _source ev of
+      Channel c _ -> do
+        mongo <- defaultMongo "triggers"
+        removeTrigger mongo (strip $ T.unwords vs) c
+        return $ return ()
+      _ -> return $ reply ev "Can only remove triggers in a channel."
 
--- |List all triggers, by uploading to sprunge
+-- |List all triggers in this channel, by uploading to sprunge
 listTriggerCmd :: CommandDef ()
 listTriggerCmd = CommandDef
   { _verb = ["list", "triggers"]
-  , _help = "List all the current triggers"
+  , _help = "List all the current triggers for this channel"
   , _action = go
   }
 
   where
     go _ _ ev = do
       mongo <- defaultMongo "triggers"
-      trigs <- allTriggers mongo
+      trigs <- allTriggers mongo (triggerSel ev)
       uri <- paste trigs
       return $ reply ev uri
 
     -- Get all triggers, as a newline-delimited string
-    allTriggers mongo = unlines . map ppTrig <$> queryMongo mongo [] ["trigger" =: (1 :: Int)]
+    allTriggers mongo selector = unlines . map ppTrig <$> queryMongo mongo selector ["trigger" =: (1 :: Int)]
 
     -- Pretty-print an individual trigger
     ppTrig trig = T.unpack $ at' "trigger" "" trig <> ppProb trig <> at' "response" "I am so triggered right now." trig
@@ -188,13 +192,13 @@ listTriggerCmd = CommandDef
 -- *Updating
 
 -- |Add a new trigger
-addTrigger :: MonadIO m => Mongo -> Text -> Response -> m ()
-addTrigger mongo trig resp = doMongo mongo add where
-  add c = insert_ c ["trigger" =: trig, "response" =: _response resp, "probability" =: _probability resp]
+addTrigger :: MonadIO m => Mongo -> Text -> Response -> Text -> m ()
+addTrigger mongo trig resp channel = doMongo mongo add where
+  add c = insert_ c ["trigger" =: trig, "response" =: _response resp, "probability" =: _probability resp, "channel" =: channel]
 
 -- |Remove a trigger
-removeTrigger :: MonadIO m => Mongo -> Text -> m ()
-removeTrigger mongo trig = deleteMongo mongo ["trigger" =: trig]
+removeTrigger :: MonadIO m => Mongo -> Text -> Text -> m ()
+removeTrigger mongo trig channel = deleteMongo mongo ["trigger" =: trig, "channel" =: channel]
 
 -- *Utils
 
@@ -210,3 +214,9 @@ tryRegex trig
 
     copt = defaultCompOpt { caseSensitive = False }
     eopt = defaultExecOpt
+
+-- | Get the selector for triggers in the current channel.
+triggerSel :: UnicodeEvent -> Selector
+triggerSel ev = case _source ev of
+  Channel c _ -> ["channel" =: c]
+  _ -> []
