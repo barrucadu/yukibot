@@ -30,6 +30,9 @@ module Yukibot.Backend
   -- ** STM
   , sendActionSTM
 
+  -- * Miscellaneous
+  , describeBackend
+
   -- * For library authors
   , Backend(..)
   ) where
@@ -44,9 +47,15 @@ import Data.Text (Text)
 -- and user types.
 --
 -- TODO: Pass configuration in.
+--
+-- TODO: Have configuration determine description.
 data Backend channel user where
   Backend :: { initialise :: IO a
-             , run :: (Event channel user -> IO ()) -> TQueue (BackendAction channel user) -> a -> IO ()
+             , run :: ((BackendHandle channel user -> Event channel user) -> IO ())
+                   -> TQueue (BackendAction channel user)
+                   -> a
+                   -> IO ()
+             , describe :: Text
              } -> Backend channel user
 
 -------------------------------------------------------------------------------
@@ -55,9 +64,10 @@ data Backend channel user where
 -- | An abstract handle to a backend, which can be used to interact
 -- with it.
 data BackendHandle channel user = BackendHandle
-  { msgQueue   :: TQueue (BackendAction channel user)
-  , hasStarted :: TVar Bool
-  , hasStopped :: TVar Bool
+  { msgQueue    :: TQueue (BackendAction channel user)
+  , hasStarted  :: TVar Bool
+  , hasStopped  :: TVar Bool
+  , description :: Text
   }
   deriving Eq
 
@@ -65,10 +75,13 @@ data BackendHandle channel user = BackendHandle
 --
 -- This will return immediately. If you want to block until the
 -- backend is ready, see 'awaitStart'.
-startBackend :: (Event channel user -> IO ()) -> Backend channel user -> IO (BackendHandle channel user)
-startBackend onReceive (Backend setup exec) = do
-  h <- createHandle
-  forkAndRunBackend h setup $ exec onReceive (msgQueue h)
+startBackend :: (Event channel user -> IO ())
+  -- ^ Process received events
+  -> Backend channel user
+  -> IO (BackendHandle channel user)
+startBackend onReceive b@(Backend setup exec _) = do
+  h <- createHandle b
+  forkAndRunBackend h setup $ exec (\ef -> onReceive (ef h)) (msgQueue h)
   pure h
 
 -- | Tell a backend to terminate. If the backend has already
@@ -123,8 +136,7 @@ newtype Message = Message Text
   deriving (Eq, Read, Show)
 
 -- | TODO: A richer event type, in its own module.
-data Event channel user = Event channel user Text
-  deriving (Eq, Read, Show)
+data Event channel user = Event (BackendHandle channel user) channel user Text
 
 -- | All the actions a backend can perform.
 data BackendAction channel user
@@ -159,11 +171,18 @@ sendActionSTM b a = do
   writeTQueue (msgQueue b) a
 
 -------------------------------------------------------------------------------
+-- Miscellaneous
+
+-- | Return a textual description of a backend
+describeBackend :: BackendHandle channel user -> Text
+describeBackend = description
+
+-------------------------------------------------------------------------------
 -- Internal
 
 -- | Create a new 'BackendHandle'.
-createHandle :: IO (BackendHandle channel user)
-createHandle = atomically $ do
+createHandle :: Backend channel user -> IO (BackendHandle channel user)
+createHandle b = atomically $ do
   queue    <- newTQueue
   startvar <- newTVar False
   stopvar  <- newTVar False
@@ -171,6 +190,7 @@ createHandle = atomically $ do
   pure BackendHandle { msgQueue = queue
                      , hasStarted = startvar
                      , hasStopped = stopvar
+                     , description = describe b
                      }
 
 -- | Initialise and run a backend in a new thread.

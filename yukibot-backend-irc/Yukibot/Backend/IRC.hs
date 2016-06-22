@@ -9,7 +9,7 @@
 -- Portability : LambdaCase, OverloadedStrings
 --
 -- An IRC backend for yukibot-core.
-module Yukibot.Backend.IRC (ircBackend) where
+module Yukibot.Backend.IRC (Channel, User, ircBackend) where
 
 import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.STM
@@ -23,6 +23,9 @@ import qualified Network.IRC.Client as IRC
 
 import qualified Yukibot.Backend as Y
 
+type Channel = Text
+type User = Text
+
 -- | A simple IRC backend.
 --
 -- TODO: Configuration. Currently the nick and network are hard-coded.
@@ -32,10 +35,11 @@ import qualified Yukibot.Backend as Y
 -- TODO: Reconnection.
 --
 -- TODO: Client-side timeout.
-ircBackend :: Y.Backend Text Text
+ircBackend :: Y.Backend Channel User
 ircBackend = Y.Backend
   { Y.initialise = connectToIrc
   , Y.run = handleIrc
+  , Y.describe = "IRC <ssl://irc.freenode.net:7000>"
   }
 
 type BackendState = (ConnectionConfig (), InstanceConfig ())
@@ -55,7 +59,9 @@ connectToIrc = do
   pure (cconf, iconf)
 
 -- | Connect to an IRC server and listen for events.
-handleIrc :: (Y.Event Text Text -> IO ()) -> TQueue (Y.BackendAction Text Text) -> BackendState -> IO ()
+handleIrc :: ((Y.BackendHandle Channel User -> Y.Event Channel User) -> IO ())
+  -> TQueue (Y.BackendAction Channel User)
+  -> BackendState -> IO ()
 handleIrc receiveEvent commandQueue (cconf, iconf) = do
   -- Fork off the client in its own thread
   stopvar <- atomically (newTVar False)
@@ -110,7 +116,7 @@ handleIrc receiveEvent commandQueue (cconf, iconf) = do
     -- Decode and send off an event.
     dispatchEvent :: IRC.UnicodeEvent -> IO ()
     dispatchEvent (IRC.Event _ (IRC.User nick) (IRC.Privmsg _ (Right msg))) =
-      receiveEvent (Y.Event nick nick msg)
+      receiveEvent (\h -> Y.Event h nick nick msg)
     dispatchEvent (IRC.Event _ (IRC.Channel chan nick) (IRC.Privmsg _ (Right msg))) =
-      receiveEvent (Y.Event chan nick msg)
+      receiveEvent (\h -> Y.Event h chan nick msg)
     dispatchEvent _ = pure ()

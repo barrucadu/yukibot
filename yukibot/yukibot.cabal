@@ -21,6 +21,7 @@ executable yukibot
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base                 >=4.9 && <4.10
+                     , text                 >=1.0 && <2
                      , yukibot-backend-irc  >=2.0 && <2.1
                      , yukibot-core         >=2.0 && <2.1
                      , yukibot-plugin-print >=2.0 && <2.1
