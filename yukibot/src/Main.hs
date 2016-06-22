@@ -1,4 +1,7 @@
 module Main where
 
+import Yukibot.Backend
+import Yukibot.Backend.IRC
+
 main :: IO ()
-main = putStrLn "Hello, world"
+main = awaitStop =<< startBackend (\e -> putStrLn $ "GOT EVENT: " ++ show e) ircBackend
