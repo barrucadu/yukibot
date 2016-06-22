@@ -61,7 +61,7 @@ addNetworkStateful cconf iconf s = do
   state <- ask
 
   -- Construct the initial state
-  let cconf' = cconf { _disconnect = liftIO . asakuraDisconnectHandler network . _connections $ state }
+  let cconf' = cconf { _ondisconnect = liftIO . asakuraDisconnectHandler network . _connections $ state }
   ircstate <- newIRCState cconf' iconf s
   addDefaultHandlers ircstate
 

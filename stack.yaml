@@ -3,5 +3,6 @@ packages:
 - yukibot/
 - irc-botlib/
 extra-deps:
-- irc-client-0.2.5.0
-resolver: nightly-2016-01-26
+- mongoDB-2.0.10
+- bson-0.3.2.2
+resolver: nightly-2016-06-20

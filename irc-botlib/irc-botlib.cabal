@@ -10,7 +10,7 @@ name:                irc-botlib
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.2.5.0
+version:             0.2.6.0
 
 -- A short (one-line) description of the package.
 synopsis:            A simple IRC bot library.
@@ -77,7 +77,7 @@ library
                      , aeson        >=0.8
                      , bytestring   >=0.10
                      , containers   >=0.5
-                     , irc-client   >=0.2.5
+                     , irc-client   >=0.3
                      , stm          >=2.4
                      , text         >=1.1
                      , time         >=1.4
