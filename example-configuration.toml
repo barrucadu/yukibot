@@ -1,0 +1,32 @@
+# Example yukibot configuration. The configuration is specified in
+# TOML: <https://github.com/toml-lang/toml>.
+
+# Backend configuration lives in the "backend.*" namespace.
+
+[backend.irc]
+
+# The IRC backend uses the namespace "backend.irc.NETWORK" for its
+# top-level configuration. Multiple configurations for the same
+# network can be specified, each one represents a distinct connection:
+# for this the array syntax should be used.
+
+[backend.irc."irc.freenode.net"]
+
+# The "nick" and "port" fields are required, everything else is
+# optional.
+nick = "yukibot"
+port = 7000
+tls  = true                         # default: false
+
+# List of channels to join after welcome.
+channels = [ "##compsoc-uk-anime" ] # default: []
+
+# If the "server-password" is present and nonempty, it is sent on
+# connection to the server via the "PASS" command.
+server-password = ""                # default: ""
+
+# If the "nickserv-password" key is present and nonempty, the
+# "nickserv" user is authed with. The username of nickserv can be
+# changed with the "nickserv" key.
+nickserv          = "nickserv"      # default: "nickserv"
+nickserv-password = ""              # default: ""

@@ -9,58 +9,145 @@
 -- Portability : LambdaCase, OverloadedStrings
 --
 -- An IRC backend for yukibot-core.
-module Yukibot.Backend.IRC (Channel, User, ircBackend) where
+module Yukibot.Backend.IRC (Channel, User, ConfigurationError(..), ircBackend) where
 
 import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.STM
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (runReaderT)
+import Data.Foldable (toList)
+import qualified Data.HashMap.Strict as H
+import Data.Maybe (mapMaybe)
 import Data.Semigroup ((<>))
-import Data.Text (Text, intercalate)
-import Network.IRC.Client (ConnectionConfig, InstanceConfig, connectWithTLS', defaultIRCConf, stdoutLogger)
+import Data.Text (Text, intercalate, pack)
+import qualified Data.Text as T
+import Data.Text.Encoding (encodeUtf8)
+import Network.IRC.Client (ConnectionConfig, InstanceConfig, connect', connectWithTLS', defaultIRCConf, stdoutLogger)
 import qualified Network.IRC.Client as IRC
 
 import qualified Yukibot.Backend as Y
+import qualified Yukibot.Configuration as Y
 
 type Channel = Text
 type User = Text
 
 -- | A simple IRC backend.
 --
--- TODO: Configuration. Currently the nick and network are hard-coded.
---
 -- TODO: Logging. Currently prints to stdout.
 --
 -- TODO: Reconnection.
 --
 -- TODO: Client-side timeout.
-ircBackend :: Y.Backend Channel User
-ircBackend = Y.Backend
-  { Y.initialise = connectToIrc
-  , Y.run = handleIrc
-  , Y.describe = "IRC <ssl://irc.freenode.net:7000>"
-  }
+ircBackend :: Text -- ^ The hostname.
+  -> Y.Table       -- ^ The configuration.
+  -> Either ConfigurationError (Y.Backend Channel User)
+ircBackend host cfg = case checkConfig host cfg of
+  Left err   -> Left err
+  Right desc -> Right Y.Backend
+    { Y.initialise = connectToIrc host cfg
+    , Y.run = handleIrc
+    , Y.describe = desc
+    }
+
+-------------------------------------------------------------------------------
+-- Configuration
+
+-- | An error in the configuration
+data ConfigurationError
+  = MissingNick -- ^ The nick must be present and nonempty.
+  | MissingPort -- ^ The port must be present and >0.
+  | BadNickType -- ^ The nick must be a string.
+  | BadPortType -- ^ The port must be an int.
+  deriving (Bounded, Enum, Eq, Ord, Read, Show)
+
+-- | Check that the configuration is all ok, and return a description
+-- if so.
+checkConfig :: Text -> Y.Table -> Either ConfigurationError Text
+checkConfig host cfg = case (H.lookup "nick" cfg, H.lookup "port" cfg) of
+  (Just (Y.VString n), Just (Y.VInteger p)) | T.length n > 0 && p > 0 -> Right $
+    let tls = if H.lookup "tls" cfg == Just (Y.VBoolean True) then "ssl://" else ""
+        port = pack (show p)
+    in "IRC <" <> tls <> n <> "@" <> host <> ":" <> port <> ">"
+  (Just (Y.VString _), _) -> Left MissingNick
+  (Nothing, _) -> Left MissingNick
+  (Just _,  _) -> Left BadNickType
+  (_, Just (Y.VInteger _)) -> Left MissingPort
+  (_, Nothing) -> Left MissingPort
+  (_, Just _)  -> Left BadPortType
+
+-- | Get the nick from the configuation. Calls 'error' if missing.
+getNick :: Y.Table -> Text
+getNick cfg = case H.lookup "nick" cfg of
+  Just (Y.VString nick) -> nick
+  _ -> error "Missing nick!"
+
+-- | Get the port from the configuration. Calls 'error' if missing.
+getPort :: Integral i => Y.Table -> i
+getPort cfg = case H.lookup "port" cfg of
+  Just (Y.VInteger p) -> fromIntegral p
+  _ -> error "Missing port!"
+
+-- | Get the TLS flag from the configuration. Defaults to @False@.
+getTls :: Y.Table -> Bool
+getTls cfg = case H.lookup "tls" cfg of
+  Just (Y.VBoolean b) -> b
+  _ -> False
+
+-- | Get the list of channels to join from the configuration. Defaults
+-- to @[]@.
+getChannels :: Y.Table -> [Channel]
+getChannels cfg = case H.lookup "channels" cfg of
+  Just (Y.VArray cs) -> mapMaybe (\case { Y.VString c -> Just c; _ -> Nothing }) (toList cs)
+  _ -> []
+
+-- | Get the server password from the configuration. Defaults to
+-- @Nothing@.
+getServerPassword :: Y.Table -> Maybe Text
+getServerPassword cfg = case H.lookup "server-password" cfg of
+  Just (Y.VString pass) | T.length pass > 0 -> Just pass
+  _ -> Nothing
+
+-- | Get the nickserv nick from the configuration. Defaults to
+-- @"nickserv"@.
+getNickserv :: Y.Table -> Text
+getNickserv cfg = case H.lookup "nickserv" cfg of
+  Just (Y.VString nick) | T.length nick > 0 -> nick
+  _ -> "nickserv"
+
+-- | Get the nickserv password from the configuration. Defaults to
+-- @Nothing@.
+getNickservPassword :: Y.Table -> Maybe Text
+getNickservPassword cfg = case H.lookup "nickserv-password" cfg of
+  Just (Y.VString pass) | T.length pass > 0 -> Just pass
+  _ -> Nothing
+
+-------------------------------------------------------------------------------
+-- Backend main
 
 type BackendState = (IRC.IRC () -> IO (), IO (), TVar Bool)
 
 -- | Set up the IRC connection.
-connectToIrc :: ((Y.BackendHandle Channel User -> Y.Event Channel User) -> IO ())
+connectToIrc :: Text
+  -> Y.Table
+  -> ((Y.BackendHandle Channel User -> Y.Event Channel User) -> IO ())
   -> IO BackendState
-connectToIrc receiveEvent = do
-  let hostname = "irc.freenode.net"
-  let port = 7000
-  let floodTimeout = 1
-  let nick = "yukitest-2_0"
-
-  cconf <- connectWithTLS' stdoutLogger hostname port floodTimeout
-  let iconf  = defaultIRCConf nick
+connectToIrc host cfg receiveEvent = do
+  cconf <- (if getTls cfg then connectWithTLS' else connect')
+             stdoutLogger
+             (encodeUtf8 host)
+             (getPort cfg)
+             1
+  let iconf = (defaultIRCConf $ getNick cfg)
+                { IRC._channels = getChannels cfg
+                , IRC._password = getServerPassword cfg
+                }
 
   -- Fork off the client in its own thread
   (stopvar, stopper) <- atomically newFlag
   let cconf' = cconf { IRC._ondisconnect = IRC._ondisconnect cconf >> liftIO (atomically stopper) }
 
-  (welcomevar, welcomer) <- atomically newWelcomeHandler
+  (welcomevar, welcomer) <- atomically (newWelcomeHandler (getNickserv cfg) (getNickservPassword cfg))
   let receiver = receiveHandler receiveEvent
   let iconf' = iconf { IRC._eventHandlers = receiver : welcomer : IRC._eventHandlers iconf }
   state <- IRC.newIRCState cconf' iconf' ()
@@ -107,6 +194,7 @@ handleIrc commandQueue (runIrc, terminate, stopvar) = process where
     when continue process
 
 -------------------------------------------------------------------------------
+-- Utilities
 
 -- | Create a new STM flag: writes 'True' to the returned 'TVar' when the action is run.
 newFlag :: STM (TVar Bool, STM ())
@@ -132,14 +220,20 @@ receiveHandler receiveEvent = IRC.EventHandler
 
 -- | Flag and handler for 001 (numeric welcome). Flag is set to 'True'
 -- on receipt.
-newWelcomeHandler :: STM (TVar Bool, IRC.EventHandler s)
-newWelcomeHandler = do
+newWelcomeHandler :: Text -> Maybe Text -> STM (TVar Bool, IRC.EventHandler s)
+newWelcomeHandler nickserv nickservPassword = do
     (flag, setFlag) <- newFlag
     let handler = IRC.EventHandler
           { IRC._description = "Set a flag on 001 (numeric welcome)"
           , IRC._matchType = IRC.ENumeric
           , IRC._eventFunc = \case
-              { IRC.Event _ _ (IRC.Numeric num _) | num == 001 -> liftIO (atomically setFlag)
+              { IRC.Event _ _ (IRC.Numeric num _) | num == 001 -> do
+                -- Auth with nickserv
+                case nickservPassword of
+                  Just p -> IRC.send . IRC.Privmsg nickserv . Right $ "IDENTIFY " <> p
+                  Nothing -> pure ()
+                -- Set the flag
+                liftIO (atomically setFlag)
               ; _ -> pure ()
               }
           }
