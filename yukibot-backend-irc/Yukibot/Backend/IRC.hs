@@ -125,9 +125,9 @@ receiveHandler receiveEvent = IRC.EventHandler
     -- Decode and send off an event.
     dispatchEvent :: IRC.UnicodeEvent -> IO ()
     dispatchEvent (IRC.Event _ (IRC.User nick) (IRC.Privmsg _ (Right msg))) =
-      receiveEvent (\h -> Y.Event h nick nick msg)
+      receiveEvent (\h -> Y.Event h Nothing nick msg)
     dispatchEvent (IRC.Event _ (IRC.Channel chan nick) (IRC.Privmsg _ (Right msg))) =
-      receiveEvent (\h -> Y.Event h chan nick msg)
+      receiveEvent (\h -> Y.Event h (Just chan) nick msg)
     dispatchEvent _ = pure ()
 
 -- | Flag and handler for 001 (numeric welcome). Flag is set to 'True'

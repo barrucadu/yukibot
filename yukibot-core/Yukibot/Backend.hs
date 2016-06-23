@@ -133,7 +133,7 @@ newtype Message = Message Text
   deriving (Eq, Read, Show)
 
 -- | TODO: A richer event type, in its own module.
-data Event channel user = Event (BackendHandle channel user) channel user Text
+data Event channel user = Event (BackendHandle channel user) (Maybe channel) user Text
 
 -- | All the actions a backend can perform.
 data BackendAction channel user

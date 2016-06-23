@@ -17,9 +17,9 @@ main = do
   awaitStop h
 
 showTextEvent :: Event Text Text -> String
-showTextEvent (Event h c u msg) = unpack . mconcat $
+showTextEvent (Event h mc u msg) = unpack . mconcat $
   [ "[@" <> describeBackend h <> "] "
-  , "[in: " <> c <> "] "
+  , maybe "" (\c -> "[in: " <> c <> "] ") mc
   , "[from: " <> u <> "] "
   , msg
   ]
