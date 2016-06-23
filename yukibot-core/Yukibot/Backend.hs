@@ -50,11 +50,8 @@ import Data.Text (Text)
 --
 -- TODO: Have configuration determine description.
 data Backend channel user where
-  Backend :: { initialise :: IO a
-             , run :: ((BackendHandle channel user -> Event channel user) -> IO ())
-                   -> TQueue (BackendAction channel user)
-                   -> a
-                   -> IO ()
+  Backend :: { initialise :: ((BackendHandle channel user -> Event channel user) -> IO ()) -> IO a
+             , run :: TQueue (BackendAction channel user) -> a -> IO ()
              , describe :: Text
              } -> Backend channel user
 
@@ -81,7 +78,7 @@ startBackend :: (Event channel user -> IO ())
   -> IO (BackendHandle channel user)
 startBackend onReceive b@(Backend setup exec _) = do
   h <- createHandle b
-  forkAndRunBackend h setup $ exec (\ef -> onReceive (ef h)) (msgQueue h)
+  forkAndRunBackend h (setup $ \ef -> onReceive (ef h)) (exec $ msgQueue h)
   pure h
 
 -- | Tell a backend to terminate. If the backend has already

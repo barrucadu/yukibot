@@ -10,7 +10,11 @@ import Yukibot.Backend
 import Yukibot.Backend.IRC
 
 main :: IO ()
-main = awaitStop =<< startBackend (\e -> putStrLn $ "GOT EVENT: " ++ showTextEvent e) ircBackend
+main = do
+  h <- startBackend (\e -> putStrLn $ "GOT EVENT: " ++ showTextEvent e) ircBackend
+  awaitStart h
+  sendAction h (Join "##compsoc-uk-anime")
+  awaitStop h
 
 showTextEvent :: Event Text Text -> String
 showTextEvent (Event h c u msg) = unpack . mconcat $
