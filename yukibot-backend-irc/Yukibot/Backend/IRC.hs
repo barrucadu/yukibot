@@ -16,18 +16,15 @@ import Control.Concurrent.STM
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (runReaderT)
-import Data.Foldable (toList)
-import qualified Data.HashMap.Strict as H
-import Data.Maybe (mapMaybe)
 import Data.Semigroup ((<>))
-import Data.Text (Text, intercalate, pack)
-import qualified Data.Text as T
+import Data.Text (Text, intercalate)
 import Data.Text.Encoding (encodeUtf8)
-import Network.IRC.Client (ConnectionConfig, InstanceConfig, connect', connectWithTLS', defaultIRCConf, stdoutLogger)
+import Network.IRC.Client (connect', connectWithTLS', defaultIRCConf, stdoutLogger)
 import qualified Network.IRC.Client as IRC
 
 import qualified Yukibot.Backend as Y
-import qualified Yukibot.Configuration as Y
+
+import Yukibot.Backend.IRC.Configuration
 
 type Channel = Text
 type User = Text
@@ -40,7 +37,7 @@ type User = Text
 --
 -- TODO: Client-side timeout.
 ircBackend :: Text -- ^ The hostname.
-  -> Y.Table       -- ^ The configuration.
+  -> Table         -- ^ The configuration.
   -> Either ConfigurationError (Y.Backend Channel User)
 ircBackend host cfg = case checkConfig host cfg of
   Left err   -> Left err
@@ -51,89 +48,17 @@ ircBackend host cfg = case checkConfig host cfg of
     }
 
 -------------------------------------------------------------------------------
--- Configuration
-
--- | An error in the configuration
-data ConfigurationError
-  = MissingNick -- ^ The nick must be present and nonempty.
-  | MissingPort -- ^ The port must be present and >0.
-  | BadNickType -- ^ The nick must be a string.
-  | BadPortType -- ^ The port must be an int.
-  deriving (Bounded, Enum, Eq, Ord, Read, Show)
-
--- | Check that the configuration is all ok, and return a description
--- if so.
-checkConfig :: Text -> Y.Table -> Either ConfigurationError Text
-checkConfig host cfg = case (H.lookup "nick" cfg, H.lookup "port" cfg) of
-  (Just (Y.VString n), Just (Y.VInteger p)) | T.length n > 0 && p > 0 -> Right $
-    let tls = if H.lookup "tls" cfg == Just (Y.VBoolean True) then "ssl://" else ""
-        port = pack (show p)
-    in "IRC <" <> tls <> n <> "@" <> host <> ":" <> port <> ">"
-  (Just (Y.VString _), _) -> Left MissingNick
-  (Nothing, _) -> Left MissingNick
-  (Just _,  _) -> Left BadNickType
-  (_, Just (Y.VInteger _)) -> Left MissingPort
-  (_, Nothing) -> Left MissingPort
-  (_, Just _)  -> Left BadPortType
-
--- | Get the nick from the configuation. Calls 'error' if missing.
-getNick :: Y.Table -> Text
-getNick cfg = case H.lookup "nick" cfg of
-  Just (Y.VString nick) -> nick
-  _ -> error "Missing nick!"
-
--- | Get the port from the configuration. Calls 'error' if missing.
-getPort :: Integral i => Y.Table -> i
-getPort cfg = case H.lookup "port" cfg of
-  Just (Y.VInteger p) -> fromIntegral p
-  _ -> error "Missing port!"
-
--- | Get the TLS flag from the configuration. Defaults to @False@.
-getTls :: Y.Table -> Bool
-getTls cfg = case H.lookup "tls" cfg of
-  Just (Y.VBoolean b) -> b
-  _ -> False
-
--- | Get the list of channels to join from the configuration. Defaults
--- to @[]@.
-getChannels :: Y.Table -> [Channel]
-getChannels cfg = case H.lookup "channels" cfg of
-  Just (Y.VArray cs) -> mapMaybe (\case { Y.VString c -> Just c; _ -> Nothing }) (toList cs)
-  _ -> []
-
--- | Get the server password from the configuration. Defaults to
--- @Nothing@.
-getServerPassword :: Y.Table -> Maybe Text
-getServerPassword cfg = case H.lookup "server-password" cfg of
-  Just (Y.VString pass) | T.length pass > 0 -> Just pass
-  _ -> Nothing
-
--- | Get the nickserv nick from the configuration. Defaults to
--- @"nickserv"@.
-getNickserv :: Y.Table -> Text
-getNickserv cfg = case H.lookup "nickserv" cfg of
-  Just (Y.VString nick) | T.length nick > 0 -> nick
-  _ -> "nickserv"
-
--- | Get the nickserv password from the configuration. Defaults to
--- @Nothing@.
-getNickservPassword :: Y.Table -> Maybe Text
-getNickservPassword cfg = case H.lookup "nickserv-password" cfg of
-  Just (Y.VString pass) | T.length pass > 0 -> Just pass
-  _ -> Nothing
-
--------------------------------------------------------------------------------
 -- Backend main
 
 type BackendState = (IRC.IRC () -> IO (), IO (), TVar Bool)
 
 -- | Set up the IRC connection.
 connectToIrc :: Text
-  -> Y.Table
+  -> Table
   -> ((Y.BackendHandle Channel User -> Y.Event Channel User) -> IO ())
   -> IO BackendState
 connectToIrc host cfg receiveEvent = do
-  cconf <- (if getTls cfg then connectWithTLS' else connect')
+  cconf <- (if getTLS cfg then connectWithTLS' else connect')
              stdoutLogger
              (encodeUtf8 host)
              (getPort cfg)
