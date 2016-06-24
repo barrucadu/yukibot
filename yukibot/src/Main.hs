@@ -2,38 +2,20 @@
 
 module Main where
 
-import qualified Data.HashMap.Strict as H
-import Data.Monoid (mconcat)
-import Data.Semigroup ((<>))
-import Data.Text (Text, unpack)
-
-import Yukibot.Backend
-import Yukibot.Backend.IRC
-import Yukibot.Configuration
+import Yukibot.Backend.IRC (ircBackend)
+import Yukibot.Configuration (parseConfigFile)
+import Yukibot.Core
 
 main :: IO ()
 main = do
-  -- The Core will handle this more gracefully (eventually)
   mcfg <- parseConfigFile "configuration.toml"
-  case mcfg of
-    Just cfg -> do
-      let freenode = do
-            (VTable backend)  <- H.lookup "backend" cfg
-            (VTable irc)      <- H.lookup "irc" backend
-            (VTable freenode) <- H.lookup "irc.freenode.net" irc
-            pure freenode
-      case ircBackend "irc.freenode.net" <$> freenode of
-        Just (Right b) -> do
-          h <- startBackend (\e -> putStrLn $ "GOT EVENT: " ++ showTextEvent e) b
-          awaitStop h
-        Just (Left err) -> putStrLn $ "Error in freenode configuration: " ++ show err
-        Nothing -> putStrLn "Freenode configuration not found."
-    Nothing -> putStrLn "Parse error in configuration file."
+  case (initialState, mcfg) of
+    (Right st, Just cfg) -> case makeBot st cfg of
+      Right run   -> run
+      Left  errs  -> putStrLn $ "Error creating bot: " ++ show errs
+    (Left err, _) -> putStrLn $ "Error constructing initial state: " ++ show err
+    (_, Nothing)  -> putStrLn   "Error parsing configuration file."
 
-showTextEvent :: Event Text Text -> String
-showTextEvent (Event h mc u msg) = unpack . mconcat $
-  [ "[@" <> describeBackend h <> "] "
-  , maybe "" (\c -> "[in: " <> c <> "] ") mc
-  , "[from: " <> u <> "] "
-  , msg
-  ]
+-- TODO: Plugins
+initialState :: Either CoreError BotState
+initialState = addBackend "irc" ircBackend initialBotState
