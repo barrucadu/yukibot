@@ -15,8 +15,11 @@ module Yukibot.Configuration
     , getString
     , getTable
     , getTableArray
-    , getTables
     , getUTCTime
+    -- ** Array helpers
+    , getStrings
+    , getTables
+
     -- * Re-exports
   , module Text.Toml.Types
   ) where
@@ -73,15 +76,24 @@ getTableArray fld tbl = case H.lookup fld tbl of
   Just (VTArray ts) -> Just (toList ts)
   _ -> Nothing
 
--- | Combines 'getTable' and 'getTableArray'.
-getTables :: Text -> Table -> [Table]
-getTables fld tbl = case (getTable fld tbl, getTableArray fld tbl) of
-  (Just t, Just ts) -> t : ts -- Can this case happen?
-  (Just t, _)  -> [t]
-  (_, Just ts) -> ts
-  _ -> []
-
 getUTCTime :: Text -> Table -> Maybe UTCTime
 getUTCTime fld tbl = case H.lookup fld tbl of
   Just (VDatetime b) -> Just b
   _ -> Nothing
+
+-------------------------------------------------------------------------------
+-- Array helprs
+
+-- | Assumes the field is an array of strings.
+getStrings :: Text -> Table -> [Text]
+getStrings fld tbl = case (getString fld tbl, getArray fld tbl) of
+  (Just s, _) -> [s]
+  (_, Just ss) -> [s | VString s <- ss]
+  _ -> []
+
+-- | Combines 'getTable' and 'getTableArray'.
+getTables :: Text -> Table -> [Table]
+getTables fld tbl = case (getTable fld tbl, getTableArray fld tbl) of
+  (Just t, _)  -> [t]
+  (_, Just ts) -> ts
+  _ -> []
