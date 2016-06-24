@@ -15,6 +15,7 @@ module Yukibot.Configuration
     , getString
     , getTable
     , getTableArray
+    , getTables
     , getUTCTime
     -- * Re-exports
   , module Text.Toml.Types
@@ -71,6 +72,14 @@ getTableArray :: Text -> Table -> Maybe [Table]
 getTableArray fld tbl = case H.lookup fld tbl of
   Just (VTArray ts) -> Just (toList ts)
   _ -> Nothing
+
+-- | Combines 'getTable' and 'getTableArray'.
+getTables :: Text -> Table -> [Table]
+getTables fld tbl = case (getTable fld tbl, getTableArray fld tbl) of
+  (Just t, Just ts) -> t : ts -- Can this case happen?
+  (Just t, _)  -> [t]
+  (_, Just ts) -> ts
+  _ -> []
 
 getUTCTime :: Text -> Table -> Maybe UTCTime
 getUTCTime fld tbl = case H.lookup fld tbl of
