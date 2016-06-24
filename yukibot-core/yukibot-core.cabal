@@ -20,6 +20,7 @@ library
   exposed-modules:     Yukibot.Backend
                      , Yukibot.Configuration
                      , Yukibot.Core
+                     , Yukibot.Plugin
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base                 >=4.9 && <4.10

@@ -20,8 +20,10 @@ module Yukibot.Core
       -- ** Backends
     , WrappedBackend(WrapB)
     , addBackend
+    -- ** Plugins
+    , addPlugin
 
-      -- * Errors
+    -- * Errors
     , CoreError(..)
     ) where
 
@@ -39,6 +41,7 @@ import System.Posix.Signals (Handler(..), installHandler, sigINT, sigTERM)
 
 import Yukibot.Backend (Backend, BackendHandle, startBackend, stopBackend, awaitStop)
 import Yukibot.Configuration
+import Yukibot.Plugin
 
 -- | A default @main@ function: parse the config file, and either
 -- halt+report errors, or start.
@@ -57,8 +60,6 @@ defaultMain st fp = do
 -- Returns @NoSuchBackend@ if any backends in the configuration are
 -- not specified in the initial state. TODO: Is this a useful
 -- behaviour? Should unknown backends be ignored instead?
---
--- TODO: Plugins
 makeBot :: BotState -> Table -> Either (NonEmpty CoreError) (IO ())
 makeBot st cfg = case (lefts &&& rights) configuredBackends of
   ([], bs) -> Right $ do
@@ -73,7 +74,7 @@ makeBot st cfg = case (lefts &&& rights) configuredBackends of
 
   where
   -- Get all backends from the config.
-  configuredBackends :: [Either CoreError WrappedBackend]
+  configuredBackends :: [Either CoreError (WrappedBackend, [Text])]
   configuredBackends = maybe [] (concatMap get . H.toList) (getTable "backend" cfg) where
     get (name, VTable tbl) = case H.lookup name (backends st) of
       Just wrapped@(WrapB _) -> flip concatMap (H.toList tbl) $ \case
@@ -82,13 +83,20 @@ makeBot st cfg = case (lefts &&& rights) configuredBackends of
         _ -> []
       _ -> [Left $ BackendUnknown name]
     get _ = []
-    make (WrapB wrapped) name inst =
-      either (Left . BackendBadConfig name) (Right . WrapBC) (wrapped name inst)
+    make (WrapB wrapped) name inst = case wrapped name inst of
+      Right b  -> Right (WrapBC b, getStrings "plugins" inst)
+      Left err -> Left (BackendBadConfig name err)
     make _ _ _ = error "makeBot.configuredBackends: 'impossible' state!"
 
   -- Start a backend with the provided plugins.
-  startWithPlugins (WrapBC b) = WrapBH <$> startBackend handleEv b where
-    handleEv _ = pure () -- todo
+  startWithPlugins (WrapBC b, eplugins) = WrapBH <$> startBackend handle b where
+    -- Unlike in original yukibot, the plugins (for a single backend)
+    -- are run in a single thread. This makes output more
+    -- deterministic when multiple plugins fire on the same event, and
+    -- in practice most plugins only deal with one type of event, so
+    -- this saves needless forking as well.
+    handle ev = mapM_ (\(Plugin plugin) -> plugin ev) enabledPlugins
+    enabledPlugins = H.filterWithKey (\k _ -> k `elem` eplugins) (plugins st)
   startWithPlugins _ = error "makeBot.startWithPlugins: 'impossible' state!"
 
   -- Kill a backend
@@ -104,10 +112,14 @@ makeBot st cfg = case (lefts &&& rights) configuredBackends of
 
 -- | Initial state for a bot.
 data BotState = BotState
-  { backends :: H.HashMap Text WrappedBackend }
+  { backends :: H.HashMap Text WrappedBackend
+  , plugins  :: H.HashMap Text Plugin
+  }
 
 initialBotState :: BotState
-initialBotState = BotState { backends = H.empty }
+initialBotState = BotState { backends = H.empty
+                           , plugins  = H.empty
+                           }
 
 -- | A 'Backend' with the type parameters hidden.
 data WrappedBackend where
@@ -117,15 +129,27 @@ data WrappedBackend where
 
 -- | Add a new backend.
 --
--- Returns @DuplicateBackendName@ if there is a clash.
+-- Returns @BackendNameClash@ if there is a clash.
 addBackend :: Text
   -- ^ The name of the backend (e.g. \"irc\")
   -> (Text -> Table -> Either Text (Backend channel user))
   -- ^ The instantiation function.
   -> BotState -> Either CoreError BotState
-addBackend name backend s = case H.lookup name (backends s) of
-  Just _ -> Left (BackendNameClash name)
-  Nothing -> Right s { backends = H.insert name (WrapB backend) (backends s) }
+addBackend name backend st
+  | H.member name (backends st) = Left (BackendNameClash name)
+  | otherwise = Right st { backends = H.insert name (WrapB backend) (backends st) }
+
+-- | Add a new plugin.
+--
+-- Returns @PluginNameClash@ if there is a clash.
+addPlugin :: Text
+  -- ^ The name of the plugin (e.g. \"hello\")
+  -> Plugin
+  -- ^ The plugin
+  -> BotState -> Either CoreError BotState
+addPlugin name plugin st
+  | H.member name (plugins st) = Left (PluginNameClash name)
+  | otherwise = Right st { plugins = H.insert name plugin (plugins st) }
 
 -------------------------------------------------------------------------------
 -- Errors
@@ -138,4 +162,6 @@ data CoreError
   -- ^ A backend was requested but it is unknown.
   | BackendBadConfig !Text !Text
   -- ^ The configuration for a backend is invalid.
+  | PluginNameClash !Text
+  -- ^ A plugin was added where the name was already taken.
   deriving (Eq, Ord, Read, Show)

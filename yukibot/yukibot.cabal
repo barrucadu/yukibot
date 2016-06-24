@@ -23,7 +23,7 @@ executable yukibot
   build-depends:       base                 >=4.9 && <4.10
                      , yukibot-backend-irc  >=2.0 && <2.1
                      , yukibot-core         >=2.0 && <2.1
-                     , yukibot-plugin-print >=2.0 && <2.1
+                     , yukibot-plugin-hello >=2.0 && <2.1
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options:         -Wall
