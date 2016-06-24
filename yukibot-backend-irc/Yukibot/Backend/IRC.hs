@@ -3,7 +3,7 @@
 
 -- |
 -- Module      : Yukibot.Backend.IRC
--- Copyright   : (2) 2016 Michael Walker
+-- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Stability   : experimental
 -- Portability : LambdaCase, OverloadedStrings
