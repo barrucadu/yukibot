@@ -110,7 +110,7 @@ addBackend :: Text
   -- ^ The instantiation function.
   -> BotState -> Either CoreError BotState
 addBackend name backend s = case H.lookup name (backends s) of
-  Just _ -> Left BackendNameClash
+  Just _ -> Left (BackendNameClash name)
   Nothing -> Right s { backends = H.insert name (WrapB backend) (backends s) }
 
 -------------------------------------------------------------------------------
@@ -118,7 +118,7 @@ addBackend name backend s = case H.lookup name (backends s) of
 
 -- | An error in the core.
 data CoreError
-  = BackendNameClash
+  = BackendNameClash !Text
   -- ^ A backend was added where the name was already taken.
   | BackendUnknown !Text
   -- ^ A backend was requested but it is unknown.
