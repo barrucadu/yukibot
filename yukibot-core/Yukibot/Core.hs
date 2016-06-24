@@ -11,7 +11,8 @@
 -- Portability : GADTs, LambdaCase, OverloadedStrings, ScopedTypeVariables
 module Yukibot.Core
     ( -- * Execution
-      makeBot
+      defaultMain
+    , makeBot
 
       -- * State
     , BotState(..)
@@ -32,10 +33,23 @@ import Data.Foldable (toList)
 import qualified Data.HashMap.Strict as H
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text (Text)
+import System.Exit (die)
+import System.FilePath (FilePath)
 import System.Posix.Signals (Handler(..), installHandler, sigINT, sigTERM)
 
-import Yukibot.Backend
+import Yukibot.Backend (Backend, BackendHandle, startBackend, stopBackend, awaitStop)
 import Yukibot.Configuration
+
+-- | A default @main@ function: parse the config file, and either
+-- halt+report errors, or start.
+defaultMain :: BotState -> FilePath -> IO ()
+defaultMain st fp = do
+  mcfg <- parseConfigFile fp
+  case mcfg of
+    Just cfg -> case makeBot st cfg of
+      Right run  -> run
+      Left  errs -> die ("Error creating bot: " ++ show errs)
+    Nothing -> die "Error parsing configuration file."
 
 -- | Create a bot with the given state and configuration, this
 -- terminates when all backends are stopped.
