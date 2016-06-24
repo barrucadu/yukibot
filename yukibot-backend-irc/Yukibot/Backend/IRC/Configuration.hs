@@ -11,8 +11,7 @@
 -- Configuration for the yukibot-core IRC backend.
 module Yukibot.Backend.IRC.Configuration
   ( -- * Validation
-    ConfigurationError(..)
-  , checkConfig
+    checkConfig
   , mgetNick
   , mgetPort
 
@@ -36,31 +35,18 @@ import qualified Data.Text as T
 
 import Yukibot.Configuration
 
--- | An error in the configuration
-data ConfigurationError
-  = MissingNick -- ^ The nick must be present and nonempty.
-  | MissingPort -- ^ The port must be present and >0.
-  deriving (Bounded, Enum, Eq, Ord, Read, Show)
-
--- | Check that the configuration is all ok, and return a description
--- if so.
-checkConfig :: Text -> Table -> Either ConfigurationError Text
+-- | Check that the configuration is all ok, and return either an
+-- error message, or a description.
+checkConfig :: Text -> Table -> Either Text Text
 checkConfig host cfg = case (mgetNick cfg, mgetPort cfg) of
   (Just n, Just p) | T.length n > 0 && p > 0 -> Right $
     let tls = if getTLS cfg then "ssl://" else ""
         port = pack (show p)
     in "IRC <" <> tls <> n <> "@" <> host <> ":" <> port <> ">"
-  (Just _, _)  -> Left MissingNick
-  (_, Just _)  -> Left MissingPort
-  (Nothing, _) -> Left MissingNick
-
-  -- You might expect this case here:
-  --
-  -- @(_, Nothing) -> Left MissingPort@
-  --
-  -- But this overlaps things above, so it's not necessary. The effect
-  -- of this is that nick errors take priority, in effect, over port
-  -- errors.
+  (Just n, _)  | T.length n <= 0 -> Left "nick must be longer than 0 characters"
+  (_, Just p)  | p <= 0          -> Left "port must be greater than 0"
+  (Nothing, _) -> Left "nick is required"
+  _            -> Left "port is required"
 
 -- | Get the nick from the configuration.
 --

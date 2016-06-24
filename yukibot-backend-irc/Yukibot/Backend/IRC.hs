@@ -9,7 +9,7 @@
 -- Portability : LambdaCase, OverloadedStrings
 --
 -- An IRC backend for yukibot-core.
-module Yukibot.Backend.IRC (Channel, User, ConfigurationError(..), ircBackend) where
+module Yukibot.Backend.IRC (Channel, User, ircBackend) where
 
 import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.STM
@@ -38,7 +38,7 @@ type User = Text
 -- TODO: Client-side timeout.
 ircBackend :: Text -- ^ The hostname.
   -> Table         -- ^ The configuration.
-  -> Either ConfigurationError (Y.Backend Channel User)
+  -> Either Text (Y.Backend Channel User)
 ircBackend host cfg = case checkConfig host cfg of
   Left err   -> Left err
   Right desc -> Right Y.Backend
