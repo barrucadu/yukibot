@@ -21,7 +21,7 @@ library
                      , Yukibot.Configuration
                      , Yukibot.Core
                      , Yukibot.Log
-                     , Yukibot.Plugin
+                     , Yukibot.Types
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base                 >=4.9 && <4.10

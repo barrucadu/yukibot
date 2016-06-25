@@ -27,18 +27,7 @@ import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 
-import Yukibot.Backend
-
-data Logger channel user = Logger
-  { loggerToServer   :: Text -> IO ()
-  -- ^ Log a raw message sent to the server.
-  , loggerFromServer :: Text -> IO ()
-  -- ^ Log a raw message received from the server.
-  , loggerEvent      :: Event channel user -> IO ()
-    -- ^ Log an event received from the backend.
-  , loggerAction     :: BackendAction channel user -> IO ()
-    -- ^ Log an action sent to the backend.
-  }
+import Yukibot.Types
 
 -- | Create a logger.
 logger :: (channel -> Text) -> (user -> Text)
@@ -54,9 +43,6 @@ logger showc showu rawf unrawf = Logger
 
 -------------------------------------------------------------------------------
 -- Component loggers
-
-data Direction = ToServer | FromServer
-  deriving (Bounded, Enum, Eq, Ord, Read, Show)
 
 -- | Raw messages are those sent to and from the server, with no
 -- interpretation.
@@ -81,11 +67,11 @@ logEvent showc showu fp (Event _ mc u txt) = logRaw fp FromServer $ case mc of
 -- | Actions are used to instruct the backend.
 logAction :: (channel -> Text) -- ^ Pretty-print channel names.
   -> (user -> Text)            -- ^ Pretty-print user names.
-  -> FilePath -> BackendAction channel user -> IO ()
+  -> FilePath -> Action channel user -> IO ()
 logAction showc showu fp act = logRaw fp ToServer $ case act of
   Join  c -> "[join: "  <> showc c <> "]"
   Leave c -> "[leave: " <> showc c <> "]"
-  Say c []  (Message m) -> "[in: " <> showc c <> "]: " <> m
-  Say c us  (Message m) -> "[in: " <> showc c <> "] [to: " <> T.intercalate ", " (map showu us) <> "]: " <> m
-  Whisper u (Message m) -> "[to: " <> showu u <> "]: " <> m
+  Say c []  m -> "[in: " <> showc c <> "]: " <> m
+  Say c us  m -> "[in: " <> showc c <> "] [to: " <> T.intercalate ", " (map showu us) <> "]: " <> m
+  Whisper u m -> "[to: " <> showu u <> "]: " <> m
   Terminate -> "[stop]"

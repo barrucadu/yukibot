@@ -39,9 +39,9 @@ import System.Exit (die)
 import System.FilePath (FilePath)
 import System.Posix.Signals (Handler(..), installHandler, sigINT, sigTERM)
 
-import Yukibot.Backend (Backend, BackendHandle, startBackend, stopBackend, awaitStop)
+import Yukibot.Backend (startBackend, stopBackend, awaitStop)
 import Yukibot.Configuration
-import Yukibot.Plugin
+import Yukibot.Types
 
 -- | A default @main@ function: parse the config file, and either
 -- halt+report errors, or start.
@@ -50,7 +50,7 @@ defaultMain st fp = do
   mcfg <- parseConfigFile fp
   case mcfg of
     Just cfg -> case makeBot st cfg of
-      Right run  -> run
+      Right go   -> go
       Left  errs -> die ("Error creating bot: " ++ show errs)
     Nothing -> die "Error parsing configuration file."
 

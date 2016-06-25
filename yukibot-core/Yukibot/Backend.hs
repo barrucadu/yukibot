@@ -1,17 +1,12 @@
-{-# LANGUAGE GADTs #-}
-
 -- |
 -- Module      : Yukibot.Backend
 -- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Stability   : experimental
--- Portability : GADTs
+-- Portability : portable
 module Yukibot.Backend
-  ( Event(..)
-  , Message(..)
-
-    -- * Starting and stopping
-  , BackendHandle
+  ( -- * Starting and stopping
+    BackendHandle
   , startBackend
   , stopBackend
   , awaitStart
@@ -25,7 +20,7 @@ module Yukibot.Backend
 
   -- * Interaction
   , BackendTerminatedException(..)
-  , BackendAction(..)
+  , Action(..)
   , sendAction
   -- ** STM
   , sendActionSTM
@@ -40,35 +35,13 @@ module Yukibot.Backend
 import Control.Concurrent (forkIO)
 import Control.Concurrent.STM
 import Control.Monad (void, when)
-import Control.Monad.Catch (Exception, throwM)
+import Control.Monad.Catch (throwM)
 import Data.Text (Text)
 
--- | A representation of a backend, it is parameterised by the channel
--- and user types.
---
--- TODO: Pass configuration in.
---
--- TODO: Have configuration determine description.
---
--- TODO: Do raw logging in backend, event/action logging in core.
-data Backend channel user where
-  Backend :: { initialise :: ((BackendHandle channel user -> IO (Event channel user)) -> IO ()) -> IO a
-             , run :: TQueue (BackendAction channel user) -> a -> IO ()
-             , describe :: Text
-             } -> Backend channel user
+import Yukibot.Types
 
 -------------------------------------------------------------------------------
 -- Starting and stopping
-
--- | An abstract handle to a backend, which can be used to interact
--- with it.
-data BackendHandle channel user = BackendHandle
-  { msgQueue    :: TQueue (BackendAction channel user)
-  , hasStarted  :: TVar Bool
-  , hasStopped  :: TVar Bool
-  , description :: Text
-  }
-  deriving Eq
 
 -- | Start executing a backend in another thread.
 --
@@ -130,41 +103,15 @@ hasStoppedSTM = readTVar . hasStopped
 -------------------------------------------------------------------------------
 -- Interaction
 
--- | TODO: A richer message type, in its own module.
-newtype Message = Message Text
-  deriving (Eq, Read, Show)
-
--- | TODO: A richer event type, in its own module.
-data Event channel user = Event (BackendHandle channel user) (Maybe channel) user Text
-
--- | All the actions a backend can perform.
-data BackendAction channel user
-  = Join channel
-  -- ^ Join a new channel.
-  | Leave channel
-  -- ^ Leave a current channel.
-  | Say channel [user] Message
-  -- ^ Send a message to a channel, optionally addressed to a collection of users.
-  | Whisper user Message
-  -- ^ Send a message to a user.
-  | Terminate
-  -- ^ Gracefully disconnect and stop running.
-  deriving (Eq, Read, Show)
-
-data BackendTerminatedException = BackendTerminatedException
-  deriving (Bounded, Enum, Eq, Ord, Read, Show)
-
-instance Exception BackendTerminatedException
-
 -- | Instruct the backend to perform an action. If the backend has
 -- terminated, throws 'BackendTerminatedException'.
 --
 -- Note: @sendAction b Terminate@ is exactly the same as @stopBackend b@
-sendAction :: BackendHandle channel user -> BackendAction channel user -> IO ()
+sendAction :: BackendHandle channel user -> Action channel user -> IO ()
 sendAction b = atomically . sendActionSTM b
 
 -- | STM variant of 'sendAction'.
-sendActionSTM :: BackendHandle channel user -> BackendAction channel user -> STM ()
+sendActionSTM :: BackendHandle channel user -> Action channel user -> STM ()
 sendActionSTM b a = do
   throwOnStop b
   writeTQueue (msgQueue b) a

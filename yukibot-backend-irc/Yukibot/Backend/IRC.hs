@@ -27,6 +27,7 @@ import System.FilePath ((<.>))
 
 import qualified Yukibot.Backend as Y
 import qualified Yukibot.Log as Y
+import qualified Yukibot.Types as Y
 
 import Yukibot.Backend.IRC.Configuration
 
@@ -96,7 +97,7 @@ connectToIrc logger host cfg receiveEvent = do
 
 -- | Connect to an IRC server and listen for events.
 handleIrc :: Y.Logger Channel User
-  -> TQueue (Y.BackendAction Channel User)
+  -> TQueue (Y.Action Channel User)
   -> BackendState
   -> IO ()
 handleIrc logger commandQueue (runIrc, terminate, stopvar) = process where
@@ -123,11 +124,11 @@ handleIrc logger commandQueue (runIrc, terminate, stopvar) = process where
       Just (Y.Leave channel) -> do
         IRC.leaveChannel channel $ Just "Goodbye!"
         pure True
-      Just (Y.Say channel users (Y.Message message)) -> do
+      Just (Y.Say channel users message) -> do
         let who = if null users then "" else intercalate ", " users <> ": "
         IRC.send $ IRC.Notice channel (Right $ who <> message)
         pure True
-      Just (Y.Whisper user (Y.Message message)) -> do
+      Just (Y.Whisper user message) -> do
         IRC.send $ IRC.Notice user (Right message)
         pure True
       _ -> pure False
