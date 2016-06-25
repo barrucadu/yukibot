@@ -18,13 +18,14 @@ module Yukibot.Types
   , BackendTerminatedException(..)
   -- * Logging
   , Logger(..)
-  , Direction(..)
+  , RawLogger(..)
   -- * Plugins
   , Plugin(..)
   ) where
 
 import Control.Concurrent.STM (TQueue, TVar)
 import Control.Monad.Catch (Exception)
+import Data.ByteString (ByteString)
 import Data.Text (Text)
 
 -------------------------------------------------------------------------------
@@ -63,20 +64,27 @@ data Action channel user
 --
 -- TODO: Do raw logging in backend, event/action logging in core.
 data Backend channel user where
-  Backend :: { initialise :: ((BackendHandle channel user -> IO (Event channel user)) -> IO ()) -> IO a
+  Backend :: { initialise :: RawLogger -> ((BackendHandle channel user -> Event channel user) -> IO ()) -> IO a
              , run :: TQueue (Action channel user) -> a -> IO ()
              , describe :: Text
+             , showChannel :: channel -> Text
+             , showUser :: user -> Text
+             , rawLogFile :: FilePath
+             , unrawLogFile :: FilePath
              } -> Backend channel user
 
 -- | An abstract handle to a backend, which can be used to interact
 -- with it.
 data BackendHandle channel user = BackendHandle
-  { msgQueue    :: TQueue (Action channel user)
-  , hasStarted  :: TVar Bool
-  , hasStopped  :: TVar Bool
-  , description :: Text
+  { msgQueue     :: TQueue (Action channel user)
+  , hasStarted   :: TVar Bool
+  , hasStopped   :: TVar Bool
+  , description  :: Text
+  , actionLogger :: Action channel user -> IO ()
   }
-  deriving Eq
+
+instance Eq (BackendHandle channel user) where
+  h1 == h2 = msgQueue h1 == msgQueue h2
 
 data BackendTerminatedException = BackendTerminatedException
   deriving (Bounded, Enum, Eq, Ord, Read, Show)
@@ -86,19 +94,23 @@ instance Exception BackendTerminatedException
 -------------------------------------------------------------------------------
 -- Logging
 
+-- | A logger of events and actions received from and sent to the
+-- backend by the bot.
 data Logger channel user = Logger
-  { loggerToServer   :: Text -> IO ()
-  -- ^ Log a raw message sent to the server.
-  , loggerFromServer :: Text -> IO ()
-  -- ^ Log a raw message received from the server.
-  , loggerEvent      :: Event channel user -> IO ()
+  { loggerEvent :: Event channel user -> IO ()
     -- ^ Log an event received from the backend.
-  , loggerAction     :: Action channel user -> IO ()
+  , loggerAction :: Action channel user -> IO ()
     -- ^ Log an action sent to the backend.
   }
 
-data Direction = ToServer | FromServer
-  deriving (Bounded, Enum, Eq, Ord, Read, Show)
+-- | A logger of raw messages sent to and from the server by the
+-- backend.
+data RawLogger = RawLogger
+  { rawToServer :: ByteString -> IO ()
+  -- ^ Log a raw message sent to the server.
+  , rawFromServer :: ByteString -> IO ()
+  -- ^ Log a raw message received from the server.
+  }
 
 -------------------------------------------------------------------------------
 -- Plugins

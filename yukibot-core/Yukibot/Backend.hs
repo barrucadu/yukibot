@@ -12,7 +12,6 @@ module Yukibot.Backend
   , awaitStart
   , awaitStop
   -- ** STM
-  , stopBackendSTM
   , awaitStartSTM
   , awaitStopSTM
   , hasStartedSTM
@@ -22,8 +21,6 @@ module Yukibot.Backend
   , BackendTerminatedException(..)
   , Action(..)
   , sendAction
-  -- ** STM
-  , sendActionSTM
 
   -- * Miscellaneous
   , describeBackend
@@ -38,12 +35,13 @@ import Control.Monad (void, when)
 import Control.Monad.Catch (throwM)
 import Data.Text (Text)
 
+import Yukibot.Log (loggerFromBackend, rawLoggerFromBackend)
 import Yukibot.Types
 
 -------------------------------------------------------------------------------
 -- Starting and stopping
 
--- | Start executing a backend in another thread.
+-- | Start executing a backend, with logging, in another thread.
 --
 -- This will return immediately. If you want to block until the
 -- backend is ready, see 'awaitStart'.
@@ -51,9 +49,13 @@ startBackend :: (Event channel user -> IO ())
   -- ^ Process received events
   -> Backend channel user
   -> IO (BackendHandle channel user)
-startBackend onReceive b@(Backend setup exec _) = do
-  h <- createHandle b
-  forkAndRunBackend h (setup $ \ef -> onReceive =<< ef h) (exec $ msgQueue h)
+startBackend onReceive b@(Backend setup exec _ _ _ _ _) = do
+  (h, eventLogger) <- createHandle b
+
+  let rawlogger = rawLoggerFromBackend b
+  let receive ef = let e = ef h in eventLogger e >> onReceive e
+
+  forkAndRunBackend h (setup rawlogger receive) (exec $ msgQueue h)
   pure h
 
 -- | Tell a backend to terminate. If the backend has already
@@ -64,11 +66,7 @@ startBackend onReceive b@(Backend setup exec _) = do
 -- terminating. If you want to block until the backend is closed, see
 -- 'awaitStop'.
 stopBackend :: BackendHandle channel user -> IO ()
-stopBackend = atomically . stopBackendSTM
-
--- | STM variant of 'stopBackend'.
-stopBackendSTM :: BackendHandle channel user -> STM ()
-stopBackendSTM b = sendActionSTM b Terminate
+stopBackend h = sendAction h Terminate
 
 -- | Block until the backend is initialised. If the backend has
 -- terminated, or terminates while waiting, this unblocks and throws
@@ -106,15 +104,11 @@ hasStoppedSTM = readTVar . hasStopped
 -- | Instruct the backend to perform an action. If the backend has
 -- terminated, throws 'BackendTerminatedException'.
 --
--- Note: @sendAction b Terminate@ is exactly the same as @stopBackend b@
+-- Note: @sendAction h Terminate@ is exactly the same as @stopBackend h@
 sendAction :: BackendHandle channel user -> Action channel user -> IO ()
-sendAction b = atomically . sendActionSTM b
-
--- | STM variant of 'sendAction'.
-sendActionSTM :: BackendHandle channel user -> Action channel user -> STM ()
-sendActionSTM b a = do
-  throwOnStop b
-  writeTQueue (msgQueue b) a
+sendAction h a = do
+  atomically $ writeTQueue (msgQueue h) a
+  actionLogger h a
 
 -------------------------------------------------------------------------------
 -- Miscellaneous
@@ -126,21 +120,28 @@ describeBackend = description
 -------------------------------------------------------------------------------
 -- Internal
 
--- | Create a new 'BackendHandle'.
-createHandle :: Backend channel user -> IO (BackendHandle channel user)
+-- | Create a new 'BackendHandle' and event logger.
+createHandle :: Backend channel user -> IO (BackendHandle channel user, Event channel user -> IO ())
 createHandle b = atomically $ do
   queue    <- newTQueue
   startvar <- newTVar False
   stopvar  <- newTVar False
 
-  pure BackendHandle { msgQueue = queue
-                     , hasStarted = startvar
-                     , hasStopped = stopvar
-                     , description = describe b
-                     }
+  let logger = loggerFromBackend b
+  let handle = BackendHandle { msgQueue = queue
+                             , hasStarted = startvar
+                             , hasStopped = stopvar
+                             , description = describe b
+                             , actionLogger = loggerAction logger
+                             }
+
+  pure (handle, loggerEvent logger)
 
 -- | Initialise and run a backend in a new thread.
-forkAndRunBackend :: BackendHandle channel user -> IO a -> (a -> IO ()) -> IO ()
+forkAndRunBackend :: BackendHandle channel user
+  -> IO a
+  -> (a -> IO ())
+  -> IO ()
 forkAndRunBackend h setup exec = void . forkIO $ do
   a <- setup
   atomically $ writeTVar (hasStarted h) True

@@ -18,6 +18,18 @@ nick = "yukibot"
 port = 7000
 tls  = true                         ## default: false
 
+# A backend had two log files: a "raw" log file, which consists of the
+# messages sent between the backend and the server, and another log
+# which consists of events and actions in the bot received from and
+# sent to that backend.
+#
+# The "logfile" and "rawlogfile" fields are common to all backends
+# and, if not present, are filled in to a default value (determined by
+# the backend). For the IRC backend, the names
+# "irc-<host>-<nick>.raw.log" and "irc-<host>-<nick>.log" are used.
+logfile    = "freenode.log"
+rawlogfile = "freenode.raw.log"
+
 # List of channels to join after welcome.
 channels = [ "##compsoc-uk-anime" ] ## default: []
 

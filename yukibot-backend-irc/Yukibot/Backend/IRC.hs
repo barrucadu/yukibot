@@ -20,7 +20,7 @@ import Data.ByteString (ByteString)
 import Data.Maybe (fromMaybe)
 import Data.Semigroup ((<>))
 import Data.Text (Text, intercalate, unpack)
-import Data.Text.Encoding (decodeUtf8, encodeUtf8)
+import Data.Text.Encoding (encodeUtf8)
 import Network.IRC.Client (connect', connectWithTLS', defaultIRCConf)
 import qualified Network.IRC.Client as IRC
 import System.FilePath ((<.>))
@@ -44,18 +44,19 @@ ircBackend :: Text  -- ^ The hostname.
   -> Either Text (Y.Backend Channel User)
 ircBackend host cfg = case checkConfig host cfg of
   Left err   -> Left err
-  Right desc -> let logger = ircLogger host cfg in Right Y.Backend
-    { Y.initialise = connectToIrc logger host cfg
-    , Y.run = handleIrc logger
-    , Y.describe = desc
-    }
-
--- | A simple logger: logs to the filename in the config if given,
--- uses hostname if not.
-ircLogger :: Text -> Table -> Y.Logger Channel User
-ircLogger host cfg = Y.logger id id rawLog unrawLog where
-  rawLog   = fromMaybe (unpack host <.> "raw.log") (getRawLogFile cfg)
-  unrawLog = fromMaybe (unpack host <.> "log")     (getLogFile    cfg)
+  Right desc ->
+    let logFileName = unpack $ "irc-" <> host <> "-" <> getNick cfg
+    in Right Y.Backend
+       { Y.initialise = connectToIrc host cfg
+       , Y.run = handleIrc
+       , Y.describe = desc
+       , Y.showChannel = id
+       , Y.showUser = id
+       -- The log file names are overridden by the core if specified
+       -- in the config, so these are just defaults.
+       , Y.rawLogFile   = logFileName <.> "raw.log"
+       , Y.unrawLogFile = logFileName <.> "log"
+       }
 
 -------------------------------------------------------------------------------
 -- Backend main
@@ -63,12 +64,12 @@ ircLogger host cfg = Y.logger id id rawLog unrawLog where
 type BackendState = (IRC.IRC Bool -> IO Bool, IO (), TVar Bool)
 
 -- | Set up the IRC connection.
-connectToIrc :: Y.Logger Channel User
-  -> Text
+connectToIrc :: Text
   -> Table
-  -> ((Y.BackendHandle Channel User -> IO (Y.Event Channel User)) -> IO ())
+  -> Y.RawLogger
+  -> ((Y.BackendHandle Channel User -> Y.Event Channel User) -> IO ())
   -> IO BackendState
-connectToIrc logger host cfg receiveEvent = do
+connectToIrc host cfg logger receiveEvent = do
   cconf <- (if getTLS cfg then connectWithTLS' else connect')
              (botLogger logger)
              (encodeUtf8 host)
@@ -84,7 +85,7 @@ connectToIrc logger host cfg receiveEvent = do
   let cconf' = cconf { IRC._ondisconnect = IRC._ondisconnect cconf >> liftIO (atomically stopper) }
 
   (welcomevar, welcomer) <- atomically (newWelcomeHandler (getNickserv cfg) (getNickservPassword cfg))
-  let receiver = receiveHandler logger receiveEvent
+  let receiver = receiveHandler receiveEvent
   let iconf' = iconf { IRC._eventHandlers = receiver : welcomer : IRC._eventHandlers iconf }
   state <- IRC.newIRCState cconf' iconf' ()
   tid <- forkIO (IRC.start' state)
@@ -96,15 +97,15 @@ connectToIrc logger host cfg receiveEvent = do
   pure ((`runReaderT` state), killThread tid, stopvar)
 
 -- | Connect to an IRC server and listen for events.
-handleIrc :: Y.Logger Channel User
-  -> TQueue (Y.Action Channel User)
+handleIrc :: TQueue (Y.Action Channel User)
   -> BackendState
   -> IO ()
-handleIrc logger commandQueue (runIrc, terminate, stopvar) = process where
+handleIrc commandQueue (runIrc, terminate, stopvar) = process where
   -- Main loop: wait for commands (or for termination of the IRC
   -- client) and process them.
   process :: IO ()
   process = do
+    -- Wait for an action, or termination of the client thread.
     act <- atomically $ do
       stopped <- readTVar stopvar
       action  <- tryReadTQueue commandQueue
@@ -112,9 +113,6 @@ handleIrc logger commandQueue (runIrc, terminate, stopvar) = process where
         (True, _) -> pure Nothing
         (False, Just a) -> pure (Just a)
         (False, Nothing) -> retry
-
-    -- Log the action
-    maybe (pure ()) (Y.loggerAction logger) act
 
     -- Process the action
     continue <- runIrc $ case act of
@@ -147,15 +145,14 @@ newFlag = do
   pure (flagvar, writeTVar flagvar True)
 
 -- | Log raw messages.
-botLogger :: Y.Logger Channel User -> IRC.Origin -> ByteString -> IO ()
-botLogger logger IRC.FromClient = Y.loggerToServer   logger . decodeUtf8
-botLogger logger IRC.FromServer = Y.loggerFromServer logger . decodeUtf8
+botLogger :: Y.RawLogger -> IRC.Origin -> ByteString -> IO ()
+botLogger logger IRC.FromClient = Y.rawToServer   logger
+botLogger logger IRC.FromServer = Y.rawFromServer logger
 
 -- | Event handler for message reception.
-receiveHandler :: Y.Logger Channel User
-  -> ((Y.BackendHandle Channel User -> IO (Y.Event Channel User)) -> IO ())
+receiveHandler :: ((Y.BackendHandle Channel User -> Y.Event Channel User) -> IO ())
   -> IRC.EventHandler s
-receiveHandler logger receiveEvent = IRC.EventHandler
+receiveHandler receiveEvent = IRC.EventHandler
   { IRC._description = "Receive PRIVMSGs and forward them to yukibot-core."
   , IRC._matchType = IRC.EPrivmsg
   , IRC._eventFunc = liftIO . dispatchEvent
@@ -164,9 +161,9 @@ receiveHandler logger receiveEvent = IRC.EventHandler
     -- Decode and send off an event.
     dispatchEvent :: IRC.UnicodeEvent -> IO ()
     dispatchEvent (IRC.Event _ (IRC.User nick) (IRC.Privmsg _ (Right msg))) =
-      receiveEvent (\h -> let e = Y.Event h Nothing nick msg in Y.loggerEvent logger e >> pure e)
+      receiveEvent (\h -> Y.Event h Nothing nick msg)
     dispatchEvent (IRC.Event _ (IRC.Channel chan nick) (IRC.Privmsg _ (Right msg))) =
-      receiveEvent (\h -> let e = Y.Event h (Just chan) nick msg in Y.loggerEvent logger e >> pure e)
+      receiveEvent (\h -> Y.Event h (Just chan) nick msg)
     dispatchEvent _ = pure ()
 
 -- | Flag and handler for 001 (numeric welcome). Flag is set to 'True'

@@ -34,7 +34,7 @@ import Data.Either (lefts, rights)
 import Data.Foldable (toList)
 import qualified Data.HashMap.Strict as H
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 import System.Exit (die)
 import System.FilePath (FilePath)
 import System.Posix.Signals (Handler(..), installHandler, sigINT, sigTERM)
@@ -84,7 +84,14 @@ makeBot st cfg = case (lefts &&& rights) configuredBackends of
       _ -> [Left $ BackendUnknown name]
     get _ = []
     make (WrapB wrapped) name inst = case wrapped name inst of
-      Right b  -> Right (WrapBC b, getStrings "plugins" inst)
+      Right b  ->
+        let enabledPlugins = getStrings "plugins" inst
+            -- Override the log files of the backend with values from
+            -- the configuration, if present.
+            b' = b { unrawLogFile = maybe (unrawLogFile b) unpack $ getString "logfile"    inst
+                   , rawLogFile   = maybe (rawLogFile   b) unpack $ getString "rawlogfile" inst
+                   }
+        in Right (WrapBC b', enabledPlugins)
       Left err -> Left (BackendBadConfig name err)
     make _ _ _ = error "makeBot.configuredBackends: 'impossible' state!"
 
