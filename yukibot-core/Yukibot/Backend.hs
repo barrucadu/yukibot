@@ -49,8 +49,10 @@ import Data.Text (Text)
 -- TODO: Pass configuration in.
 --
 -- TODO: Have configuration determine description.
+--
+-- TODO: Do raw logging in backend, event/action logging in core.
 data Backend channel user where
-  Backend :: { initialise :: ((BackendHandle channel user -> Event channel user) -> IO ()) -> IO a
+  Backend :: { initialise :: ((BackendHandle channel user -> IO (Event channel user)) -> IO ()) -> IO a
              , run :: TQueue (BackendAction channel user) -> a -> IO ()
              , describe :: Text
              } -> Backend channel user
@@ -78,7 +80,7 @@ startBackend :: (Event channel user -> IO ())
   -> IO (BackendHandle channel user)
 startBackend onReceive b@(Backend setup exec _) = do
   h <- createHandle b
-  forkAndRunBackend h (setup $ \ef -> onReceive (ef h)) (exec $ msgQueue h)
+  forkAndRunBackend h (setup $ \ef -> onReceive =<< ef h) (exec $ msgQueue h)
   pure h
 
 -- | Tell a backend to terminate. If the backend has already

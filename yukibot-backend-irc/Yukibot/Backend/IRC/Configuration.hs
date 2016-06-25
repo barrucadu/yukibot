@@ -23,6 +23,8 @@ module Yukibot.Backend.IRC.Configuration
   , getServerPassword
   , getNickserv
   , getNickservPassword
+  , getLogFile
+  , getRawLogFile
 
   -- * Re-exports
   , Table
@@ -30,7 +32,7 @@ module Yukibot.Backend.IRC.Configuration
 
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid ((<>))
-import Data.Text (Text, pack)
+import Data.Text (Text, pack, unpack)
 import qualified Data.Text as T
 
 import Yukibot.Configuration
@@ -95,6 +97,14 @@ getNickserv = fromMaybe "nickserv" . getString "nickserv"
 -- @Nothing@.
 getNickservPassword :: Table -> Maybe Text
 getNickservPassword = mguard ((>0) . T.length) . getString "nickserv-password"
+
+-- | Get the log file. Defaults to @Nothing@.
+getLogFile :: Table -> Maybe FilePath
+getLogFile = fmap unpack . mguard ((>0) . T.length) . getString "log"
+
+-- | Get the raw log file. Defaults to @Nothing@.
+getRawLogFile :: Table -> Maybe FilePath
+getRawLogFile = fmap unpack . mguard ((>0) . T.length) . getString "rawlog"
 
 -------------------------------------------------------------------------------
 

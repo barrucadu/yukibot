@@ -20,6 +20,7 @@ library
   exposed-modules:     Yukibot.Backend
                      , Yukibot.Configuration
                      , Yukibot.Core
+                     , Yukibot.Log
                      , Yukibot.Plugin
   -- other-modules:       
   -- other-extensions:    
