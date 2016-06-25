@@ -17,7 +17,6 @@ import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (runReaderT)
 import Data.ByteString (ByteString)
-import Data.Maybe (fromMaybe)
 import Data.Semigroup ((<>))
 import Data.Text (Text, intercalate, unpack)
 import Data.Text.Encoding (encodeUtf8)
@@ -25,9 +24,7 @@ import Network.IRC.Client (connect', connectWithTLS', defaultIRCConf)
 import qualified Network.IRC.Client as IRC
 import System.FilePath ((<.>))
 
-import qualified Yukibot.Backend as Y
-import qualified Yukibot.Log as Y
-import qualified Yukibot.Types as Y
+import qualified Yukibot.Core as Y
 
 import Yukibot.Backend.IRC.Configuration
 

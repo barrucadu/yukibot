@@ -12,8 +12,7 @@ module Yukibot.Plugin.Hello where
 
 import qualified Data.Text as T
 
-import Yukibot.Backend
-import Yukibot.Types
+import Yukibot.Core
 
 helloPlugin :: Plugin
 helloPlugin = Plugin plugin where
