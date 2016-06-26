@@ -16,4 +16,4 @@ main = case initialState of
 initialState :: Either CoreError BotState
 initialState = addBackend "irc" ircBackend   =<<
                addPlugin "hello" helloPlugin =<<
-               pure initialBotState
+               pure emptyBotState

@@ -15,10 +15,9 @@ module Yukibot.Main
     , makeBot
 
       -- * State
-    , BotState(..)
-    , initialBotState
+    , BotState
+    , emptyBotState
       -- ** Backends
-    , WrappedBackend(WrapB)
     , addBackend
     -- ** Plugins
     , addPlugin
@@ -140,10 +139,11 @@ data BotState = BotState
   , plugins  :: H.HashMap Text (Table -> Either Text Plugin)
   }
 
-initialBotState :: BotState
-initialBotState = BotState { backends = H.empty
-                           , plugins  = H.empty
-                           }
+-- | An empty bot state: no backends, no plugins.
+emptyBotState :: BotState
+emptyBotState = BotState { backends = H.empty
+                         , plugins  = H.empty
+                         }
 
 -- | A 'Backend' with the type parameters hidden.
 data WrappedBackend where
