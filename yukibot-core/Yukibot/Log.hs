@@ -36,53 +36,61 @@ import Yukibot.Types
 
 -- | Create an event/action logger.
 logger :: (channel -> Text)
+  -- ^ Pretty-print channel names.
   -> (user -> Text)
-  -> FilePath
-  -> Logger channel user
-logger showc showu fp = Logger
-  { loggerEvent  = logEvent showc showu fp
-  , loggerAction = logAction showc showu fp
+  -- ^ Pretty-print user names.
+  -> Tag -> FilePath -> Logger channel user
+logger showc showu tag fp = Logger
+  { loggerEvent  = logEvent showc showu tag fp
+  , loggerAction = logAction showc showu tag fp
   }
 
 -- | Create an event/action logger from a backend.
 loggerFromBackend :: Backend' channel user -> Logger channel user
-loggerFromBackend b = logger (showChannel b) (showUser b) (unrawLogFile b)
+loggerFromBackend b = logger (showChannel  b)
+                             (showUser     b)
+                             (Tag $ describe b)
+                             (unrawLogFile b)
 
 -- | Create a raw logger.
-rawLogger :: FilePath -> RawLogger
-rawLogger fp = RawLogger
-  { rawToServer = logRawTo fp
-  , rawFromServer = logRawFrom fp
+rawLogger :: Tag -> FilePath -> RawLogger
+rawLogger tag fp = RawLogger
+  { rawToServer = logRawTo tag fp
+  , rawFromServer = logRawFrom tag fp
   }
 
 -- | Create a raw logger from a backend.
 rawLoggerFromBackend :: Backend' channel user -> RawLogger
-rawLoggerFromBackend = rawLogger . rawLogFile
+rawLoggerFromBackend b = rawLogger (Tag $ describe b) (rawLogFile b)
 
 -------------------------------------------------------------------------------
 -- Component loggers
 
 -- | A message sent from the backend to the server.
-logRawTo :: FilePath -> ByteString -> IO ()
-logRawTo fp = logInternalTo fp . init . tail . show
+logRawTo :: Tag -> FilePath -> ByteString -> IO ()
+logRawTo tag fp = logInternalTo tag fp . init . tail . show
 
 -- | A message sent from the server to the backend.
-logRawFrom :: FilePath -> ByteString -> IO ()
-logRawFrom fp = logInternalFrom fp . init . tail . show
+logRawFrom :: Tag -> FilePath -> ByteString -> IO ()
+logRawFrom tag fp = logInternalFrom tag fp . init . tail . show
 
 -- | Events come in from the server.
-logEvent :: (channel -> Text) -- ^ Pretty-print channel names.
-  -> (user -> Text)           -- ^ Pretty-print user names.
-  -> FilePath -> Event channel user -> IO ()
-logEvent showc showu fp (Event _ mc u txt) = logInternalFrom fp . unpack $ case mc of
+logEvent :: (channel -> Text)
+  -- ^ Pretty-print channel names.
+  -> (user -> Text)
+  -- ^ Pretty-print user names.
+  -> Tag -> FilePath -> Event channel user -> IO ()
+logEvent showc showu tag fp (Event _ mc u txt) = logInternalFrom tag fp . unpack $ case mc of
   Just c  -> "[in: " <> showc c <> "] [from: " <> showu u <> "]: " <> txt
   Nothing ->                         "[from: " <> showu u <> "]: " <> txt
 
 -- | Actions are used to instruct the backend.
-logAction :: (channel -> Text) -- ^ Pretty-print channel names.
-  -> (user -> Text)            -- ^ Pretty-print user names.
-  -> FilePath -> Action channel user -> IO ()
-logAction showc showu fp act = logInternalTo fp . unpack $ case act of
+logAction :: (channel -> Text)
+  -- ^ Pretty-print channel names.
+  -> (user -> Text)
+  -- ^ Pretty-print user names.
+  -> Tag -> FilePath -> Action channel user -> IO ()
+logAction showc showu tag fp act = logInternalTo tag fp . unpack $ case act of
   Join  c -> "[join: "  <> showc c <> "]"
   Leave c -> "[leave: " <> showc c <> "]"
   Say c []  m -> "[in: " <> showc c <> "]: " <> m
@@ -94,19 +102,17 @@ logAction showc showu fp act = logInternalTo fp . unpack $ case act of
 -- Helpers
 
 -- | Log a message sent TO something.
-logInternalTo :: FilePath -> String -> IO ()
-logInternalTo = logInternal "--->"
+logInternalTo :: Tag -> FilePath -> String -> IO ()
+logInternalTo = logInternal " ---> "
 
 -- | Log a message received FROM something.
-logInternalFrom :: FilePath -> String -> IO ()
-logInternalFrom = logInternal "<---"
+logInternalFrom :: Tag -> FilePath -> String -> IO ()
+logInternalFrom = logInternal " <--- "
 
 -- | Log a message.
-logInternal :: String -> FilePath -> String -> IO ()
-logInternal arrow fp msg = do
+logInternal :: String -> Tag -> FilePath -> String -> IO ()
+logInternal arrow (Tag tag) fp msg = do
   now <- getCurrentTime
-  appendFile fp $ unwords
-    [ formatTime defaultTimeLocale "%c" now
-    , arrow
-    , msg ++ "\n"
-    ]
+  let logEntry = unwords [formatTime defaultTimeLocale "%c" now, arrow, msg]
+  appendFile fp (logEntry ++ "\n")
+  putStrLn (unpack tag ++ " " ++ logEntry)

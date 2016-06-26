@@ -22,6 +22,7 @@ module Yukibot.Types
   -- * Logging
   , Logger(..)
   , RawLogger(..)
+  , Tag(..)
   -- * Plugins
   , PluginName(..)
   , Plugin(..)
@@ -120,6 +121,12 @@ data RawLogger = RawLogger
   , rawFromServer :: ByteString -> IO ()
   -- ^ Log a raw message received from the server.
   }
+
+-- | A tag displayed in the stdout log to indicate which backend a
+-- message is from. Tags are not included in the backend-specific log
+-- files.
+newtype Tag = Tag { getTag :: Text }
+  deriving (Eq, Ord, Read, Show, Hashable, IsString)
 
 -------------------------------------------------------------------------------
 -- Plugins
