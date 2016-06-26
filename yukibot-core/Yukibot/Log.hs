@@ -45,7 +45,7 @@ logger showc showu fp = Logger
   }
 
 -- | Create an event/action logger from a backend.
-loggerFromBackend :: Backend channel user -> Logger channel user
+loggerFromBackend :: Backend' channel user -> Logger channel user
 loggerFromBackend b = logger (showChannel b) (showUser b) (unrawLogFile b)
 
 -- | Create a raw logger.
@@ -56,7 +56,7 @@ rawLogger fp = RawLogger
   }
 
 -- | Create a raw logger from a backend.
-rawLoggerFromBackend :: Backend channel user -> RawLogger
+rawLoggerFromBackend :: Backend' channel user -> RawLogger
 rawLoggerFromBackend = rawLogger . rawLogFile
 
 -------------------------------------------------------------------------------

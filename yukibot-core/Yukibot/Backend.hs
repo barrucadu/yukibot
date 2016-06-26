@@ -6,7 +6,8 @@
 -- Portability : portable
 module Yukibot.Backend
   ( -- * Starting and stopping
-    BackendHandle
+    Backend'
+  , BackendHandle
   , startBackend
   , stopBackend
   , awaitStart
@@ -24,9 +25,6 @@ module Yukibot.Backend
 
   -- * Miscellaneous
   , describeBackend
-
-  -- * For library authors
-  , Backend(..)
   ) where
 
 import Control.Concurrent (forkIO)
@@ -47,9 +45,9 @@ import Yukibot.Types
 -- backend is ready, see 'awaitStart'.
 startBackend :: (Event channel user -> IO ())
   -- ^ Process received events
-  -> Backend channel user
+  -> Backend' channel user
   -> IO (BackendHandle channel user)
-startBackend onReceive b@(Backend setup exec _ _ _ _ _) = do
+startBackend onReceive b@(Backend' setup exec _ _ _ _ _) = do
   (h, eventLogger) <- createHandle b
 
   let rawlogger = rawLoggerFromBackend b
@@ -121,7 +119,7 @@ describeBackend = description
 -- Internal
 
 -- | Create a new 'BackendHandle' and event logger.
-createHandle :: Backend channel user -> IO (BackendHandle channel user, Event channel user -> IO ())
+createHandle :: Backend' channel user -> IO (BackendHandle channel user, Event channel user -> IO ())
 createHandle b = atomically $ do
   queue    <- newTQueue
   startvar <- newTVar False

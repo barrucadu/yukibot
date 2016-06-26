@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- |
@@ -6,26 +7,33 @@
 -- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Stability   : experimental
--- Portability : GADTs, RankNTypes
+-- Portability : GADTs, GeneralizedNewtypeDeriving, RankNTypes
 module Yukibot.Types
   ( -- * Events
     Event(..)
   -- * Actions
   , Action(..)
   -- * Backends
+  , BackendName(..)
   , Backend(..)
+  , Backend'(..)
   , BackendHandle(..)
   , BackendTerminatedException(..)
   -- * Logging
   , Logger(..)
   , RawLogger(..)
   -- * Plugins
+  , PluginName(..)
   , Plugin(..)
+  -- * Errors
+  , CoreError(..)
   ) where
 
 import Control.Concurrent.STM (TQueue, TVar)
 import Control.Monad.Catch (Exception)
 import Data.ByteString (ByteString)
+import Data.Hashable (Hashable)
+import Data.String (IsString)
 import Data.Text (Text)
 
 -------------------------------------------------------------------------------
@@ -57,24 +65,25 @@ data Action channel user
 -------------------------------------------------------------------------------
 -- Backends
 
+newtype BackendName = BackendName { getBackendName :: Text }
+  deriving (Eq, Ord, Read, Show, Hashable, IsString)
+
+data Backend where
+  Backend :: Backend' channel user -> Backend
+
 -- | A representation of a backend, it is parameterised by the channel
 -- and user types.
---
--- TODO: Have configuration determine description.
---
--- TODO: Do raw logging in backend, event/action logging in core.
-data Backend channel user where
-  Backend :: { initialise :: RawLogger -> ((BackendHandle channel user -> Event channel user) -> IO ()) -> IO a
+data Backend' channel user where
+  Backend' :: { initialise :: RawLogger -> ((BackendHandle channel user -> Event channel user) -> IO ()) -> IO a
              , run :: TQueue (Action channel user) -> a -> IO ()
              , describe :: Text
              , showChannel :: channel -> Text
              , showUser :: user -> Text
              , rawLogFile :: FilePath
              , unrawLogFile :: FilePath
-             } -> Backend channel user
+             } -> Backend' channel user
 
--- | An abstract handle to a backend, which can be used to interact
--- with it.
+-- | A handle to a backend, which can be used to interact with it.
 data BackendHandle channel user = BackendHandle
   { msgQueue     :: TQueue (Action channel user)
   , hasStarted   :: TVar Bool
@@ -115,4 +124,26 @@ data RawLogger = RawLogger
 -------------------------------------------------------------------------------
 -- Plugins
 
+newtype PluginName = PluginName { getPluginName :: Text }
+  deriving (Eq, Ord, Read, Show, Hashable, IsString)
+
 newtype Plugin = Plugin (forall channel user. Event channel user -> IO ())
+
+-------------------------------------------------------------------------------
+-- Errors
+
+-- | An error in the core.
+data CoreError
+  = BackendNameClash !BackendName
+  -- ^ A backend was added where the name was already taken.
+  | BackendUnknown !BackendName
+  -- ^ A backend was requested but it is unknown.
+  | BackendBadConfig !BackendName !Text !Text
+  -- ^ The configuration for a backend is invalid.
+  | PluginNameClash !PluginName
+  -- ^ A plugin was added where the name was already taken.
+  | PluginUnknown !BackendName !Text !PluginName
+  -- ^ A plugin was requested but it is unknown.
+  | PluginBadConfig !BackendName !Text !PluginName !Text
+  -- ^ The configuration for a plugin is invalid.
+  deriving (Eq, Ord, Read, Show)

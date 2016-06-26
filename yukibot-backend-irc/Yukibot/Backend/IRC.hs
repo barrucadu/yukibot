@@ -38,12 +38,12 @@ type User = Text
 -- TODO: Client-side timeout.
 ircBackend :: Text  -- ^ The hostname.
   -> Table          -- ^ The configuration.
-  -> Either Text (Y.Backend Channel User)
+  -> Either Text Y.Backend
 ircBackend host cfg = case checkConfig host cfg of
   Left err   -> Left err
   Right desc ->
     let logFileName = unpack $ "irc-" <> host <> "-" <> getNick cfg
-    in Right Y.Backend
+    in (Right . Y.Backend) Y.Backend'
        { Y.initialise = connectToIrc host cfg
        , Y.run = handleIrc
        , Y.describe = desc
@@ -93,7 +93,7 @@ connectToIrc host cfg logger receiveEvent = do
   -- Return the backend state
   pure ((`runReaderT` state), killThread tid, stopvar)
 
--- | Connect to an IRC server and listen for events.
+-- | Wait for commands.
 handleIrc :: TQueue (Y.Action Channel User)
   -> BackendState
   -> IO ()
