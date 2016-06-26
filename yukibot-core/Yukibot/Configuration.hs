@@ -19,6 +19,8 @@ module Yukibot.Configuration
     -- ** Array helpers
     , getStrings
     , getTables
+    -- ** Table helpers
+    , getNestedTable
 
     -- * Re-exports
   , module Text.Toml.Types
@@ -97,3 +99,11 @@ getTables fld tbl = case (getTable fld tbl, getTableArray fld tbl) of
   (Just t, _)  -> [t]
   (_, Just ts) -> ts
   _ -> []
+
+-------------------------------------------------------------------------------
+-- Table helpers
+
+-- | Get a nested table.
+getNestedTable :: [Text] -> Table -> Maybe Table
+getNestedTable (t:ts) tbl = getTable t tbl >>= getNestedTable ts
+getNestedTable [] tbl = Just tbl

@@ -44,4 +44,16 @@ nickserv          = "nickserv"      ## default: "nickserv"
 nickserv-password = ""              ## default: ""
 
 # List of plugins to enable.
+#
+# This can also be a table, overriding the global configuration. For
+# example:
+#
+# plugins = { "hello" = { "message" = "Salutations!" } }
 plugins = [ "hello" ]               ## default: []
+
+# Plugin configuration lives in the "plugin.*" namespace. Each plugin
+# defines its own configuration, there is nothing globally necessary.
+
+[plugin.hello]
+
+message = "Hello!"

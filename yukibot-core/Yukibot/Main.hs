@@ -34,6 +34,8 @@ import Data.Either (lefts, rights)
 import Data.Foldable (toList)
 import qualified Data.HashMap.Strict as H
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.Maybe (fromMaybe)
+import Data.Monoid ((<>))
 import Data.Text (Text, unpack)
 import System.Exit (die)
 import System.FilePath (FilePath)
@@ -61,7 +63,7 @@ defaultMain st fp = do
 -- not specified in the initial state. TODO: Is this a useful
 -- behaviour? Should unknown backends be ignored instead?
 makeBot :: BotState -> Table -> Either (NonEmpty CoreError) (IO ())
-makeBot st cfg = case (lefts &&& rights) configuredBackends of
+makeBot st cfg = case (concat . lefts &&& rights) configuredBackends of
   ([], bs) -> Right $ do
     -- Start all backends
     hs <- mapM startWithPlugins bs
@@ -74,36 +76,51 @@ makeBot st cfg = case (lefts &&& rights) configuredBackends of
 
   where
   -- Get all backends from the config.
-  configuredBackends :: [Either CoreError (WrappedBackend, [Text])]
+  configuredBackends :: [Either [CoreError] (WrappedBackend, [Plugin])]
   configuredBackends = maybe [] (concatMap get . H.toList) (getTable "backend" cfg) where
     get (name, VTable tbl) = case H.lookup name (backends st) of
       Just wrapped@(WrapB _) -> flip concatMap (H.toList tbl) $ \case
         (n, VTable  c)  -> [make wrapped n c]
         (n, VTArray cs) -> [make wrapped n c | c <- toList cs]
         _ -> []
-      _ -> [Left $ BackendUnknown name]
+      _ -> [Left [BackendUnknown name]]
     get _ = []
     make (WrapB wrapped) name inst = case wrapped name inst of
       Right b  ->
-        let enabledPlugins = getStrings "plugins" inst
+        let enabledPlugins = configuredPlugins name inst
             -- Override the log files of the backend with values from
             -- the configuration, if present.
             b' = b { unrawLogFile = maybe (unrawLogFile b) unpack $ getString "logfile"    inst
                    , rawLogFile   = maybe (rawLogFile   b) unpack $ getString "rawlogfile" inst
                    }
-        in Right (WrapBC b', enabledPlugins)
-      Left err -> Left (BackendBadConfig name err)
+        in case (lefts &&& rights) enabledPlugins of
+          ([], ps) -> Right (WrapBC b', ps)
+          (es, _)  -> Left es
+      Left err -> Left [BackendBadConfig name err]
     make _ _ _ = error "makeBot.configuredBackends: 'impossible' state!"
 
+  -- Get all plugins from backend config.
+  configuredPlugins :: Text -> Table -> [Either CoreError Plugin]
+  configuredPlugins name inst = case (getStrings "plugins" inst, getTable "plugins" inst) of
+    -- Plugins with backend-specific config
+    (_, Just plugins) -> map (\case { (n, VTable c) -> make n c; (n, _) -> make n H.empty }) (H.toList plugins)
+    -- No backend-specific config
+    (plugins, _) -> [make n H.empty | n <- plugins]
+
+    where
+    make n c = case H.lookup n (plugins st) of
+      Just toP -> either (Left . PluginBadConfig name n) Right (toP (pcfg n c))
+      Nothing  -> Left (PluginUnknown name n)
+    pcfg n c = c <> fromMaybe H.empty (getNestedTable ["plugin", n] cfg)
+
   -- Start a backend with the provided plugins.
-  startWithPlugins (WrapBC b, eplugins) = WrapBH <$> startBackend handle b where
+  startWithPlugins (WrapBC b, enabledPlugins) = WrapBH <$> startBackend handle b where
     -- Unlike in original yukibot, the plugins (for a single backend)
     -- are run in a single thread. This makes output more
     -- deterministic when multiple plugins fire on the same event, and
     -- in practice most plugins only deal with one type of event, so
     -- this saves needless forking as well.
     handle ev = mapM_ (\(Plugin plugin) -> plugin ev) enabledPlugins
-    enabledPlugins = H.filterWithKey (\k _ -> k `elem` eplugins) (plugins st)
   startWithPlugins _ = error "makeBot.startWithPlugins: 'impossible' state!"
 
   -- Kill a backend
@@ -120,7 +137,7 @@ makeBot st cfg = case (lefts &&& rights) configuredBackends of
 -- | Initial state for a bot.
 data BotState = BotState
   { backends :: H.HashMap Text WrappedBackend
-  , plugins  :: H.HashMap Text Plugin
+  , plugins  :: H.HashMap Text (Table -> Either Text Plugin)
   }
 
 initialBotState :: BotState
@@ -151,8 +168,8 @@ addBackend name backend st
 -- Returns @PluginNameClash@ if there is a clash.
 addPlugin :: Text
   -- ^ The name of the plugin (e.g. \"hello\")
-  -> Plugin
-  -- ^ The plugin
+  -> (Table -> Either Text Plugin)
+  -- ^ The instantiation function.
   -> BotState -> Either CoreError BotState
 addPlugin name plugin st
   | H.member name (plugins st) = Left (PluginNameClash name)
@@ -171,4 +188,8 @@ data CoreError
   -- ^ The configuration for a backend is invalid.
   | PluginNameClash !Text
   -- ^ A plugin was added where the name was already taken.
+  | PluginUnknown !Text !Text
+  -- ^ A plugin was requested but it is unknown.
+  | PluginBadConfig !Text !Text !Text
+  -- ^ The configuration for a plugin is invalid.
   deriving (Eq, Ord, Read, Show)
