@@ -24,6 +24,8 @@ module Yukibot.Configuration
 
     -- * Re-exports
   , module Text.Toml.Types
+  , E.ParseError, E.Message(..), E.errorPos, E.errorMessages
+  , P.SourcePos, P.Line, P.Column, P.sourceLine, P.sourceColumn
   ) where
 
 import Data.Foldable (toList)
@@ -31,14 +33,14 @@ import qualified Data.HashMap.Strict as H
 import Data.Text (Text, pack)
 import Data.Time.Clock (UTCTime)
 import System.FilePath (FilePath)
+import qualified Text.Parsec.Error as E
+import qualified Text.Parsec.Pos as P
 import Text.Toml (parseTomlDoc)
 import Text.Toml.Types
 
 -- | Parse a configuration file
-parseConfigFile :: FilePath -> IO (Maybe Table)
-parseConfigFile path = do
-  toml <- parseTomlDoc "" . pack <$> readFile path
-  pure $ either (const Nothing) Just toml
+parseConfigFile :: FilePath -> IO (Either E.ParseError Table)
+parseConfigFile path = parseTomlDoc "" . pack <$> readFile path
 
 -------------------------------------------------------------------------------
 -- Accessors

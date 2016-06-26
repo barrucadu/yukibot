@@ -38,7 +38,7 @@ import Data.Foldable (toList)
 import qualified Data.HashMap.Strict as H
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (fromMaybe)
-import Data.Monoid ((<>))
+import Data.Monoid ((<>), mconcat)
 import Data.Text (Text, unpack)
 import System.Exit (die)
 import System.FilePath (FilePath)
@@ -58,10 +58,25 @@ defaultMain :: BotState -> FilePath -> IO ()
 defaultMain st fp = do
   mcfg <- parseConfigFile fp
   case mcfg of
-    Just cfg -> case makeBot st cfg of
+    Right cfg -> case makeBot st cfg of
       Right go   -> go
       Left  errs -> die ("Error creating bot: " ++ show errs)
-    Nothing -> die "Error parsing configuration file."
+    Left err ->
+      let pos     = errorPos err
+          line    = show (sourceLine   pos)
+          col     = show (sourceColumn pos)
+          msgs    = errorMessages err
+          msgs'   = if null msgs then ["Unknown error."] else map formatMsg msgs
+          msgList = mconcat . map ("\n  • "<>) $ msgs'
+      in die ("An error occurred while parsing the configuration file at line " <> line <> ":, column " <> col <> ":" <> msgList)
+
+  where
+    -- Pretty-print a parse error.
+    formatMsg :: Message -> String
+    formatMsg (SysUnExpect str) = "Unexpected: " <> str
+    formatMsg (UnExpect    str) = "Unexpected: " <> str
+    formatMsg (Expect      str) = "Expected: "   <> str
+    formatMsg (Message     str) = str
 
 -- | Create a bot with the given state and configuration, this
 -- terminates when all backends are stopped.
