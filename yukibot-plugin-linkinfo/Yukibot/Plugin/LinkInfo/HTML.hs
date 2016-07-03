@@ -9,12 +9,12 @@
 module Yukibot.Plugin.LinkInfo.HTML where
 
 import Data.Char (toLower)
-import Data.List (isInfixOf, isPrefixOf)
+import Data.List (isInfixOf, isPrefixOf, isSuffixOf)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text, unpack)
 import qualified Data.Text as T
-import Network.URI (URI(..), URIAuth(..), parseURI)
+import Network.URI (URI(..), URIAuth(..))
 
 import Yukibot.Configuration
 
@@ -29,13 +29,13 @@ linkHandler cfg =
      }
 
 -- | Don't fetch titles for URIs which look like a media file.
-predicate :: Text -> Bool
-predicate uri = not $ any (`T.isSuffixOf` uri) types where
+predicate :: URI -> Bool
+predicate uri = not $ any (`isSuffixOf` uriPath uri) types where
   types = [".bmp", ".png", ".jpg", ".jpeg", ".gif", ".mp3", ".mp4", ".wav", ".avi", ".mkv"]
 
 -- | Try to fetch the title of a URL. Drop titles which are too
 -- similar to the URI.
-handler :: Int -> Text -> IO (LinkInfo Text)
+handler :: Int -> URI -> IO (LinkInfo Text)
 handler maxTitleLen uri = do
   title <- fmap (trunc maxTitleLen) . maybe Failed Title <$> fetchTitle uri
   pure $ case title of
@@ -48,11 +48,8 @@ trunc maxLen txt | T.length txt > maxLen = T.take (maxLen - 1) txt <> "…"
 trunc _ txt = txt
 
 -- | Check that a title and URL aren't too similar.
-isSimilar :: Text -> Text -> Bool
-isSimilar title = maybe False (isSimilarURI title) . parseURI . unpack
-
-isSimilarURI :: Text -> URI -> Bool
-isSimilarURI title uri = inDomain || inPath || inTitle where
+isSimilar :: Text -> URI -> Bool
+isSimilar title uri = inDomain || inPath || inTitle where
   -- Normalise case and strip non-[a-z/]s
   slug      = normalise $ unpack title
   path      = normalise $ uriPath uri

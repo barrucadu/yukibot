@@ -10,7 +10,7 @@ module Yukibot.Plugin.LinkInfo.Imgur where
 
 import Data.Text (Text, unpack)
 import qualified Data.Text as T
-import Network.URI (URI(..), URIAuth(..), parseURI)
+import Network.URI (URI(..), URIAuth(..))
 
 import Yukibot.Plugin.LinkInfo.Common
 
@@ -21,17 +21,14 @@ linkHandler _ = Right LinkHandler
   }
 
 -- | Handle any URLs for the domains "imgur.com" or "i.imgur.com".
-predicate :: Text -> Bool
-predicate turi = case parseURI (unpack turi) of
-  Just uri -> isImageUri uri || isGalleryUri uri
-  Nothing -> False
+predicate :: URI -> Bool
+predicate uri = isImageUri uri || isGalleryUri uri
 
 -- | fetch an image title.
-handler :: Text -> IO (LinkInfo Text)
-handler turi = case parseURI (unpack turi) of
-  Just uri | isImageUri   uri -> fetchImgurTitle (toGalleryUri uri)
-           | isGalleryUri uri -> fetchImgurTitle uri
-  _ -> pure Failed
+handler :: URI -> IO (LinkInfo Text)
+handler uri
+  | isImageUri   uri = fetchImgurTitle (toGalleryUri uri)
+  | isGalleryUri uri = fetchImgurTitle uri
 
 -- | Check if a URI is for "i.imgur.com" (an image).
 isImageUri :: URI -> Bool
@@ -61,7 +58,7 @@ toGalleryUri uri = uri { uriAuthority = Just newAuth, uriPath = newPath } where
 -- it's the default.
 fetchImgurTitle :: URI -> IO (LinkInfo Text)
 fetchImgurTitle uri = do
-  title <- fetchTitleUri uri
+  title <- fetchTitle uri
   pure $ case title of
     Just t | "imgur:" `T.isPrefixOf` T.toLower t -> NoTitle
            | otherwise -> Title t

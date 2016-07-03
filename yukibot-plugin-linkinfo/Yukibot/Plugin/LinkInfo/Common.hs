@@ -18,9 +18,9 @@ import qualified Network.HTTP.Simple as W
 import Network.URI (URI)
 
 data LinkHandler = LinkHandler
-  { lhPredicate :: Text -> Bool
+  { lhPredicate :: URI -> Bool
   -- ^ When to apply this handler
-  , lhHandler :: Text -> IO (LinkInfo Text)
+  , lhHandler :: URI -> IO (LinkInfo Text)
   -- ^ Get link info from a URI
   }
 
@@ -32,7 +32,7 @@ data LinkInfo a
   deriving (Eq, Ord, Read, Show, Functor)
 
 -- | Fetch the title of a URI.
-fetchTitle :: Text -> IO (Maybe Text)
+fetchTitle :: URI -> IO (Maybe Text)
 fetchTitle uri = do
   downloaded <- download uri
   case downloaded of
@@ -51,14 +51,11 @@ fetchTitle uri = do
     dequote ('\"':xs) | last xs == '\"' = (init . tail) xs
     dequote xs = xs
 
-fetchTitleUri :: URI -> IO (Maybe Text)
-fetchTitleUri = fetchTitle . pack . show
-
 -- | Download a file. Assume UTF-8 encoding.
-download :: Text -> IO (Maybe Text)
+download :: URI -> IO (Maybe Text)
 download uri = fetch `catch` handler where
   fetch = do
-    req  <- W.parseRequest (unpack uri)
+    req  <- W.parseRequest (show uri)
     resp <- W.httpLbs req
     pure $ if W.getResponseStatusCode resp == 200
       then Just . decodeUtf8 . toStrict $ W.getResponseBody resp

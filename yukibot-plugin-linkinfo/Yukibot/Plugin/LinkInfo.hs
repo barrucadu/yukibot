@@ -15,7 +15,7 @@ import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text, unpack, strip)
 import qualified Data.Text as T
-import Network.URI (isURI)
+import Network.URI (URI, parseURI)
 
 import Yukibot.Core
 
@@ -43,7 +43,7 @@ plugin numLinks hs = Plugin $ \ev -> case ev of
     -- Get a title for every link in a message
     linkTitles :: Text -> IO [Text]
     linkTitles m = do
-      let uris = filter (isURI . unpack) (T.words m)
+      let uris = mapMaybe (parseURI . unpack) (T.words m)
       titles <- mapM fetchLinkInfo uris
       pure . take numLinks $ mapMaybe showTitle titles
 
@@ -54,7 +54,7 @@ plugin numLinks hs = Plugin $ \ev -> case ev of
     showTitle _ = Nothing
 
     -- Try to fetch information on a URI.
-    fetchLinkInfo :: Text -> IO (LinkInfo Text)
+    fetchLinkInfo :: URI -> IO (LinkInfo Text)
     fetchLinkInfo = fmap unempty . fetch where
       fetch uri = case filter (`lhPredicate` uri) hs of
         (lh:_) -> lhHandler lh uri
