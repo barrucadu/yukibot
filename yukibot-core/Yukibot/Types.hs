@@ -1,22 +1,22 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE RankNTypes #-}
 
 -- |
 -- Module      : Yukibot.Types
 -- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Stability   : experimental
--- Portability : GADTs, GeneralizedNewtypeDeriving, RankNTypes
+-- Portability : GADTs, GeneralizedNewtypeDeriving
 module Yukibot.Types
   ( -- * Events
-    Event(..)
+    ChannelName(..)
+  , UserName(..)
+  , Event(..)
   -- * Actions
   , Action(..)
   -- * Backends
   , BackendName(..)
   , Backend(..)
-  , Backend'(..)
   , BackendHandle(..)
   , BackendTerminatedException(..)
   -- * Logging
@@ -45,24 +45,30 @@ import Data.Text (Text)
 -------------------------------------------------------------------------------
 -- Events
 
-data Event channel user = Event
-  { eventHandle  :: BackendHandle channel user
-  , eventChannel :: Maybe channel
-  , eventUser    :: user
+newtype ChannelName = ChannelName { getChannelName :: Text }
+  deriving (Eq, Ord, Read, Show, Hashable, IsString)
+
+newtype UserName = UserName { getUserName :: Text }
+  deriving (Eq, Ord, Read, Show, Hashable, IsString)
+
+data Event = Event
+  { eventHandle  :: BackendHandle
+  , eventChannel :: Maybe ChannelName
+  , eventUser    :: UserName
   , eventMessage :: Text
   }
 
 -------------------------------------------------------------------------------
 -- Actions
 
-data Action channel user
-  = Join channel
+data Action
+  = Join ChannelName
   -- ^ Join a new channel.
-  | Leave channel
+  | Leave ChannelName
   -- ^ Leave a current channel.
-  | Say channel [user] Text
+  | Say ChannelName [UserName] Text
   -- ^ Send a message to a channel, optionally addressed to a collection of users.
-  | Whisper user Text
+  | Whisper UserName Text
   -- ^ Send a message to a user.
   | Terminate
   -- ^ Gracefully disconnect.
@@ -74,31 +80,25 @@ data Action channel user
 newtype BackendName = BackendName { getBackendName :: Text }
   deriving (Eq, Ord, Read, Show, Hashable, IsString)
 
+-- | A representation of a backend.
 data Backend where
-  Backend :: Backend' channel user -> Backend
-
--- | A representation of a backend, it is parameterised by the channel
--- and user types.
-data Backend' channel user where
-  Backend' :: { initialise :: RawLogger -> ((BackendHandle channel user -> Event channel user) -> IO ()) -> IO a
-             , run :: TQueue (Action channel user) -> a -> IO ()
+  Backend :: { initialise :: RawLogger -> ((BackendHandle -> Event) -> IO ()) -> IO a
+             , run :: TQueue Action -> a -> IO ()
              , describe :: Text
-             , showChannel :: channel -> Text
-             , showUser :: user -> Text
              , rawLogFile :: FilePath
              , unrawLogFile :: FilePath
-             } -> Backend' channel user
+             } -> Backend
 
 -- | A handle to a backend, which can be used to interact with it.
-data BackendHandle channel user = BackendHandle
-  { msgQueue     :: TQueue (Action channel user)
+data BackendHandle = BackendHandle
+  { msgQueue     :: TQueue Action
   , hasStarted   :: TVar Bool
   , hasStopped   :: TVar Bool
   , description  :: Text
-  , actionLogger :: Action channel user -> IO ()
+  , actionLogger :: Action -> IO ()
   }
 
-instance Eq (BackendHandle channel user) where
+instance Eq BackendHandle where
   h1 == h2 = msgQueue h1 == msgQueue h2
 
 data BackendTerminatedException = BackendTerminatedException
@@ -111,10 +111,10 @@ instance Exception BackendTerminatedException
 
 -- | A logger of events and actions received from and sent to the
 -- backend by the bot.
-data Logger channel user = Logger
-  { loggerEvent :: Event channel user -> IO ()
+data Logger = Logger
+  { loggerEvent :: Event -> IO ()
     -- ^ Log an event received from the backend.
-  , loggerAction :: Action channel user -> IO ()
+  , loggerAction :: Action -> IO ()
     -- ^ Log an action sent to the backend.
   }
 
@@ -153,13 +153,13 @@ data Plugin = Plugin
 
 -- | Monitors are activated on every message. They can communicate
 -- with the backend using the supplied 'Event'.
-newtype Monitor = Monitor (forall channel user. Event channel user -> IO ())
+newtype Monitor = Monitor (Event -> IO ())
 
 -- | Commands are like monitors, but they have a \"verb\" (specified
 -- in the configuration) and are only activated when that verb begins
 -- a message. All of the words in the message after the verb are
 -- passed as an argument list.
-newtype Command = Command  (forall channel user. Event channel user -> [Text] -> IO ())
+newtype Command = Command (Event -> [Text] -> IO ())
 
 -------------------------------------------------------------------------------
 -- Errors

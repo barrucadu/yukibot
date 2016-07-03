@@ -27,7 +27,7 @@ module Yukibot.Log
 
 import Data.ByteString (ByteString)
 import Data.Monoid ((<>))
-import Data.Text (Text, unpack)
+import Data.Text (unpack)
 import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
@@ -35,22 +35,15 @@ import Data.Time.Format (defaultTimeLocale, formatTime)
 import Yukibot.Types
 
 -- | Create an event/action logger.
-logger :: (channel -> Text)
-  -- ^ Pretty-print channel names.
-  -> (user -> Text)
-  -- ^ Pretty-print user names.
-  -> Tag -> FilePath -> Logger channel user
-logger showc showu tag fp = Logger
-  { loggerEvent  = logEvent showc showu tag fp
-  , loggerAction = logAction showc showu tag fp
+logger :: Tag -> FilePath -> Logger
+logger tag fp = Logger
+  { loggerEvent  = logEvent tag fp
+  , loggerAction = logAction tag fp
   }
 
 -- | Create an event/action logger from a backend.
-loggerFromBackend :: Backend' channel user -> Logger channel user
-loggerFromBackend b = logger (showChannel  b)
-                             (showUser     b)
-                             (Tag $ describe b)
-                             (unrawLogFile b)
+loggerFromBackend :: Backend -> Logger
+loggerFromBackend b = logger (Tag $ describe b) (unrawLogFile b)
 
 -- | Create a raw logger.
 rawLogger :: Tag -> FilePath -> RawLogger
@@ -60,7 +53,7 @@ rawLogger tag fp = RawLogger
   }
 
 -- | Create a raw logger from a backend.
-rawLoggerFromBackend :: Backend' channel user -> RawLogger
+rawLoggerFromBackend :: Backend -> RawLogger
 rawLoggerFromBackend b = rawLogger (Tag $ describe b) (rawLogFile b)
 
 -------------------------------------------------------------------------------
@@ -75,27 +68,19 @@ logRawFrom :: Tag -> FilePath -> ByteString -> IO ()
 logRawFrom tag fp = logInternalFrom tag fp . init . tail . show
 
 -- | Events come in from the server.
-logEvent :: (channel -> Text)
-  -- ^ Pretty-print channel names.
-  -> (user -> Text)
-  -- ^ Pretty-print user names.
-  -> Tag -> FilePath -> Event channel user -> IO ()
-logEvent showc showu tag fp (Event _ mc u txt) = logInternalFrom tag fp . unpack $ case mc of
-  Just c  -> "[in: " <> showc c <> "] [from: " <> showu u <> "]: " <> txt
-  Nothing ->                         "[from: " <> showu u <> "]: " <> txt
+logEvent :: Tag -> FilePath -> Event -> IO ()
+logEvent tag fp (Event _ mc u txt) = logInternalFrom tag fp . unpack $ case mc of
+  Just c  -> "[in: " <> getChannelName c <> "] [from: " <> getUserName u <> "]: " <> txt
+  Nothing -> "[from: " <> getUserName u <> "]: " <> txt
 
 -- | Actions are used to instruct the backend.
-logAction :: (channel -> Text)
-  -- ^ Pretty-print channel names.
-  -> (user -> Text)
-  -- ^ Pretty-print user names.
-  -> Tag -> FilePath -> Action channel user -> IO ()
-logAction showc showu tag fp act = logInternalTo tag fp . unpack $ case act of
-  Join  c -> "[join: "  <> showc c <> "]"
-  Leave c -> "[leave: " <> showc c <> "]"
-  Say c []  m -> "[in: " <> showc c <> "]: " <> m
-  Say c us  m -> "[in: " <> showc c <> "] [to: " <> T.intercalate ", " (map showu us) <> "]: " <> m
-  Whisper u m -> "[to: " <> showu u <> "]: " <> m
+logAction :: Tag -> FilePath -> Action -> IO ()
+logAction tag fp act = logInternalTo tag fp . unpack $ case act of
+  Join  c -> "[join: "  <> getChannelName c <> "]"
+  Leave c -> "[leave: " <> getChannelName c <> "]"
+  Say c []  m -> "[in: " <> getChannelName c <> "]: " <> m
+  Say c us  m -> "[in: " <> getChannelName c <> "] [to: " <> T.intercalate ", " (map getUserName us) <> "]: " <> m
+  Whisper u m -> "[to: " <> getUserName u <> "]: " <> m
   Terminate -> "[stop]"
 
 -------------------------------------------------------------------------------

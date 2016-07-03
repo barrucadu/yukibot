@@ -9,7 +9,7 @@
 -- Portability : LambdaCase, OverloadedStrings
 --
 -- An IRC backend for yukibot-core.
-module Yukibot.Backend.IRC (Channel, User, ircBackend) where
+module Yukibot.Backend.IRC (ircBackend) where
 
 import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.STM
@@ -28,9 +28,6 @@ import qualified Yukibot.Core as Y
 
 import Yukibot.Backend.IRC.Configuration
 
-type Channel = Text
-type User = Text
-
 -- | A simple IRC backend.
 --
 -- TODO: Reconnection.
@@ -43,12 +40,10 @@ ircBackend host cfg = case checkConfig host cfg of
   Left err   -> Left err
   Right desc ->
     let logFileName = unpack $ "irc-" <> host <> "-" <> getNick cfg
-    in (Right . Y.Backend) Y.Backend'
+    in Right Y.Backend
        { Y.initialise = connectToIrc host cfg
        , Y.run = handleIrc
        , Y.describe = desc
-       , Y.showChannel = id
-       , Y.showUser = id
        -- The log file names are overridden by the core if specified
        -- in the config, so these are just defaults.
        , Y.rawLogFile   = logFileName <.> "raw.log"
@@ -64,7 +59,7 @@ type BackendState = (IRC.IRC Bool -> IO Bool, IO (), TVar Bool)
 connectToIrc :: Text
   -> Table
   -> Y.RawLogger
-  -> ((Y.BackendHandle Channel User -> Y.Event Channel User) -> IO ())
+  -> ((Y.BackendHandle -> Y.Event) -> IO ())
   -> IO BackendState
 connectToIrc host cfg logger receiveEvent = do
   cconf <- (if getTLS cfg then connectWithTLS' else connect')
@@ -94,9 +89,7 @@ connectToIrc host cfg logger receiveEvent = do
   pure ((`runReaderT` state), killThread tid, stopvar)
 
 -- | Wait for commands.
-handleIrc :: TQueue (Y.Action Channel User)
-  -> BackendState
-  -> IO ()
+handleIrc :: TQueue Y.Action -> BackendState -> IO ()
 handleIrc commandQueue (runIrc, terminate, stopvar) = process where
   -- Main loop: wait for commands (or for termination of the IRC
   -- client) and process them.
@@ -114,17 +107,17 @@ handleIrc commandQueue (runIrc, terminate, stopvar) = process where
     -- Process the action
     continue <- runIrc $ case act of
       Just (Y.Join channel) -> do
-        IRC.send $ IRC.Join channel
+        IRC.send $ IRC.Join (Y.getChannelName channel)
         pure True
       Just (Y.Leave channel) -> do
-        IRC.leaveChannel channel $ Just "Goodbye!"
+        IRC.leaveChannel (Y.getChannelName channel) $ Just "Goodbye!"
         pure True
       Just (Y.Say channel users message) -> do
-        let who = if null users then "" else intercalate ", " users <> ": "
-        IRC.send $ IRC.Notice channel (Right $ who <> message)
+        let who = if null users then "" else intercalate ", " (map Y.getUserName users) <> ": "
+        IRC.send $ IRC.Notice (Y.getChannelName channel) (Right $ who <> message)
         pure True
       Just (Y.Whisper user message) -> do
-        IRC.send $ IRC.Notice user (Right message)
+        IRC.send $ IRC.Notice (Y.getUserName user) (Right message)
         pure True
       _ -> pure False
 
@@ -147,8 +140,7 @@ botLogger logger IRC.FromClient = Y.rawToServer   logger
 botLogger logger IRC.FromServer = Y.rawFromServer logger
 
 -- | Event handler for message reception.
-receiveHandler :: ((Y.BackendHandle Channel User -> Y.Event Channel User) -> IO ())
-  -> IRC.EventHandler s
+receiveHandler :: ((Y.BackendHandle -> Y.Event) -> IO ()) -> IRC.EventHandler s
 receiveHandler receiveEvent = IRC.EventHandler
   { IRC._description = "Receive PRIVMSGs and forward them to yukibot-core."
   , IRC._matchType = IRC.EPrivmsg
@@ -158,9 +150,9 @@ receiveHandler receiveEvent = IRC.EventHandler
     -- Decode and send off an event.
     dispatchEvent :: IRC.UnicodeEvent -> IO ()
     dispatchEvent (IRC.Event _ (IRC.User nick) (IRC.Privmsg _ (Right msg))) =
-      receiveEvent (\h -> Y.Event h Nothing nick msg)
+      receiveEvent (\h -> Y.Event h Nothing (Y.UserName nick) msg)
     dispatchEvent (IRC.Event _ (IRC.Channel chan nick) (IRC.Privmsg _ (Right msg))) =
-      receiveEvent (\h -> Y.Event h (Just chan) nick msg)
+      receiveEvent (\h -> Y.Event h (Just $ Y.ChannelName chan) (Y.UserName nick) msg)
     dispatchEvent _ = pure ()
 
 -- | Flag and handler for 001 (numeric welcome). Flag is set to 'True'

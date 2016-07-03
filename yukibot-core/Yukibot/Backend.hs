@@ -6,7 +6,7 @@
 -- Portability : portable
 module Yukibot.Backend
   ( -- * Starting and stopping
-    Backend'
+    Backend
   , BackendHandle
   , startBackend
   , stopBackend
@@ -43,11 +43,10 @@ import Yukibot.Types
 --
 -- This will return immediately. If you want to block until the
 -- backend is ready, see 'awaitStart'.
-startBackend :: (Event channel user -> IO ())
+startBackend :: (Event -> IO ())
   -- ^ Process received events
-  -> Backend' channel user
-  -> IO (BackendHandle channel user)
-startBackend onReceive b@(Backend' setup exec _ _ _ _ _) = do
+  -> Backend -> IO BackendHandle
+startBackend onReceive b@(Backend setup exec _ _ _) = do
   (h, eventLogger) <- createHandle b
 
   let rawlogger = rawLoggerFromBackend b
@@ -63,37 +62,37 @@ startBackend onReceive b@(Backend' setup exec _ _ _ _ _) = do
 -- the backend will be received between calling this function and it
 -- terminating. If you want to block until the backend is closed, see
 -- 'awaitStop'.
-stopBackend :: BackendHandle channel user -> IO ()
+stopBackend :: BackendHandle -> IO ()
 stopBackend h = sendAction h Terminate
 
 -- | Block until the backend is initialised. If the backend has
 -- terminated, or terminates while waiting, this unblocks and throws
 -- 'BackendTerminatedException'.
-awaitStart :: BackendHandle channel user -> IO ()
+awaitStart :: BackendHandle -> IO ()
 awaitStart = atomically . awaitStartSTM
 
 -- | STM variant of 'awaitStart'.
-awaitStartSTM :: BackendHandle channel user -> STM ()
+awaitStartSTM :: BackendHandle -> STM ()
 awaitStartSTM b = do
   throwOnStop b
   check =<< hasStartedSTM b
 
 -- | Block until the backend terminates. This never throws
 -- 'BackendTerminatedException'.
-awaitStop :: BackendHandle channel user -> IO ()
+awaitStop :: BackendHandle -> IO ()
 awaitStop = atomically . awaitStopSTM
 
 -- | STM variant of 'awaitStop'.
-awaitStopSTM :: BackendHandle channel user -> STM ()
+awaitStopSTM :: BackendHandle -> STM ()
 awaitStopSTM b = check =<< hasStoppedSTM b
 
 -- | Check if the backend has finished its initialisation and entered
 -- the main loop.
-hasStartedSTM :: BackendHandle channel user -> STM Bool
+hasStartedSTM :: BackendHandle -> STM Bool
 hasStartedSTM = readTVar . hasStarted
 
 -- | Check if the backend has terminated.
-hasStoppedSTM :: BackendHandle channel user -> STM Bool
+hasStoppedSTM :: BackendHandle -> STM Bool
 hasStoppedSTM = readTVar . hasStopped
 
 -------------------------------------------------------------------------------
@@ -103,7 +102,7 @@ hasStoppedSTM = readTVar . hasStopped
 -- terminated, throws 'BackendTerminatedException'.
 --
 -- Note: @sendAction h Terminate@ is exactly the same as @stopBackend h@
-sendAction :: BackendHandle channel user -> Action channel user -> IO ()
+sendAction :: BackendHandle -> Action -> IO ()
 sendAction h a = do
   atomically $ writeTQueue (msgQueue h) a
   actionLogger h a
@@ -112,14 +111,14 @@ sendAction h a = do
 -- Miscellaneous
 
 -- | Return a textual description of a backend
-describeBackend :: BackendHandle channel user -> Text
+describeBackend :: BackendHandle -> Text
 describeBackend = description
 
 -------------------------------------------------------------------------------
 -- Internal
 
 -- | Create a new 'BackendHandle' and event logger.
-createHandle :: Backend' channel user -> IO (BackendHandle channel user, Event channel user -> IO ())
+createHandle :: Backend -> IO (BackendHandle, Event -> IO ())
 createHandle b = atomically $ do
   queue    <- newTQueue
   startvar <- newTVar False
@@ -136,7 +135,7 @@ createHandle b = atomically $ do
   pure (handle, loggerEvent logger)
 
 -- | Initialise and run a backend in a new thread.
-forkAndRunBackend :: BackendHandle channel user
+forkAndRunBackend :: BackendHandle
   -> IO a
   -> (a -> IO ())
   -> IO ()
@@ -147,7 +146,7 @@ forkAndRunBackend h setup exec = void . forkIO $ do
   atomically $ writeTVar (hasStopped h) True
 
 -- | Throw a 'BackendTerminatedException' if it has stopped.
-throwOnStop :: BackendHandle channel user -> STM ()
+throwOnStop :: BackendHandle -> STM ()
 throwOnStop b = do
   stopped <- hasStoppedSTM b
   when stopped (throwM BackendTerminatedException)

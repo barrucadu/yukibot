@@ -52,10 +52,6 @@ import Yukibot.Backend (startBackend, stopBackend, awaitStop)
 import Yukibot.Configuration
 import Yukibot.Types
 
--- | A 'BackendHandle' with the type parameters hidden.
-data WrappedHandle where
-  Wrap :: BackendHandle channel user -> WrappedHandle
-
 -- | A default @main@ function: parse the config file, and either
 -- halt+report errors, or start.
 defaultMain :: BotState -> FilePath -> IO ()
@@ -97,13 +93,13 @@ makeBot st cfg = case configuredBackends (getBackends st) (getPlugins st) cfg of
     void $ installHandler sigINT  (Catch $ mapM_ killBackend hs) Nothing
     void $ installHandler sigTERM (Catch $ mapM_ killBackend hs) Nothing
     -- Wait for termination
-    mapM_ waitStop hs
+    mapM_ awaitStop hs
   Left es -> Left es
 
   where
   -- Start a backend with the provided plugins.
-  startWithPlugins :: (Backend, [Monitor]) -> IO WrappedHandle
-  startWithPlugins (Backend b, enabledMonitors) = Wrap <$> startBackend handle b where
+  startWithPlugins :: (Backend, [Monitor]) -> IO BackendHandle
+  startWithPlugins (b, enabledMonitors) = startBackend handle b where
     -- Unlike in original yukibot, the monitors (for a single backend)
     -- are run in a single thread. This makes output more
     -- deterministic when multiple monitors fire on the same event,
@@ -112,12 +108,8 @@ makeBot st cfg = case configuredBackends (getBackends st) (getPlugins st) cfg of
     handle ev = mapM_ (\(Monitor monitor) -> monitor ev) enabledMonitors
 
   -- Kill a backend
-  killBackend :: WrappedHandle -> IO ()
-  killBackend (Wrap h) = stopBackend h `catch` (\(_ :: SomeException) -> pure ())
-
-  -- Wait for a backend to stop.
-  waitStop :: WrappedHandle -> IO ()
-  waitStop (Wrap h) = awaitStop h
+  killBackend :: BackendHandle -> IO ()
+  killBackend h = stopBackend h `catch` (\(_ :: SomeException) -> pure ())
 
 -------------------------------------------------------------------------------
 -- Configuration
@@ -151,14 +143,14 @@ configuredBackends allBackends allPlugins cfg0 = mangle id (:[]) . concat $
          -> Table
          -> Either (NonEmpty CoreError) (Backend, [Monitor])
     make bf bname name cfg = case bf name cfg of
-      Right (Backend b)  ->
+      Right b  ->
         let enabledPlugins = configuredPlugins allPlugins bname name cfg
             -- Override the log files of the backend with values from
             -- the configuration, if present.
             b' = b { unrawLogFile = maybe (unrawLogFile b) unpack $ getString "logfile"    cfg
                    , rawLogFile   = maybe (rawLogFile   b) unpack $ getString "rawlogfile" cfg
                    }
-        in (\ms -> (Backend b', ms)) <$> mangle id id enabledPlugins
+        in (\ms -> (b', ms)) <$> mangle id id enabledPlugins
       Left err -> Left (BackendBadConfig bname name err:|[])
 
 -- | Configure and instantiate all plugins of a backend.
