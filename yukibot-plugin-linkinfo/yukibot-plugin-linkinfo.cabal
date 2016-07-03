@@ -21,17 +21,22 @@ library
                      , Yukibot.Plugin.LinkInfo.Common
                      , Yukibot.Plugin.LinkInfo.HTML
                      , Yukibot.Plugin.LinkInfo.Imgur
+                     , Yukibot.Plugin.LinkInfo.Youtube
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base                 >=4.9  && <4.10
+                     , aeson                >=0.11 && <0.12
                      , bytestring           >=0.10 && <0.11
                      , contravariant        >=1.4  && <1.5
                      , exceptions           >=0.7  && <0.9
                      , http-conduit         >=2.1  && <2.2
                      , hxt                  >=9.3  && <9.4
                      , hxt-tagsoup          >=9.1  && <9.2
+                     , lens                 >=4.14 && <4.15
+                     , lens-aeson           >=1.0  && <1.1
                      , network-uri          >=2.5  && <2.7
                      , text                 >=1.0  && <2
+                     , time                 >=1.5  && <1.7
                      , unordered-containers >=0.2  && <0.3
                      , yukibot-core         >=2.0  && <2.1
   -- hs-source-dirs:      

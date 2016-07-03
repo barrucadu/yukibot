@@ -12,10 +12,13 @@ num-links = 5
 
 # Enabled handlers. The ordering determines priority, if multiple
 # handlers match the same URI.
-handlers = [ "imgur", "html" ]
+handlers = [ "youtube", "imgur", "html" ]
 
 # Handler configuration
 [plugin.linkinfo.handler.html]
     # The length at which a page title is truncated.
     max-title-len = 100
+[plugin.linkinfo.handler.youtube]
+    # The youtube handler needs a valid API key.
+    api-key = "your key"
 ```

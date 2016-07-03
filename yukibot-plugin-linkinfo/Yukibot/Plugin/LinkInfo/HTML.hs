@@ -65,10 +65,3 @@ isSimilar title uri = inDomain || inPath || inTitle where
   -- Is some part of the path the start of the title?
   inTitle = any (\c -> isPrefixOf c slug && length slug <= length c * 2) chunks
   chunks = filter ((<10) . length) $ wordsWhen (=='/') path
-
--- | Split a string by a character.
-wordsWhen :: (Char -> Bool) -> String -> [String]
-wordsWhen p s = case dropWhile p s of
-  "" -> []
-  s' -> let (w, s'') = break p s'
-        in w : wordsWhen p s''

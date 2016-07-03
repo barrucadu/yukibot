@@ -9,10 +9,11 @@
 module Yukibot.Plugin.LinkInfo.Common where
 
 import Control.Monad.Catch (SomeException, catch)
-import Data.ByteString.Lazy (toStrict)
+import Data.Aeson (Object, decode')
+import Data.ByteString.Lazy (ByteString, toStrict)
 import Data.Functor.Contravariant (Contravariant(..))
 import Data.Text (Text, pack, strip, unpack)
-import Data.Text.Encoding (decodeUtf8)
+import Data.Text.Encoding (decodeUtf8')
 import Text.XML.HXT.Core ((//>), readString, hasName, getText, runX, withParseHTML, withWarnings, yes, no)
 import Text.XML.HXT.TagSoup (withTagSoup)
 import qualified Network.HTTP.Simple as W
@@ -53,7 +54,7 @@ data LinkInfo a
 -- | Fetch the title of a URI.
 fetchTitle :: URI -> IO (Maybe Text)
 fetchTitle uri = do
-  downloaded <- download uri
+  downloaded <- downloadText uri
   case downloaded of
     Just html -> do
       let doc = readString [ withParseHTML yes
@@ -70,15 +71,31 @@ fetchTitle uri = do
     dequote ('\"':xs) | last xs == '\"' = (init . tail) xs
     dequote xs = xs
 
+-- |Download some JSON over HTTP.
+downloadJson :: URI -> IO (Maybe Object)
+downloadJson uri = maybe Nothing decode' <$> download uri
+
 -- | Download a file. Assume UTF-8 encoding.
-download :: URI -> IO (Maybe Text)
+downloadText :: URI -> IO (Maybe Text)
+downloadText uri = maybe Nothing decodeUtf8 <$> download uri where
+  decodeUtf8 = either (const Nothing) Just . decodeUtf8' . toStrict
+
+-- | Download a file.
+download :: URI -> IO (Maybe ByteString)
 download uri = fetch `catch` handler where
   fetch = do
     req  <- W.parseRequest (show uri)
     resp <- W.httpLbs req
     pure $ if W.getResponseStatusCode resp == 200
-      then Just . decodeUtf8 . toStrict $ W.getResponseBody resp
+      then Just (W.getResponseBody resp)
       else Nothing
 
   handler :: SomeException -> IO (Maybe a)
   handler = const $ pure Nothing
+
+-- | Split a string by a character.
+wordsWhen :: (Char -> Bool) -> String -> [String]
+wordsWhen p s = case dropWhile p s of
+  "" -> []
+  s' -> let (w, s'') = break p s'
+        in w : wordsWhen p s''

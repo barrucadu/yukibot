@@ -22,6 +22,7 @@ import Yukibot.Core
 import Yukibot.Plugin.LinkInfo.Common
 import qualified Yukibot.Plugin.LinkInfo.HTML as HTML
 import qualified Yukibot.Plugin.LinkInfo.Imgur as Imgur
+import qualified Yukibot.Plugin.LinkInfo.Youtube as Youtube
 
 linkInfoPlugin :: Table -> Either Text Plugin
 linkInfoPlugin cfg =
@@ -67,10 +68,11 @@ plugin numLinks hs = Plugin $ \ev -> case ev of
 getHandlers :: Table -> [Either Text (LinkHandler URI)]
 getHandlers cfg = [get h' (conf h') | h <- getStrings "handlers" cfg, let h' = T.toLower h] where
   -- Instantiate a link handler
-  get "html"  = HTML.linkHandler
-  get "imgur" = Imgur.linkHandler
-  get name    = const (Left $ "Unknown link handler: " <> name)
   get :: Text -> Table -> Either Text (LinkHandler URI)
+  get "html"    = HTML.linkHandler
+  get "imgur"   = Imgur.linkHandler
+  get "youtube" = Youtube.linkHandler
+  get name      = const (Left $ "Unknown link handler: " <> name)
 
   -- Get the configuration for a link handler.
   conf :: Text -> Table
