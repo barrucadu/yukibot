@@ -6,6 +6,15 @@
 -- License     : MIT
 -- Stability   : experimental
 -- Portability : OverloadedStrings
+--
+-- A link information plugin for yukibot-core. This provides one
+-- monitor and one command:
+--
+--     * Monitor "linkinfo", responds with the title of every link in
+--       a message (up to some limit)
+--
+--     * Command "linkinfo", which responds with the title of every
+--       link in a message.
 module Yukibot.Plugin.LinkInfo (linkInfoPlugin) where
 
 import Control.Arrow ((&&&))
@@ -37,17 +46,22 @@ linkInfoPlugin cfg =
 -- processing stops as soon as one matching handler is found. This
 -- allows a priority ordering.
 plugin :: Int -> [LinkHandler URI] -> Plugin
-plugin numLinks hs = Plugin $ \ev -> case ev of
-  Event h (Just c) _ m -> mapM_ (sendAction h . Say c [])  =<< linkTitles m
-  Event h Nothing n m  -> mapM_ (sendAction h . Whisper n) =<< linkTitles m
+plugin numLinks hs = Plugin
+  { pluginMonitors = H.fromList [("linkinfo", Monitor $ linkinfo True)]
+  , pluginCommands = H.fromList [("linkinfo", Command $ \ev _ -> linkinfo False ev)]
+  }
 
   where
+    -- Respond with linkinfo for a collection of links.
+    linkinfo lim (Event h (Just c) _ m) = mapM_ (sendAction h . Say c [])  =<< linkTitles lim m
+    linkinfo lim (Event h Nothing n  m) = mapM_ (sendAction h . Whisper n) =<< linkTitles lim m
+
     -- Get a title for every link in a message
-    linkTitles :: Text -> IO [Text]
-    linkTitles m = do
+    linkTitles :: Bool -> Text -> IO [Text]
+    linkTitles lim m = do
       let uris = nub $ mapMaybe (parseURI . unpack) (T.words m)
-      titles <- mapM fetchLinkInfo uris
-      pure . take numLinks $ mapMaybe showTitle titles
+      titles <- mapMaybe showTitle <$> mapM fetchLinkInfo uris
+      pure $ if lim then take numLinks titles else titles
 
     -- Show a title.
     showTitle :: LinkInfo Text -> Maybe Text

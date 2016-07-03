@@ -17,6 +17,7 @@ module Yukibot.Main
     -- * Configuration
     , configuredBackends
     , configuredPlugins
+    , pluginToMonitors
 
       -- * State
     , BotState
@@ -31,15 +32,18 @@ module Yukibot.Main
     ) where
 
 import Control.Arrow ((&&&))
-import Control.Monad (void)
+import Control.Monad (when, void)
 import Control.Monad.Catch (SomeException, catch)
 import Data.Either (lefts, rights)
 import Data.Foldable (toList)
 import qualified Data.HashMap.Strict as H
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.Maybe (fromMaybe)
+import Data.List (isPrefixOf)
+import Data.List.NonEmpty (NonEmpty(..), fromList)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid ((<>), mconcat)
+import Data.Semigroup (Semigroup, sconcat)
 import Data.Text (Text, unpack)
+import qualified Data.Text as T
 import System.Exit (die)
 import System.FilePath (FilePath)
 import System.Posix.Signals (Handler(..), installHandler, sigINT, sigTERM)
@@ -98,14 +102,14 @@ makeBot st cfg = case configuredBackends (getBackends st) (getPlugins st) cfg of
 
   where
   -- Start a backend with the provided plugins.
-  startWithPlugins :: (Backend, [Plugin]) -> IO WrappedHandle
-  startWithPlugins (Backend b, enabledPlugins) = Wrap <$> startBackend handle b where
-    -- Unlike in original yukibot, the plugins (for a single backend)
+  startWithPlugins :: (Backend, [Monitor]) -> IO WrappedHandle
+  startWithPlugins (Backend b, enabledMonitors) = Wrap <$> startBackend handle b where
+    -- Unlike in original yukibot, the monitors (for a single backend)
     -- are run in a single thread. This makes output more
-    -- deterministic when multiple plugins fire on the same event, and
-    -- in practice most plugins only deal with one type of event, so
+    -- deterministic when multiple monitors fire on the same event,
+    -- and in practice most events are only handled by one monitor, so
     -- this saves needless forking as well.
-    handle ev = mapM_ (\(Plugin plugin) -> plugin ev) enabledPlugins
+    handle ev = mapM_ (\(Monitor monitor) -> monitor ev) enabledMonitors
 
   -- Kill a backend
   killBackend :: WrappedHandle -> IO ()
@@ -125,28 +129,27 @@ configuredBackends :: H.HashMap BackendName (Text -> Table -> Either Text Backen
   -- ^ The plugins.
   -> Table
   -- ^ The global config.
-  -> Either (NonEmpty CoreError) [(Backend, [Plugin])]
-configuredBackends allBackends allPlugins cfg0 = mangle [ get (BackendName n) cfgs
-                                                        | (n, VTable cfgs) <- maybe [] H.toList (getTable "backend" cfg0)
-                                                        ]
+  -> Either (NonEmpty CoreError) [(Backend, [Monitor])]
+configuredBackends allBackends allPlugins cfg0 = mangle id (:[]) . concat $
+  [ get (BackendName n) cfgs
+  | (n, VTable cfgs) <- maybe [] H.toList (getTable "backend" cfg0)
+  ]
   where
-    -- Gather the errors.
-    mangle :: [[Either [CoreError] (Backend, [Plugin])]] -> Either (NonEmpty CoreError) [(Backend, [Plugin])]
-    mangle xs = case (concat . lefts &&& rights) (concat xs) of
-      ([], bs) -> Right bs
-      (e:es, _) -> Left (e:|es)
-
     -- Instantiate all backends of the given type from the config.
-    get :: BackendName -> Table -> [Either [CoreError] (Backend, [Plugin])]
+    get :: BackendName -> Table -> [Either (NonEmpty CoreError) (Backend, [Monitor])]
     get name cfgs = case H.lookup name allBackends of
       Just b -> flip concatMap (H.toList cfgs) $ \case
         (n, VTable  c)  -> [make b name n (c `override` cfg0)]
         (n, VTArray cs) -> [make b name n (c `override` cfg0) | c <- toList cs]
         (n, _) -> [make b name n cfg0]
-      _ -> [Left [BackendUnknown name]]
+      _ -> [Left (BackendUnknown name:|[])]
 
     -- Instantiate an individual backend.
-    make :: (Text -> Table -> Either Text Backend) -> BackendName -> Text -> Table -> Either [CoreError] (Backend, [Plugin])
+    make :: (Text -> Table -> Either Text Backend)
+         -> BackendName
+         -> Text
+         -> Table
+         -> Either (NonEmpty CoreError) (Backend, [Monitor])
     make bf bname name cfg = case bf name cfg of
       Right (Backend b)  ->
         let enabledPlugins = configuredPlugins allPlugins bname name cfg
@@ -155,10 +158,8 @@ configuredBackends allBackends allPlugins cfg0 = mangle [ get (BackendName n) cf
             b' = b { unrawLogFile = maybe (unrawLogFile b) unpack $ getString "logfile"    cfg
                    , rawLogFile   = maybe (rawLogFile   b) unpack $ getString "rawlogfile" cfg
                    }
-        in case (lefts &&& rights) enabledPlugins of
-          ([], ps) -> Right (Backend b', ps)
-          (es, _)  -> Left es
-      Left err -> Left [BackendBadConfig bname name err]
+        in (\ms -> (Backend b', ms)) <$> mangle id id enabledPlugins
+      Left err -> Left (BackendBadConfig bname name err:|[])
 
 -- | Configure and instantiate all plugins of a backend.
 configuredPlugins :: H.HashMap PluginName (Table -> Either Text Plugin)
@@ -169,17 +170,60 @@ configuredPlugins :: H.HashMap PluginName (Table -> Either Text Plugin)
   -- ^ The name of this particular instance of the backend.
   -> Table
   -- ^ The configuration.
-  -> [Either CoreError Plugin]
+  -> [Either (NonEmpty CoreError) [Monitor]]
 configuredPlugins allPlugins bname name cfg = [make (PluginName n) | n <- getStrings "plugins" cfg] where
   -- Instantiate a plugin.
-  make :: PluginName -> Either CoreError Plugin
+  make :: PluginName -> Either (NonEmpty CoreError) [Monitor]
   make n = case H.lookup n allPlugins of
-    Just toP -> either (Left . PluginBadConfig bname name n) Right (toP (pcfg n))
-    Nothing  -> Left (PluginUnknown bname name n)
+    Just toP -> case toP (pcfg n) of
+      Right plugin -> mangle (:|[]) (:[]) (pluginToMonitors bname name n plugin cfg)
+      Left err -> Left (PluginBadConfig bname name n err:|[])
+    Nothing  -> Left (PluginUnknown bname name n:|[])
 
   -- Get the configuration of a plugin
   pcfg :: PluginName -> Table
   pcfg n = fromMaybe H.empty $ getNestedTable ["plugin", getPluginName n] cfg
+
+-- | Convert a plugin into a list of monitors: one for every matching
+-- monitor or command in the configuration.
+pluginToMonitors :: BackendName
+  -- ^ The name of the backend.
+  -> Text
+  -- ^ The name of this particular instance of the backend.
+  -> PluginName
+  -- ^ The name of the plugin.
+  -> Plugin
+  -- ^ The plugin.
+  -> Table
+  -- ^ The configuration.
+  -> [Either CoreError Monitor]
+pluginToMonitors bname name pname plugin cfg = map makeMonitor theMonitors ++ map makeCommandMonitor theCommands where
+  -- Look up a monitor by name.
+  makeMonitor :: MonitorName -> Either CoreError Monitor
+  makeMonitor m = case H.lookup m (pluginMonitors plugin) of
+    Just monitor -> Right monitor
+    Nothing      -> Left (MonitorUnknown bname name pname m)
+
+  -- Look up a command by name and turn it into a monitor.
+  makeCommandMonitor :: (Text, CommandName) -> Either CoreError Monitor
+  makeCommandMonitor (v, c) = case H.lookup c (pluginCommands plugin) of
+    Just command -> Right (commandToMonitor v command)
+    Nothing      -> Left (CommandUnknown bname name pname c)
+
+  -- All enabled monitors for this plugin/backend.
+  theMonitors :: [MonitorName]
+  theMonitors = mapMaybe restrict $ getStrings "monitors" cfg where
+    restrict m = case T.breakOn ":" m of
+      (pn, mn) | pn == getPluginName pname -> Just (MonitorName $ T.tail mn)
+               | otherwise -> Nothing
+
+  -- All enabled commands for this plugin/backend.
+  theCommands :: [(Text, CommandName)]
+  theCommands = maybe [] (mapMaybe restrict . H.toList) $ getTable "commands" cfg where
+    restrict (v, VString c) = case T.breakOn ":" c of
+      (pn, cn) | pn == getPluginName pname -> Just (v, CommandName $ T.tail cn)
+               | otherwise -> Nothing
+    restrict _ = Nothing
 
 -------------------------------------------------------------------------------
 -- State
@@ -229,3 +273,21 @@ addPlugin name plugin st
 getPlugins :: BotState
   -> H.HashMap PluginName (Table -> Either Text Plugin)
 getPlugins = stPlugins
+
+-------------------------------------------------------------------------------
+-- Utilities
+
+-- | Gather values.
+mangle :: (Semigroup s, Monoid m) => (a -> s) -> (b -> m) -> [Either a b] -> Either s m
+mangle toS toM xs = case (lefts &&& rights) xs of
+  ([], bs) -> let ms = map toM bs in Right (mconcat ms)
+  (as, _)  -> let ss = map toS as in Left  (sconcat $ fromList ss)
+
+-- | Given a verb, convert a 'Command' to a 'Monitor'.
+commandToMonitor :: Text -> Command -> Monitor
+commandToMonitor v (Command c) = Monitor $ \ev -> do
+  let vs    = T.words v
+  let parts = T.words (eventMessage ev)
+  let args  = drop (length vs) parts
+
+  when (vs `isPrefixOf` parts) (c ev args)

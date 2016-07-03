@@ -7,22 +7,35 @@
 -- Stability   : experimental
 -- Portability : OverloadedStrings
 --
--- A \"hello world\" plugin for yukibot-core.
+-- A \"hello world\" plugin for yukibot-core. This provides one
+-- monitor and one command:
+--
+--     * Monitor "hello", responds with a greeting to any message
+--       which consists only of "hello".
+--
+--     * Command "hello", which responds with a greeting.
 module Yukibot.Plugin.Hello where
 
+import qualified Data.HashMap.Strict as H
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 
 import Yukibot.Core
 
 helloPlugin :: Table -> Either a Plugin
-helloPlugin cfg = Right (Plugin plugin) where
-  msg = message cfg
-  plugin (Event h (Just c) n m) | T.toLower m == "hello" =
-    sendAction h $ Say c [n] msg
-  plugin (Event h Nothing  n m) | T.toLower m == "hello" =
-    sendAction h $ Whisper n msg
-  plugin _ = pure ()
+helloPlugin cfg = Right Plugin
+  { pluginMonitors = H.fromList [("hello", Monitor monitor)]
+  , pluginCommands = H.fromList [("hello", Command command)]
+  }
+
+  where
+    msg = message cfg
+
+    monitor ev@(Event _ _ _ m) | T.toLower m == "hello" = command ev []
+    monitor _ = pure ()
+
+    command (Event h (Just c) n _) _ = sendAction h $ Say c [n] msg
+    command (Event h Nothing  n _) _ = sendAction h $ Whisper n msg
 
 -- | Get the message from the configuration. Defaults to @"Hello!"@.
 message :: Table -> T.Text

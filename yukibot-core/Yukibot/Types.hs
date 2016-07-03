@@ -26,6 +26,10 @@ module Yukibot.Types
   -- * Plugins
   , PluginName(..)
   , Plugin(..)
+  , MonitorName(..)
+  , Monitor(..)
+  , CommandName(..)
+  , Command(..)
   -- * Errors
   , CoreError(..)
   ) where
@@ -34,6 +38,7 @@ import Control.Concurrent.STM (TQueue, TVar)
 import Control.Monad.Catch (Exception)
 import Data.ByteString (ByteString)
 import Data.Hashable (Hashable)
+import Data.HashMap.Strict (HashMap)
 import Data.String (IsString)
 import Data.Text (Text)
 
@@ -134,7 +139,27 @@ newtype Tag = Tag { getTag :: Text }
 newtype PluginName = PluginName { getPluginName :: Text }
   deriving (Eq, Ord, Read, Show, Hashable, IsString)
 
-newtype Plugin = Plugin (forall channel user. Event channel user -> IO ())
+newtype MonitorName = MonitorName { getMonitorName :: Text }
+  deriving (Eq, Ord, Read, Show, Hashable, IsString)
+
+newtype CommandName = CommandName { getCommandName :: Text }
+  deriving (Eq, Ord, Read, Show, Hashable, IsString)
+
+-- | A plugin provides a collection of named monitors and commands.
+data Plugin = Plugin
+  { pluginMonitors :: HashMap MonitorName Monitor
+  , pluginCommands :: HashMap CommandName Command
+  }
+
+-- | Monitors are activated on every message. They can communicate
+-- with the backend using the supplied 'Event'.
+newtype Monitor = Monitor (forall channel user. Event channel user -> IO ())
+
+-- | Commands are like monitors, but they have a \"verb\" (specified
+-- in the configuration) and are only activated when that verb begins
+-- a message. All of the words in the message after the verb are
+-- passed as an argument list.
+newtype Command = Command  (forall channel user. Event channel user -> [Text] -> IO ())
 
 -------------------------------------------------------------------------------
 -- Errors
@@ -153,4 +178,8 @@ data CoreError
   -- ^ A plugin was requested but it is unknown.
   | PluginBadConfig !BackendName !Text !PluginName !Text
   -- ^ The configuration for a plugin is invalid.
+  | MonitorUnknown !BackendName !Text !PluginName !MonitorName
+  -- ^ A monitor was requested but it is unknown.
+  | CommandUnknown !BackendName !Text !PluginName !CommandName
+  -- ^ A command was requested but it is unknown.
   deriving (Eq, Ord, Read, Show)
