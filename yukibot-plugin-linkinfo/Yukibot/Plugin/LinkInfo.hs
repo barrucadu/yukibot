@@ -11,6 +11,7 @@ module Yukibot.Plugin.LinkInfo (linkInfoPlugin) where
 import Control.Arrow ((&&&))
 import Data.Either (lefts, rights)
 import qualified Data.HashMap.Strict as H
+import Data.List (nub)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text, unpack, strip)
@@ -44,7 +45,7 @@ plugin numLinks hs = Plugin $ \ev -> case ev of
     -- Get a title for every link in a message
     linkTitles :: Text -> IO [Text]
     linkTitles m = do
-      let uris = mapMaybe (parseURI . unpack) (T.words m)
+      let uris = nub $ mapMaybe (parseURI . unpack) (T.words m)
       titles <- mapM fetchLinkInfo uris
       pure . take numLinks $ mapMaybe showTitle titles
 
