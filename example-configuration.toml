@@ -2,58 +2,64 @@
 # TOML: <https://github.com/toml-lang/toml>.
 
 # Backend configuration lives in the "backend.*" namespace.
+#
+# Any global configuration can be overridden in a backend by simply
+# replicating the appropriate hierarchy, like in the plugin.hello
+# example below.
+#
+# Similarly, the global configuration can provide defaults for any
+# value in the backend configuration. When a backend is instantiated,
+# the global and backend configurations are merged, with the backend
+# configuration taking priority. The backend-specific configuration is
+# then drawn from this merged configuration.
 
 [backend.irc]
 
-# The IRC backend uses the namespace "backend.irc.NETWORK" for its
-# top-level configuration. Multiple configurations for the same
-# network can be specified, each one represents a distinct connection:
-# for this the array syntax should be used.
+  # The IRC backend uses the namespace "backend.irc.NETWORK" for its
+  # top-level configuration. Multiple configurations for the same
+  # network can be specified, each one represents a distinct
+  # connection: for this the array syntax should be used.
+  [backend.irc."irc.freenode.net"]
+    # The "nick" and "port" fields are required, everything else is
+    # optional.
+    nick = "yukibot"
+    port = 7000
+    tls  = true                         ## default: false
 
-[backend.irc."irc.freenode.net"]
+    # A backend had two log files: a "raw" log file, which consists of
+    # the messages sent between the backend and the server, and
+    # another log which consists of events and actions in the bot
+    # received from and sent to that backend.
+    #
+    # The "logfile" and "rawlogfile" fields are common to all backends
+    # and, if not present, are filled in to a default value
+    # (determined by the backend). For the IRC backend, the names
+    # "irc-<host>-<nick>.raw.log" and "irc-<host>-<nick>.log" are
+    # used.
+    logfile    = "freenode.log"
+    rawlogfile = "freenode.raw.log"
 
-# The "nick" and "port" fields are required, everything else is
-# optional.
-nick = "yukibot"
-port = 7000
-tls  = true                         ## default: false
+    # List of channels to join after welcome.
+    channels = [ "##compsoc-uk-anime" ] ## default: []
 
-# A backend had two log files: a "raw" log file, which consists of the
-# messages sent between the backend and the server, and another log
-# which consists of events and actions in the bot received from and
-# sent to that backend.
-#
-# The "logfile" and "rawlogfile" fields are common to all backends
-# and, if not present, are filled in to a default value (determined by
-# the backend). For the IRC backend, the names
-# "irc-<host>-<nick>.raw.log" and "irc-<host>-<nick>.log" are used.
-logfile    = "freenode.log"
-rawlogfile = "freenode.raw.log"
+    # If the "server-password" is present and nonempty, it is sent on
+    # connection to the server via the "PASS" command.
+    server-password = ""                ## default: ""
 
-# List of channels to join after welcome.
-channels = [ "##compsoc-uk-anime" ] ## default: []
+    # If the "nickserv-password" key is present and nonempty, the
+    # "nickserv" user is authed with. The username of nickserv can be
+    # changed with the "nickserv" key.
+    nickserv          = "nickserv"      ## default: "nickserv"
+    nickserv-password = ""              ## default: ""
 
-# If the "server-password" is present and nonempty, it is sent on
-# connection to the server via the "PASS" command.
-server-password = ""                ## default: ""
+    # List of plugins to enable.
+    plugins = [ "hello" ]               ## default: []
 
-# If the "nickserv-password" key is present and nonempty, the
-# "nickserv" user is authed with. The username of nickserv can be
-# changed with the "nickserv" key.
-nickserv          = "nickserv"      ## default: "nickserv"
-nickserv-password = ""              ## default: ""
-
-# List of plugins to enable.
-#
-# This can also be a table, overriding the global configuration. For
-# example:
-#
-# plugins = { "hello" = { "message" = "Salutations!" } }
-plugins = [ "hello" ]               ## default: []
+    # Backend-specific plugin configuration.
+    [backend.irc."irc.freenode.net".plugin.hello]
+      message = "Salutations"
 
 # Plugin configuration lives in the "plugin.*" namespace. Each plugin
 # defines its own configuration, there is nothing globally necessary.
-
 [plugin.hello]
-
-message = "Hello!"
+  message = "Hello!"

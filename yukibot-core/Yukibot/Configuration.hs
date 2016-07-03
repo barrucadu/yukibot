@@ -21,6 +21,8 @@ module Yukibot.Configuration
     , getTables
     -- ** Table helpers
     , getNestedTable
+    -- * Combining
+    , override
 
     -- * Re-exports
   , module Text.Toml.Types
@@ -109,3 +111,29 @@ getTables fld tbl = case (getTable fld tbl, getTableArray fld tbl) of
 getNestedTable :: [Text] -> Table -> Maybe Table
 getNestedTable (t:ts) tbl = getTable t tbl >>= getNestedTable ts
 getNestedTable [] tbl = Just tbl
+
+-------------------------------------------------------------------------------
+-- Combining
+
+-- | Combine two tables.
+--
+-- The keys in the resultant table are the union of the keys in both
+-- tables. The values are:
+--
+--     (1) where the key only appears in one table, that value is
+--     used;
+--
+--     (2) where the key appears in both tables, and both values are
+--     tables, they are combined with this function;
+--
+--     (3) otherwise the value from the left-hand table is used.
+--
+-- It is the recursive case that distinguishes this from the regular
+-- '<>' for 'Table'.
+override :: Table -> Table -> Table
+override left right = H.fromList [(k, val k) | k <- H.keys left ++ H.keys right] where
+  val k = case (H.lookup k left, H.lookup k right) of
+    (Just (VTable a), Just (VTable b)) -> VTable (a `override` b)
+    (Just a, _) -> a
+    (_, Just b) -> b
+    _ -> error "This isn't reachable, but the type system can't tell that :("

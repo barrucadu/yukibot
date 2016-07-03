@@ -126,9 +126,9 @@ configuredBackends :: H.HashMap BackendName (Text -> Table -> Either Text Backen
   -> Table
   -- ^ The global config.
   -> Either (NonEmpty CoreError) [(Backend, [Plugin])]
-configuredBackends allBackends allPlugins cfg = mangle [ get (BackendName n) c
-                                                       | (n, VTable c) <- maybe [] H.toList (getTable "backend" cfg)
-                                                       ]
+configuredBackends allBackends allPlugins cfg0 = mangle [ get (BackendName n) cfgs
+                                                        | (n, VTable cfgs) <- maybe [] H.toList (getTable "backend" cfg0)
+                                                        ]
   where
     -- Gather the errors.
     mangle :: [[Either [CoreError] (Backend, [Plugin])]] -> Either (NonEmpty CoreError) [(Backend, [Plugin])]
@@ -138,22 +138,22 @@ configuredBackends allBackends allPlugins cfg = mangle [ get (BackendName n) c
 
     -- Instantiate all backends of the given type from the config.
     get :: BackendName -> Table -> [Either [CoreError] (Backend, [Plugin])]
-    get name tbl = case H.lookup name allBackends of
-      Just b -> flip concatMap (H.toList tbl) $ \case
-        (n, VTable  c)  -> [make b name n c]
-        (n, VTArray cs) -> [make b name n c | c <- toList cs]
-        _ -> []
+    get name cfgs = case H.lookup name allBackends of
+      Just b -> flip concatMap (H.toList cfgs) $ \case
+        (n, VTable  c)  -> [make b name n (c `override` cfg0)]
+        (n, VTArray cs) -> [make b name n (c `override` cfg0) | c <- toList cs]
+        (n, _) -> [make b name n cfg0]
       _ -> [Left [BackendUnknown name]]
 
     -- Instantiate an individual backend.
     make :: (Text -> Table -> Either Text Backend) -> BackendName -> Text -> Table -> Either [CoreError] (Backend, [Plugin])
-    make bf bname name tbl = case bf name tbl of
+    make bf bname name cfg = case bf name cfg of
       Right (Backend b)  ->
-        let enabledPlugins = configuredPlugins allPlugins bname name cfg tbl
+        let enabledPlugins = configuredPlugins allPlugins bname name cfg
             -- Override the log files of the backend with values from
             -- the configuration, if present.
-            b' = b { unrawLogFile = maybe (unrawLogFile b) unpack $ getString "logfile"    tbl
-                   , rawLogFile   = maybe (rawLogFile   b) unpack $ getString "rawlogfile" tbl
+            b' = b { unrawLogFile = maybe (unrawLogFile b) unpack $ getString "logfile"    cfg
+                   , rawLogFile   = maybe (rawLogFile   b) unpack $ getString "rawlogfile" cfg
                    }
         in case (lefts &&& rights) enabledPlugins of
           ([], ps) -> Right (Backend b', ps)
@@ -168,32 +168,18 @@ configuredPlugins :: H.HashMap PluginName (Table -> Either Text Plugin)
   -> Text
   -- ^ The name of this particular instance of the backend.
   -> Table
-  -- ^ The global configuration.
-  -> Table
-  -- ^ The backend configuration.
+  -- ^ The configuration.
   -> [Either CoreError Plugin]
-configuredPlugins allPlugins bname name cfg inst = case (getStrings "plugins" inst, getTable "plugins" inst) of
-  -- Plugins with backend-specific config
-  (_, Just plugins) -> [make' (PluginName n) c | (n, c) <- H.toList plugins]
-  -- No backend-specific config
-  (plugins, _) -> [make (PluginName n) H.empty | n <- plugins]
+configuredPlugins allPlugins bname name cfg = [make (PluginName n) | n <- getStrings "plugins" cfg] where
+  -- Instantiate a plugin.
+  make :: PluginName -> Either CoreError Plugin
+  make n = case H.lookup n allPlugins of
+    Just toP -> either (Left . PluginBadConfig bname name n) Right (toP (pcfg n))
+    Nothing  -> Left (PluginUnknown bname name n)
 
-  where
-    -- Instantiate a plugin with some config.
-    make :: PluginName -> Table -> Either CoreError Plugin
-    make n c = case H.lookup n allPlugins of
-      Just toP -> either (Left . PluginBadConfig bname name n) Right (toP (pcfg n c))
-      Nothing  -> Left (PluginUnknown bname name n)
-
-    -- Instantiate a plugin with some config.
-    make' :: PluginName -> Node -> Either CoreError Plugin
-    make' n (VTable c) = make n c
-    make' n _ = make n H.empty
-
-    -- Look up the global config and merge with the backend-specific
-    -- config, with backend-specific taking priority.
-    pcfg :: PluginName -> Table -> Table
-    pcfg (PluginName n) c = c <> fromMaybe H.empty (getNestedTable ["plugin", n] cfg)
+  -- Get the configuration of a plugin
+  pcfg :: PluginName -> Table
+  pcfg n = fromMaybe H.empty $ getNestedTable ["plugin", getPluginName n] cfg
 
 -------------------------------------------------------------------------------
 -- State
