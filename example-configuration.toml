@@ -24,7 +24,7 @@
     # optional.
     nick = "yukibot"
     port = 7000
-    tls  = true                             ## default: false
+    tls  = true                              ## default: false
 
     # A backend had two log files: a "raw" log file, which consists of
     # the messages sent between the backend and the server, and
@@ -40,26 +40,27 @@
     rawlogfile = "freenode.raw.log"
 
     # List of channels to join after welcome.
-    channels = [ "##compsoc-uk-anime" ]     ## default: []
+    channels = [ "##compsoc-uk-anime" ]      ## default: []
 
     # If the "server-password" is present and nonempty, it is sent on
     # connection to the server via the "PASS" command.
-    server-password = ""                    ## default: ""
+    server-password = ""                     ## default: ""
 
     # If the "nickserv-password" key is present and nonempty, the
     # "nickserv" user is authed with. The username of nickserv can be
     # changed with the "nickserv" key.
-    nickserv          = "nickserv"          ## default: "nickserv"
-    nickserv-password = ""                  ## default: ""
+    nickserv          = "nickserv"           ## default: "nickserv"
+    nickserv-password = ""                   ## default: ""
 
-    # List of plugins to enable.
-    plugins = [ "hello" ]                   ## default: []
+    # List of plugins to enable. The "builtin" plugin is always
+    # enabled, even if this is an empty list.
+    plugins = [ "hello" ]                    ## default: []
 
     # List of monitors to enable.
     #
     # Monitor names are in the format "plugin:monitor". Monitors
     # belonging to plugins which aren't enabled are silently ignored.
-    monitors = [ "hello:hello" ]            ## default: []
+    monitors = [ "hello:hello" ]             ## default: []
 
     # Table of commands to enable, with keys being verbs and values
     # being names.
@@ -67,7 +68,26 @@
     # Verbs can contain spaces. Command names are in the format
     # "plugin:command". As with monitors, commands belonging to
     # plugins which aren't enabled are silently ignored.
-    commands = { "greet" = "hello:hello" }  ## default: {}
+    [backend.irc."irc.freenode.net".commands] ## default: {}
+      "greet" = "hello:hello"
+      "set default prefix"   = "builtin:set-default-prefix"
+      "set channel prefix"   = "builtin:set-channel-prefix"
+      "unset channel prefix" = "builtin:unset-channel-prefix"
+      "disable plugin"       = "builtin:disable-plugin"
+      "enable plugin"        = "builtin:enable-plugin"
+      "disable monitor"      = "builtin:disable-monitor"
+      "enable monitor"       = "builtin:enable-monitor"
+      "disable command"      = "Builtin:disable-command"
+      "enable command"       = "builtin:enable-command"
+
+    # Commands in a channel must be prefixed with the following string
+    # in order to be activated. It is optional for whispered commands.
+    # The nick followed by ", " or ": " is also accepted.
+    default-prefix = "!"                    ## default: "!"
+
+    # In addition, individual channels can have different prefixes.
+    # This is useful to avoid clashes with other bots.
+    channel-prefixes = { "#cs-york" = "@" } ## default: {}
 
     # Backend-specific plugin configuration.
     [backend.irc."irc.freenode.net".plugin.hello]

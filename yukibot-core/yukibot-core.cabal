@@ -22,6 +22,7 @@ library
                      , Yukibot.Core
                      , Yukibot.Log
                      , Yukibot.Main
+                     , Yukibot.Plugin.Builtin
                      , Yukibot.Types
   -- other-modules:       
   -- other-extensions:    

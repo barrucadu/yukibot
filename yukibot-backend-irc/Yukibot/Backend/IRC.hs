@@ -60,8 +60,9 @@ connectToIrc :: Text
   -> Table
   -> Y.RawLogger
   -> ((Y.BackendHandle -> Y.Event) -> IO ())
+  -> (Y.UserName -> IO ())
   -> IO BackendState
-connectToIrc host cfg logger receiveEvent = do
+connectToIrc host cfg logger receiveEvent changeUser = do
   cconf <- (if getTLS cfg then connectWithTLS' else connect')
              (botLogger logger)
              (encodeUtf8 host)
@@ -77,7 +78,7 @@ connectToIrc host cfg logger receiveEvent = do
   let cconf' = cconf { IRC._ondisconnect = IRC._ondisconnect cconf >> liftIO (atomically stopper) }
 
   (welcomevar, welcomer) <- atomically (newWelcomeHandler (getNickserv cfg) (getNickservPassword cfg))
-  let receiver = receiveHandler receiveEvent
+  let receiver = receiveHandler receiveEvent changeUser
   let iconf' = iconf { IRC._eventHandlers = receiver : welcomer : IRC._eventHandlers iconf }
   state <- IRC.newIRCState cconf' iconf' ()
   tid <- forkIO (IRC.start' state)
@@ -140,11 +141,18 @@ botLogger logger IRC.FromClient = Y.rawToServer   logger
 botLogger logger IRC.FromServer = Y.rawFromServer logger
 
 -- | Event handler for message reception.
-receiveHandler :: ((Y.BackendHandle -> Y.Event) -> IO ()) -> IRC.EventHandler s
-receiveHandler receiveEvent = IRC.EventHandler
+--
+-- Also store the nick every time we receive a message, because it can
+-- be changed by a few different things, and irc-client unfortunately
+-- doesn't make it easy to hook into a nick change. This means that
+-- there will be up to a one-event lag on nick changes.
+receiveHandler :: ((Y.BackendHandle -> Y.Event) -> IO ()) -> (Y.UserName -> IO ()) -> IRC.EventHandler s
+receiveHandler receiveEvent changeUser = IRC.EventHandler
   { IRC._description = "Receive PRIVMSGs and forward them to yukibot-core."
-  , IRC._matchType = IRC.EPrivmsg
-  , IRC._eventFunc = liftIO . dispatchEvent
+  , IRC._matchType = IRC.EEverything
+  , IRC._eventFunc = \ev -> do
+    user <- Y.UserName . IRC._nick <$> IRC.instanceConfig
+    liftIO $ changeUser user >> dispatchEvent ev
   }
    where
     -- Decode and send off an event.

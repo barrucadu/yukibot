@@ -82,7 +82,7 @@ newtype BackendName = BackendName { getBackendName :: Text }
 
 -- | A representation of a backend.
 data Backend where
-  Backend :: { initialise :: RawLogger -> ((BackendHandle -> Event) -> IO ()) -> IO a
+  Backend :: { initialise :: RawLogger -> ((BackendHandle -> Event) -> IO ()) -> (UserName -> IO ()) -> IO a
              , run :: TQueue Action -> a -> IO ()
              , describe :: Text
              , rawLogFile :: FilePath
@@ -96,6 +96,9 @@ data BackendHandle = BackendHandle
   , hasStopped   :: TVar Bool
   , description  :: Text
   , actionLogger :: Action -> IO ()
+  , backendName  :: BackendName
+  , specificName :: Text
+  , backendIndex :: Int
   }
 
 instance Eq BackendHandle where
