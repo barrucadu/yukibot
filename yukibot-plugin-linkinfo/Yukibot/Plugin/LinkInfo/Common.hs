@@ -10,6 +10,7 @@ module Yukibot.Plugin.LinkInfo.Common where
 
 import Control.Monad.Catch (SomeException, catch)
 import Data.ByteString.Lazy (toStrict)
+import Data.Functor.Contravariant (Contravariant(..))
 import Data.Text (Text, pack, strip, unpack)
 import Data.Text.Encoding (decodeUtf8)
 import Text.XML.HXT.Core ((//>), readString, hasName, getText, runX, withParseHTML, withWarnings, yes, no)
@@ -17,11 +18,29 @@ import Text.XML.HXT.TagSoup (withTagSoup)
 import qualified Network.HTTP.Simple as W
 import Network.URI (URI)
 
-data LinkHandler = LinkHandler
-  { lhPredicate :: URI -> Bool
+data LinkHandler a = LinkHandler
+  { lhPredicate :: a -> Bool
   -- ^ When to apply this handler
-  , lhHandler :: URI -> IO (LinkInfo Text)
+  , lhHandler :: a -> IO (LinkInfo Text)
   -- ^ Get link info from a URI
+  }
+
+instance Contravariant LinkHandler where
+  contramap f lh = LinkHandler
+    { lhPredicate = lhPredicate lh . f
+    , lhHandler   = lhHandler lh . f
+    }
+
+-- | Wrap a 'LinkHandler' with a function that might fail. If the
+-- function does fail, the predicate returns false.
+contramapMaybe :: (a -> Maybe b) -> LinkHandler b -> LinkHandler a
+contramapMaybe f lh = LinkHandler
+  { lhPredicate = \a -> case f a of
+      Just b -> lhPredicate lh b
+      Nothing -> False
+  , lhHandler = \a -> case f a of
+      Just b -> lhHandler lh b
+      Nothing -> pure Failed
   }
 
 data LinkInfo a

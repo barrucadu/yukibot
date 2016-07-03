@@ -8,56 +8,47 @@
 -- Portability : OverloadedStrings
 module Yukibot.Plugin.LinkInfo.Imgur where
 
-import Data.Text (Text, unpack)
+import Data.Text (Text)
 import qualified Data.Text as T
 import Network.URI (URI(..), URIAuth(..))
 
 import Yukibot.Plugin.LinkInfo.Common
 
-linkHandler :: config -> Either error LinkHandler
-linkHandler _ = Right LinkHandler
-  { lhPredicate = predicate
-  , lhHandler   = handler
+linkHandler :: config -> Either error (LinkHandler URI)
+linkHandler _ = Right . contramapMaybe getGalleryUri $ LinkHandler
+  { lhPredicate = const True
+  , lhHandler   = getLinkInfo
   }
 
--- | Handle any URLs for the domains "imgur.com" or "i.imgur.com".
-predicate :: URI -> Bool
-predicate uri = isImageUri uri || isGalleryUri uri
+-- | Get the gallery URI for an imgur link.
+getGalleryUri :: URI -> Maybe URI
+getGalleryUri uri
+  | isImageUri   = Just uri { uriAuthority = Just galleryAuth, uriPath = galleryPath }
+  | isGalleryUri = Just uri
+  | otherwise = Nothing
 
--- | fetch an image title.
-handler :: URI -> IO (LinkInfo Text)
-handler uri
-  | isImageUri   uri = fetchImgurTitle (toGalleryUri uri)
-  | isGalleryUri uri = fetchImgurTitle uri
+  where
+    -- Check if a URI is for "i.imgur.com" (an image).
+    isImageUri = maybe False ((=="i.imgur.com") . uriRegName) (uriAuthority uri)
 
--- | Check if a URI is for "i.imgur.com" (an image).
-isImageUri :: URI -> Bool
-isImageUri uri = case uriAuthority uri of
-  Just auth -> uriRegName auth == "i.imgur.com"
-  Nothing -> False
+    -- Check if a URI is for "imgur.com" (the gallery).
+    isGalleryUri = maybe False ((=="imgur.com") . uriRegName) (uriAuthority uri)
 
--- | Check if a URI is for "imgur.com" (the gallery).
-isGalleryUri :: URI -> Bool
-isGalleryUri uri = case uriAuthority uri of
-  Just auth -> uriRegName auth == "imgur.com"
-  Nothing -> False
+    -- The URI authority of the imgur gallery.
+    galleryAuth = case uriAuthority uri of
+      Just auth -> auth { uriRegName = "imgur.com" }
+      Nothing   -> URIAuth { uriUserInfo = ""
+                           , uriRegName  = "imgur.com"
+                           , uriPort     = ""
+                           }
 
--- | Convert an image URI into a gallery URI.
-toGalleryUri :: URI -> URI
-toGalleryUri uri = uri { uriAuthority = Just newAuth, uriPath = newPath } where
-  newAuth = case uriAuthority uri of
-    Just auth -> auth { uriRegName = "imgur.com" }
-    Nothing   -> URIAuth { uriUserInfo = ""
-                         , uriRegName  = "imgur.com"
-                         , uriPort     = ""
-                         }
-
-  newPath = takeWhile (/='.') (uriPath uri)
+    -- The URI path of the image in the gallery
+    galleryPath = takeWhile (/='.') (uriPath uri)
 
 -- | Fetch the title of an imgur gallery page, returning @NoTitle@ if
 -- it's the default.
-fetchImgurTitle :: URI -> IO (LinkInfo Text)
-fetchImgurTitle uri = do
+getLinkInfo :: URI -> IO (LinkInfo Text)
+getLinkInfo uri = do
   title <- fetchTitle uri
   pure $ case title of
     Just t | "imgur:" `T.isPrefixOf` T.toLower t -> NoTitle

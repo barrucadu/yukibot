@@ -20,7 +20,7 @@ import Yukibot.Configuration
 
 import Yukibot.Plugin.LinkInfo.Common
 
-linkHandler :: Table -> Either error LinkHandler
+linkHandler :: Table -> Either error (LinkHandler URI)
 linkHandler cfg =
   let maxTitleLen = fromMaybe 100 $ getInteger "max-title-len" cfg
   in Right LinkHandler

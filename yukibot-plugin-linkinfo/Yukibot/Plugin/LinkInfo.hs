@@ -34,7 +34,7 @@ linkInfoPlugin cfg =
 -- | The plugin itself. Link handlers are applied in order, and
 -- processing stops as soon as one matching handler is found. This
 -- allows a priority ordering.
-plugin :: Int -> [LinkHandler] -> Plugin
+plugin :: Int -> [LinkHandler URI] -> Plugin
 plugin numLinks hs = Plugin $ \ev -> case ev of
   Event h (Just c) _ m -> mapM_ (sendAction h . Say c [])  =<< linkTitles m
   Event h Nothing n m  -> mapM_ (sendAction h . Whisper n) =<< linkTitles m
@@ -64,13 +64,13 @@ plugin numLinks hs = Plugin $ \ev -> case ev of
       unempty t = t
 
 -- | Get all handlers from the config.
-getHandlers :: Table -> [Either Text LinkHandler]
+getHandlers :: Table -> [Either Text (LinkHandler URI)]
 getHandlers cfg = [get h' (conf h') | h <- getStrings "handlers" cfg, let h' = T.toLower h] where
   -- Instantiate a link handler
-  get :: Text -> Table -> Either Text LinkHandler
   get "html"  = HTML.linkHandler
   get "imgur" = Imgur.linkHandler
   get name    = const (Left $ "Unknown link handler: " <> name)
+  get :: Text -> Table -> Either Text (LinkHandler URI)
 
   -- Get the configuration for a link handler.
   conf :: Text -> Table

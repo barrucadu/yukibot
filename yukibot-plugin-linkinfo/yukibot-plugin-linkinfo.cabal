@@ -25,6 +25,7 @@ library
   -- other-extensions:    
   build-depends:       base                 >=4.9  && <4.10
                      , bytestring           >=0.10 && <0.11
+                     , contravariant        >=1.4  && <1.5
                      , exceptions           >=0.7  && <0.9
                      , http-conduit         >=2.1  && <2.2
                      , hxt                  >=9.3  && <9.4
