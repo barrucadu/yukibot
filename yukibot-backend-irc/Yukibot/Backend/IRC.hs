@@ -60,9 +60,8 @@ connectToIrc :: Text
   -> Table
   -> Y.RawLogger
   -> ((Y.BackendHandle -> Y.Event) -> IO ())
-  -> (Y.UserName -> IO ())
   -> IO BackendState
-connectToIrc host cfg logger receiveEvent changeUser = do
+connectToIrc host cfg logger receiveEvent = do
   cconf <- (if getTLS cfg then connectWithTLS' else connect')
              (botLogger logger)
              (encodeUtf8 host)
@@ -78,7 +77,7 @@ connectToIrc host cfg logger receiveEvent changeUser = do
   let cconf' = cconf { IRC._ondisconnect = IRC._ondisconnect cconf >> liftIO (atomically stopper) }
 
   (welcomevar, welcomer) <- atomically (newWelcomeHandler (getNickserv cfg) (getNickservPassword cfg))
-  let receiver = receiveHandler receiveEvent changeUser
+  let receiver = receiveHandler receiveEvent
   let iconf' = iconf { IRC._eventHandlers = receiver : welcomer : IRC._eventHandlers iconf }
   state <- IRC.newIRCState cconf' iconf' ()
   tid <- forkIO (IRC.start' state)
@@ -141,27 +140,21 @@ botLogger logger IRC.FromClient = Y.rawToServer   logger
 botLogger logger IRC.FromServer = Y.rawFromServer logger
 
 -- | Event handler for message reception.
---
--- Also store the nick every time we receive a message, because it can
--- be changed by a few different things, and irc-client unfortunately
--- doesn't make it easy to hook into a nick change. This means that
--- there will be up to a one-event lag on nick changes.
-receiveHandler :: ((Y.BackendHandle -> Y.Event) -> IO ()) -> (Y.UserName -> IO ()) -> IRC.EventHandler s
-receiveHandler receiveEvent changeUser = IRC.EventHandler
+receiveHandler :: ((Y.BackendHandle -> Y.Event) -> IO ()) -> IRC.EventHandler s
+receiveHandler receiveEvent = IRC.EventHandler
   { IRC._description = "Receive PRIVMSGs and forward them to yukibot-core."
-  , IRC._matchType = IRC.EEverything
+  , IRC._matchType = IRC.EPrivmsg
   , IRC._eventFunc = \ev -> do
     user <- Y.UserName . IRC._nick <$> IRC.instanceConfig
-    liftIO $ changeUser user >> dispatchEvent ev
+    liftIO $ dispatchEvent user ev
   }
    where
     -- Decode and send off an event.
-    dispatchEvent :: IRC.UnicodeEvent -> IO ()
-    dispatchEvent (IRC.Event _ (IRC.User nick) (IRC.Privmsg _ (Right msg))) =
-      receiveEvent (\h -> Y.Event h Nothing (Y.UserName nick) msg)
-    dispatchEvent (IRC.Event _ (IRC.Channel chan nick) (IRC.Privmsg _ (Right msg))) =
-      receiveEvent (\h -> Y.Event h (Just $ Y.ChannelName chan) (Y.UserName nick) msg)
-    dispatchEvent _ = pure ()
+    dispatchEvent user (IRC.Event _ (IRC.User nick) (IRC.Privmsg _ (Right msg))) =
+      receiveEvent (\h -> Y.Event h user Nothing (Y.UserName nick) msg)
+    dispatchEvent user (IRC.Event _ (IRC.Channel chan nick) (IRC.Privmsg _ (Right msg))) =
+      receiveEvent (\h -> Y.Event h user (Just $ Y.ChannelName chan) (Y.UserName nick) msg)
+    dispatchEvent _ _ = pure ()
 
 -- | Flag and handler for 001 (numeric welcome). Flag is set to 'True'
 -- on receipt.

@@ -53,8 +53,8 @@ plugin numLinks hs = Plugin
 
   where
     -- Respond with linkinfo for a collection of links.
-    linkinfo lim (Event h (Just c) _ m) = mapM_ (sendAction h . Say c [])  =<< linkTitles lim m
-    linkinfo lim (Event h Nothing n  m) = mapM_ (sendAction h . Whisper n) =<< linkTitles lim m
+    linkinfo lim (Event h _ (Just c) _ m) = mapM_ (sendAction h . Say c [])  =<< linkTitles lim m
+    linkinfo lim (Event h _ Nothing n  m) = mapM_ (sendAction h . Whisper n) =<< linkTitles lim m
 
     -- Get a title for every link in a message
     linkTitles :: Bool -> Text -> IO [Text]

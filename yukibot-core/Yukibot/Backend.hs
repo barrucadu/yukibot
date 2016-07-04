@@ -45,8 +45,6 @@ import Yukibot.Types
 -- backend is ready, see 'awaitStart'.
 startBackend :: (Event -> IO ())
   -- ^ Process received events
-  -> (UserName -> IO ())
-  -- ^ Callback for when the username changes.
   -> BackendName
   -- ^ The name of the backend (e.g. \"irc\")
   -> Text
@@ -55,13 +53,13 @@ startBackend :: (Event -> IO ())
   -- ^ The index of this particular instance in the table array (0 if
   -- there is no array).
   -> Backend -> IO BackendHandle
-startBackend onReceive onChange bname sname index b@(Backend setup exec _ _ _) = do
+startBackend onReceive bname sname index b@(Backend setup exec _ _ _) = do
   (h, eventLogger) <- createHandle bname sname index b
 
   let rawlogger = rawLoggerFromBackend b
   let receive ef = let e = ef h in eventLogger e >> onReceive e
 
-  forkAndRunBackend h (setup rawlogger receive onChange) (exec $ msgQueue h)
+  forkAndRunBackend h (setup rawlogger receive) (exec $ msgQueue h)
   pure h
 
 -- | Tell a backend to terminate. If the backend has already

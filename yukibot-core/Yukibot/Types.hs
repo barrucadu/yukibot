@@ -53,6 +53,7 @@ newtype UserName = UserName { getUserName :: Text }
 
 data Event = Event
   { eventHandle  :: BackendHandle
+  , eventWhoAmI  :: UserName
   , eventChannel :: Maybe ChannelName
   , eventUser    :: UserName
   , eventMessage :: Text
@@ -82,7 +83,7 @@ newtype BackendName = BackendName { getBackendName :: Text }
 
 -- | A representation of a backend.
 data Backend where
-  Backend :: { initialise :: RawLogger -> ((BackendHandle -> Event) -> IO ()) -> (UserName -> IO ()) -> IO a
+  Backend :: { initialise :: RawLogger -> ((BackendHandle -> Event) -> IO ()) -> IO a
              , run :: TQueue Action -> a -> IO ()
              , describe :: Text
              , rawLogFile :: FilePath

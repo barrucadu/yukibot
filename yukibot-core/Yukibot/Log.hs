@@ -69,7 +69,7 @@ logRawFrom tag fp = logInternalFrom tag fp . init . tail . show
 
 -- | Events come in from the server.
 logEvent :: Tag -> FilePath -> Event -> IO ()
-logEvent tag fp (Event _ mc u txt) = logInternalFrom tag fp . unpack $ case mc of
+logEvent tag fp (Event _ _ mc u txt) = logInternalFrom tag fp . unpack $ case mc of
   Just c  -> "[in: " <> getChannelName c <> "] [from: " <> getUserName u <> "]: " <> txt
   Nothing -> "[from: " <> getUserName u <> "]: " <> txt
 

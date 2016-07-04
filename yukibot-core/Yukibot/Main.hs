@@ -61,13 +61,11 @@ defaultMain st0 fp = do
   case mcfg of
     Right cfg -> do
       state <- initialBuiltinState cfg
-      let getUser0   = builtinGetUser   state
       let getPrefix0 = builtinGetPrefix state
-      let setUser0   = builtinSetUser   state
       let isMonitorEnabled = builtinIsMonitorEnabled state
       let isCommandEnabled = builtinIsCommandEnabled state
       case addPlugin "builtin" (builtinPlugin state) st0 of
-        Right st -> case makeBot st setUser0 getUser0 getPrefix0 isMonitorEnabled isCommandEnabled cfg of
+        Right st -> case makeBot st getPrefix0 isMonitorEnabled isCommandEnabled cfg of
           Right go   -> go
           Left  errs -> die ("En error while creating the bot: " ++ show errs)
         Left err -> die ("An error occurred while adding the \"builtin\" plugin: " ++ show err)
@@ -93,10 +91,6 @@ defaultMain st0 fp = do
 makeBot :: BotState
   -- ^ The initial state. This should include the \"builtin\" plugin
   -- (or at least, one with that name).
-  -> (BackendName -> Text -> Int -> UserName -> IO ())
-  -- ^ Callback for when the username changes.
-  -> (BackendName -> Text -> Int -> IO UserName)
-  -- ^ Get the real username.
   -> (BackendName -> Text -> Int -> Maybe ChannelName -> IO Text)
   -- ^ Get the command prefix.
   -> (BackendName -> Text -> Int -> ChannelName -> PluginName -> MonitorName -> IO Bool)
@@ -106,8 +100,8 @@ makeBot :: BotState
   -> Table
   -- ^ The global configuration.
   -> Either (NonEmpty CoreError) (IO ())
-makeBot st setUser0 getUser0 getPrefix0 isMonitorEnabled isCommandEnabled cfg =
-  case configuredBackends (getBackends st) (getPlugins st) getUser0 getPrefix0 cfg of
+makeBot st getPrefix0 isMonitorEnabled isCommandEnabled cfg =
+  case configuredBackends (getBackends st) (getPlugins st) getPrefix0 cfg of
     Right bs -> Right $ do
       -- Start all backends
       hs <- mapM startWithPlugins bs
@@ -121,7 +115,7 @@ makeBot st setUser0 getUser0 getPrefix0 isMonitorEnabled isCommandEnabled cfg =
   where
   -- Start a backend with the provided plugins.
   startWithPlugins (bname, sname, index, b, enabledMonitors) =
-    startBackend handle (setUser0 bname sname index) bname sname index b
+    startBackend handle bname sname index b
     where
       -- Unlike in original yukibot, the monitors (for a single
       -- backend) are run in a single thread. This makes output more
@@ -148,14 +142,12 @@ configuredBackends :: H.HashMap BackendName (Text -> Table -> Either Text Backen
   -> H.HashMap PluginName (Table -> Either Text Plugin)
   -- ^ The plugins. This should include the \"builtin\" plugin (or at
   -- least, one with that name).
-  -> (BackendName -> Text -> Int -> IO UserName)
-  -- ^ Get the real username.
   -> (BackendName -> Text -> Int -> Maybe ChannelName -> IO Text)
   -- ^ Get the command prefix.
   -> Table
   -- ^ The global config.
   -> Either (NonEmpty CoreError) [(BackendName, Text, Int, Backend, [(PluginName, Either MonitorName CommandName, Monitor)])]
-configuredBackends allBackends allPlugins getUser0 getPrefix0 cfg0 = mangle id (:[]) . concat $
+configuredBackends allBackends allPlugins getPrefix0 cfg0 = mangle id (:[]) . concat $
   [ get (BackendName n) cfgs
   | (n, VTable cfgs) <- maybe [] H.toList (getTable "backend" cfg0)
   ]
@@ -180,9 +172,8 @@ configuredBackends allBackends allPlugins getUser0 getPrefix0 cfg0 = mangle id (
          -> Either (NonEmpty CoreError) (BackendName, Text, Int, Backend, [(PluginName, Either MonitorName CommandName, Monitor)])
     make bf bname sname index cfg = case bf sname cfg of
       Right b  ->
-        let getUser   = getUser0   bname sname index
-            getPrefix = getPrefix0 bname sname index
-            enabledPlugins = configuredPlugins allPlugins getUser getPrefix bname sname cfg
+        let getPrefix = getPrefix0 bname sname index
+            enabledPlugins = configuredPlugins allPlugins getPrefix bname sname cfg
             -- Override the log files of the backend with values from
             -- the configuration, if present.
             b' = b { unrawLogFile = maybe (unrawLogFile b) unpack $ getString "logfile"    cfg
@@ -200,8 +191,6 @@ configuredBackends allBackends allPlugins getUser0 getPrefix0 cfg0 = mangle id (
 -- plugin error!
 configuredPlugins :: H.HashMap PluginName (Table -> Either Text Plugin)
   -- ^ The plugins.
-  -> IO UserName
-  -- ^ Get the username.
   -> (Maybe ChannelName -> IO Text)
   -- ^ Get the command prefix.
   -> BackendName
@@ -211,14 +200,14 @@ configuredPlugins :: H.HashMap PluginName (Table -> Either Text Plugin)
   -> Table
   -- ^ The configuration.
   -> [Either (NonEmpty CoreError) [(PluginName, Either MonitorName CommandName, Monitor)]]
-configuredPlugins allPlugins getUser getPrefix bname name cfg =
+configuredPlugins allPlugins getPrefix bname name cfg =
   [make (PluginName n) | n <- nub $ "builtin":getStrings "plugins" cfg]
   where
     -- Instantiate a plugin.
     make :: PluginName -> Either (NonEmpty CoreError) [(PluginName, Either MonitorName CommandName, Monitor)]
     make n = case H.lookup n allPlugins of
       Just toP -> case toP (pcfg n) of
-        Right plugin -> case mangle (:|[]) (:[]) (pluginToMonitors getUser getPrefix bname name n plugin cfg)  of
+        Right plugin -> case mangle (:|[]) (:[]) (pluginToMonitors getPrefix bname name n plugin cfg)  of
           Right ms -> Right [(n, e, m) | (e, m) <- ms]
           Left  es -> Left es
         Left err -> Left (PluginBadConfig bname name n err:|[])
@@ -230,9 +219,7 @@ configuredPlugins allPlugins getUser getPrefix bname name cfg =
 
 -- | Convert a plugin into a list of monitors: one for every matching
 -- monitor or command in the configuration.
-pluginToMonitors :: IO UserName
-  -- ^ Get the username.
-  -> (Maybe ChannelName -> IO Text)
+pluginToMonitors :: (Maybe ChannelName -> IO Text)
   -- ^ Get the command prefix.
   -> BackendName
   -- ^ The name of the backend.
@@ -245,7 +232,7 @@ pluginToMonitors :: IO UserName
   -> Table
   -- ^ The configuration.
   -> [Either CoreError (Either MonitorName CommandName, Monitor)]
-pluginToMonitors getUser getPrefix bname name pname plugin cfg =
+pluginToMonitors getPrefix bname name pname plugin cfg =
   map makeMonitor theMonitors ++ map makeCommandMonitor theCommands
   where
     -- Look up a monitor by name.
@@ -257,7 +244,7 @@ pluginToMonitors getUser getPrefix bname name pname plugin cfg =
     -- Look up a command by name and turn it into a monitor.
     makeCommandMonitor :: (Text, CommandName) -> Either CoreError (Either MonitorName CommandName, Monitor)
     makeCommandMonitor (v, c) = case H.lookup c (pluginCommands plugin) of
-      Just command -> Right (Right c, commandToMonitor getUser getPrefix v command)
+      Just command -> Right (Right c, commandToMonitor getPrefix v command)
       Nothing      -> Left (CommandUnknown bname name pname c)
 
     -- All enabled monitors for this plugin/backend.
@@ -334,26 +321,20 @@ mangle toS toM xs = case (lefts &&& rights) xs of
   (as, _)  -> let ss = map toS as in Left  (sconcat $ fromList ss)
 
 -- | Given a verb, convert a 'Command' to a 'Monitor'.
-commandToMonitor :: IO UserName
-  -- ^ Get the username.
-  -> (Maybe ChannelName -> IO Text)
+commandToMonitor :: (Maybe ChannelName -> IO Text)
   -- ^ Get the channel prefix.
   -> Text
   -- ^ The verb.
   -> Command -> Monitor
-commandToMonitor getUser getPrefix v (Command cmd) = Monitor $ \ev@(Event _ c _ m) -> do
-  prefixes <- getPrefixes c
+commandToMonitor getPrefix v (Command cmd) = Monitor $ \ev@(Event _ _ c _ m) -> do
+  prefix <- getPrefix c
+  let UserName user = eventWhoAmI ev
+  let prefixes = [prefix, user <> ": ", user <> ", ", user <> " "]
   case check (isNothing c) prefixes m of
     Just args -> cmd ev args
     Nothing   -> pure ()
 
   where
-    -- Get the allowed prefixes
-    getPrefixes c = do
-      UserName user <- getUser
-      prefix <- getPrefix c
-      pure [prefix, user <> ": ", user <> ", ", user <> " "]
-
     -- Check if any of the prefixes match the message, and return the
     -- args if so.
     check allowEmpty [] m

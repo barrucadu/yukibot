@@ -47,8 +47,6 @@ module Yukibot.Plugin.Builtin
   , builtinPlugin
 
   -- * Actions
-  , builtinSetUser
-  , builtinGetUser
   , builtinGetPrefix
   , builtinIsMonitorEnabled
   , builtinIsCommandEnabled
@@ -61,7 +59,6 @@ import Data.HashMap.Strict (HashMap)
 import Data.HashSet (HashSet)
 import qualified Data.HashMap.Strict as H
 import qualified Data.HashSet as HS
-import Data.Maybe (fromJust)
 import Data.Text (Text)
 import qualified Data.Text as T
 
@@ -73,8 +70,7 @@ import Yukibot.Types
 
 -- | Abstract mutable state.
 data State = State
-  { userNames        :: TVar (HashMap (BackendName, Text, Int) UserName)
-  , defaultPrefixes  :: TVar (HashMap (BackendName, Text, Int) Text)
+  { defaultPrefixes  :: TVar (HashMap (BackendName, Text, Int) Text)
   , channelPrefixes  :: TVar (HashMap (BackendName, Text, Int, ChannelName) Text)
   , disabledPlugins  :: TVar (HashSet (BackendName, Text, Int, ChannelName, PluginName))
   , disabledMonitors :: TVar (HashSet (BackendName, Text, Int, ChannelName, PluginName, MonitorName))
@@ -84,8 +80,7 @@ data State = State
 -- | Create the initial state.
 initialBuiltinState :: Table -> IO State
 initialBuiltinState cfg = atomically $
-  State <$> newTVar H.empty
-        <*> newTVar (getDefaultPrefixes cfg)
+  State <$> newTVar (getDefaultPrefixes cfg)
         <*> newTVar (getChannelPrefixes cfg)
         <*> newTVar HS.empty
         <*> newTVar HS.empty
@@ -209,16 +204,6 @@ onOffThing var f enable = Command $ \ev args -> atomically . whenJust (eventChan
 
 -------------------------------------------------------------------------------
 -- Queries
-
--- | Set the username.
-builtinSetUser :: State -> BackendName -> Text -> Int -> UserName -> IO ()
-builtinSetUser st bname sname index user = atomically $
-  modifyTVar (userNames st) $ H.insert (bname, sname, index) user
-
--- | Get the username.
-builtinGetUser :: State -> BackendName -> Text -> Int -> IO UserName
-builtinGetUser st bname sname index = atomically $
-  fromJust . H.lookup (bname, sname, index) <$> readTVar (userNames st)
 
 -- | Get the prefix for a channel.
 builtinGetPrefix :: State -> BackendName -> Text -> Int -> Maybe ChannelName -> IO Text
