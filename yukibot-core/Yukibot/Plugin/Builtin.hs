@@ -40,7 +40,7 @@
 --       this channel.
 module Yukibot.Plugin.Builtin
   ( -- * State
-    State
+    BuiltinState
   , initialBuiltinState
 
   -- * Plugin
@@ -69,7 +69,7 @@ import Yukibot.Types
 -- State
 
 -- | Abstract mutable state.
-data State = State
+data BuiltinState = BuiltinState
   { defaultPrefixes  :: TVar (HashMap (BackendName, Text, Int) Text)
   , channelPrefixes  :: TVar (HashMap (BackendName, Text, Int, ChannelName) Text)
   , disabledPlugins  :: TVar (HashSet (BackendName, Text, Int, ChannelName, PluginName))
@@ -78,13 +78,13 @@ data State = State
   }
 
 -- | Create the initial state.
-initialBuiltinState :: Table -> IO State
+initialBuiltinState :: Table -> IO BuiltinState
 initialBuiltinState cfg = atomically $
-  State <$> newTVar (getDefaultPrefixes cfg)
-        <*> newTVar (getChannelPrefixes cfg)
-        <*> newTVar HS.empty
-        <*> newTVar HS.empty
-        <*> newTVar HS.empty
+  BuiltinState <$> newTVar (getDefaultPrefixes cfg)
+               <*> newTVar (getChannelPrefixes cfg)
+               <*> newTVar HS.empty
+               <*> newTVar HS.empty
+               <*> newTVar HS.empty
 
 -- | Get the default prefixes.
 getDefaultPrefixes :: Table -> HashMap (BackendName, Text, Int) Text
@@ -118,7 +118,7 @@ getChannelPrefixes cfg0 = H.fromList [ ((BackendName bname, sname, index, Channe
 -------------------------------------------------------------------------------
 -- Plugin
 
-builtinPlugin :: State -> config -> Either error Plugin
+builtinPlugin :: BuiltinState -> config -> Either error Plugin
 builtinPlugin state _ = Right Plugin
   { pluginMonitors = H.empty
   , pluginCommands = H.fromList [ ("set-default-prefix",   setDefaultPrefix   state)
@@ -134,7 +134,7 @@ builtinPlugin state _ = Right Plugin
   }
 
 -- | Set the default prefix for a backend.
-setDefaultPrefix :: State -> Command
+setDefaultPrefix :: BuiltinState -> Command
 setDefaultPrefix st = Command $ \ev args -> do
   let newPrefix = T.unwords args
   let addr = backendAddress ev
@@ -142,7 +142,7 @@ setDefaultPrefix st = Command $ \ev args -> do
 
 -- | Set the custom prefix for a channel. If applied outside of a
 -- channel, this command does nothing.
-setChannelPrefix :: State -> Command
+setChannelPrefix :: BuiltinState -> Command
 setChannelPrefix st = Command $ \ev args -> do
   let newPrefix = T.unwords args
   let (bname, sname, index) = backendAddress ev
@@ -151,7 +151,7 @@ setChannelPrefix st = Command $ \ev args -> do
 
 -- | Unset the custom prefix for a channel. If applied outside of a
 -- channel, this command does nothing.
-unsetChannelPrefix :: State -> Command
+unsetChannelPrefix :: BuiltinState -> Command
 unsetChannelPrefix st = Command $ \ev _ -> do
   let (bname, sname, index) = backendAddress ev
   atomically . whenJust (eventChannel ev) $ \cname ->
@@ -159,13 +159,13 @@ unsetChannelPrefix st = Command $ \ev _ -> do
 
 -- | Enable or disable a plugin for a channel. If applied outside of
 -- a channel, this command does nothing.
-onOffPlugin :: State -> Bool -> Command
+onOffPlugin :: BuiltinState -> Bool -> Command
 onOffPlugin st = onOffThing (disabledPlugins st) $
   \bname sname index cname arg -> Just (bname, sname, index, cname, PluginName arg)
 
 -- | Enable or disable a monitor for a channel. If applied outside of
 -- a channel, this command does nothing.
-onOffMonitor :: State -> Bool -> Command
+onOffMonitor :: BuiltinState -> Bool -> Command
 onOffMonitor st = onOffThing (disabledMonitors st) $ \bname sname index cname arg -> case toMon arg of
   Just (pn, mn) -> Just (bname, sname, index, cname, pn, mn)
   Nothing -> Nothing
@@ -177,7 +177,7 @@ onOffMonitor st = onOffThing (disabledMonitors st) $ \bname sname index cname ar
 
 -- | Enable or disable a command for a channel. If applied outside of
 -- a channel, this command does nothing.
-onOffCommand :: State -> Bool -> Command
+onOffCommand :: BuiltinState -> Bool -> Command
 onOffCommand st = onOffThing (disabledCommands st) $ \bname sname index cname arg -> case toCmd arg of
   Just (pn, mn) -> Just (bname, sname, index, cname, pn, mn)
   Nothing -> Nothing
@@ -206,7 +206,7 @@ onOffThing var f enable = Command $ \ev args -> atomically . whenJust (eventChan
 -- Queries
 
 -- | Get the prefix for a channel.
-builtinGetPrefix :: State -> BackendName -> Text -> Int -> Maybe ChannelName -> IO Text
+builtinGetPrefix :: BuiltinState -> BackendName -> Text -> Int -> Maybe ChannelName -> IO Text
 builtinGetPrefix st bname sname index mcname = atomically $ do
   defaultPrefix <- H.lookupDefault "!" (bname, sname, index) <$> readTVar (defaultPrefixes st)
   case mcname of
@@ -215,14 +215,14 @@ builtinGetPrefix st bname sname index mcname = atomically $ do
     Nothing -> pure defaultPrefix
 
 -- | Check if a monitor is enabled.
-builtinIsMonitorEnabled :: State -> BackendName -> Text -> Int -> ChannelName -> PluginName -> MonitorName -> IO Bool
+builtinIsMonitorEnabled :: BuiltinState -> BackendName -> Text -> Int -> ChannelName -> PluginName -> MonitorName -> IO Bool
 builtinIsMonitorEnabled st bname sname index cname pn mn = atomically $ do
   p <- HS.member (bname, sname, index, cname, pn)     <$> readTVar (disabledPlugins  st)
   m <- HS.member (bname, sname, index, cname, pn, mn) <$> readTVar (disabledMonitors st)
   pure . not $ p || m
 
 -- | Check if a command is enabled.
-builtinIsCommandEnabled :: State -> BackendName -> Text -> Int -> ChannelName -> PluginName -> CommandName -> IO Bool
+builtinIsCommandEnabled :: BuiltinState -> BackendName -> Text -> Int -> ChannelName -> PluginName -> CommandName -> IO Bool
 builtinIsCommandEnabled st bname sname index cname pn cn = atomically $ do
   p <- HS.member (bname, sname, index, cname, pn)     <$> readTVar (disabledPlugins  st)
   c <- HS.member (bname, sname, index, cname, pn, cn) <$> readTVar (disabledCommands st)

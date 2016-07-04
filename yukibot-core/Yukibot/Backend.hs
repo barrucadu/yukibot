@@ -9,6 +9,7 @@ module Yukibot.Backend
     Backend
   , BackendHandle
   , startBackend
+  , startInstantiatedBackend
   , stopBackend
   , awaitStart
   , awaitStop
@@ -61,6 +62,10 @@ startBackend onReceive bname sname index b@(Backend setup exec _ _ _) = do
 
   forkAndRunBackend h (setup rawlogger receive) (exec $ msgQueue h)
   pure h
+
+-- | Start an instantiated backend.
+startInstantiatedBackend :: (Event -> IO ()) -> InstantiatedBackend -> IO BackendHandle
+startInstantiatedBackend onReceive ib = startBackend onReceive (instBackendName ib) (instSpecificName ib) (instIndex ib) (instBackend ib)
 
 -- | Tell a backend to terminate. If the backend has already
 -- terminated, throws 'BackendTerminatedException'.

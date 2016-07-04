@@ -17,6 +17,7 @@ module Yukibot.Types
   -- * Backends
   , BackendName(..)
   , Backend(..)
+  , InstantiatedBackend(..)
   , BackendHandle(..)
   , BackendTerminatedException(..)
   -- * Logging
@@ -26,6 +27,7 @@ module Yukibot.Types
   -- * Plugins
   , PluginName(..)
   , Plugin(..)
+  , InstantiatedPlugin(..)
   , MonitorName(..)
   , Monitor(..)
   , CommandName(..)
@@ -90,6 +92,16 @@ data Backend where
              , unrawLogFile :: FilePath
              } -> Backend
 
+-- | An instantiated backend, corresponding to one entry in the
+-- backend configuration.
+data InstantiatedBackend = InstantiatedBackend
+  { instBackendName  :: BackendName
+  , instSpecificName :: Text
+  , instIndex        :: Int
+  , instBackend      :: Backend
+  , instPlugins      :: [InstantiatedPlugin]
+  }
+
 -- | A handle to a backend, which can be used to interact with it.
 data BackendHandle = BackendHandle
   { msgQueue     :: TQueue Action
@@ -153,6 +165,13 @@ newtype CommandName = CommandName { getCommandName :: Text }
 data Plugin = Plugin
   { pluginMonitors :: HashMap MonitorName Monitor
   , pluginCommands :: HashMap CommandName Command
+  }
+
+-- | An instantiated plugin, corresponding to either a monitor or a
+-- command in the backend configuration.
+data InstantiatedPlugin = InstantiatedPlugin
+  { instPluginName :: PluginName
+  , instMonitors   :: [(Either MonitorName CommandName, Monitor)]
   }
 
 -- | Monitors are activated on every message. They can communicate
