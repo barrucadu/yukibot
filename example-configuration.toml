@@ -62,6 +62,10 @@
     # belonging to plugins which aren't enabled are silently ignored.
     monitors = [ "hello:hello" ]             ## default: []
 
+    # List of users who are able to use commands and monitors from the
+    # builtin plugin.
+    deities = [ "barrucadu" ]                ## default: []
+
     # Table of commands to enable, with keys being verbs and values
     # being names.
     #
@@ -77,8 +81,10 @@
       "enable plugin"        = "builtin:enable-plugin"
       "disable monitor"      = "builtin:disable-monitor"
       "enable monitor"       = "builtin:enable-monitor"
-      "disable command"      = "Builtin:disable-command"
+      "disable command"      = "builtin:disable-command"
       "enable command"       = "builtin:enable-command"
+      "deify"                = "builtin:deify"
+      "degrade"              = "builtin:degrade"
 
     # Commands in a channel must be prefixed with the following string
     # in order to be activated. It is optional for whispered commands.

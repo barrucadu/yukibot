@@ -38,6 +38,12 @@
 --
 --     * "enable-command", enable a previously-disabled command in
 --       this channel.
+--
+--     * "deify", grant a user administrator privileges for this
+--       backend.
+--
+--     * "degrade", remove a user's administrator privileges for this
+--       backend.
 module Yukibot.Plugin.Builtin
   ( -- * State
     BuiltinState
@@ -61,7 +67,9 @@ import qualified Data.HashMap.Strict as H
 import qualified Data.HashSet as HS
 import Data.Text (Text)
 import qualified Data.Text as T
+import System.Random (randomIO)
 
+import Yukibot.Backend (sendAction)
 import Yukibot.Configuration
 import Yukibot.Types
 
@@ -75,6 +83,7 @@ data BuiltinState = BuiltinState
   , disabledPlugins  :: TVar (HashSet (BackendName, Text, Int, ChannelName, PluginName))
   , disabledMonitors :: TVar (HashSet (BackendName, Text, Int, ChannelName, PluginName, MonitorName))
   , disabledCommands :: TVar (HashSet (BackendName, Text, Int, ChannelName, PluginName, CommandName))
+  , deifiedUsers     :: TVar (HashSet (BackendName, Text, Int, UserName))
   }
 
 -- | Create the initial state.
@@ -85,6 +94,7 @@ initialBuiltinState cfg = atomically $
                <*> newTVar HS.empty
                <*> newTVar HS.empty
                <*> newTVar HS.empty
+               <*> newTVar (getDeities cfg)
 
 -- | Get the default prefixes.
 getDefaultPrefixes :: Table -> HashMap (BackendName, Text, Int) Text
@@ -115,22 +125,40 @@ getChannelPrefixes cfg0 = H.fromList [ ((BackendName bname, sname, index, Channe
 
     get = maybe [] H.toList . getTable "channel-prefixes"
 
+-- | Get the deities.
+getDeities :: Table -> HashSet (BackendName, Text, Int, UserName)
+getDeities cfg0 = HS.fromList [ (BackendName bname, sname, index, UserName user)
+                              | (bname, VTable cfgs) <- maybe [] H.toList (getTable "backend" cfg0)
+                              , (sname, cfg)         <- H.toList cfgs
+                              , (index, users)       <- usersOf cfg
+                              , user                 <- users
+                              ]
+  where
+    usersOf (VTable c) = [(0, get (c `override` cfg0))]
+    usersOf (VTArray cs) = [(i, get (c `override` cfg0)) | (i, c) <- zip [0..] (toList cs)]
+    usersOf _ = [(0, get cfg0)]
+
+    get = getStrings "deities"
+
 -------------------------------------------------------------------------------
 -- Plugin
 
 builtinPlugin :: BuiltinState -> config -> Either error Plugin
 builtinPlugin state _ = Right Plugin
   { pluginMonitors = H.empty
-  , pluginCommands = H.fromList [ ("set-default-prefix",   setDefaultPrefix   state)
-                                , ("set-channel-prefix",   setChannelPrefix   state)
-                                , ("unset-channel-prefix", unsetChannelPrefix state)
-                                , ("disable-plugin",       onOffPlugin        state False)
-                                , ("enable-plugin",        onOffPlugin        state True)
-                                , ("disable-monitor",      onOffMonitor       state False)
-                                , ("enable-monitor",       onOffMonitor       state True)
-                                , ("disable-command",      onOffCommand       state False)
-                                , ("enable-command",       onOffCommand       state True)
-                                ]
+  , pluginCommands = H.fromList $ map (\(cn, cf) -> (cn, wrapCommand cf state))
+    [ ("set-default-prefix",   setDefaultPrefix)
+    , ("set-channel-prefix",   setChannelPrefix)
+    , ("unset-channel-prefix", unsetChannelPrefix)
+    , ("disable-plugin",       onOffPlugin  False)
+    , ("enable-plugin",        onOffPlugin  True)
+    , ("disable-monitor",      onOffMonitor False)
+    , ("enable-monitor",       onOffMonitor True)
+    , ("disable-command",      onOffCommand False)
+    , ("enable-command",       onOffCommand True)
+    , ("deify",                deify)
+    , ("degrade",              degrade)
+    ]
   }
 
 -- | Set the default prefix for a backend.
@@ -159,14 +187,14 @@ unsetChannelPrefix st = Command $ \ev _ -> do
 
 -- | Enable or disable a plugin for a channel. If applied outside of
 -- a channel, this command does nothing.
-onOffPlugin :: BuiltinState -> Bool -> Command
-onOffPlugin st = onOffThing (disabledPlugins st) $
+onOffPlugin :: Bool -> BuiltinState -> Command
+onOffPlugin enable st = onOffThing enable (disabledPlugins st) $
   \bname sname index cname arg -> Just (bname, sname, index, cname, PluginName arg)
 
 -- | Enable or disable a monitor for a channel. If applied outside of
 -- a channel, this command does nothing.
-onOffMonitor :: BuiltinState -> Bool -> Command
-onOffMonitor st = onOffThing (disabledMonitors st) $ \bname sname index cname arg -> case toMon arg of
+onOffMonitor :: Bool -> BuiltinState -> Command
+onOffMonitor enable st = onOffThing enable (disabledMonitors st) $ \bname sname index cname arg -> case toMon arg of
   Just (pn, mn) -> Just (bname, sname, index, cname, pn, mn)
   Nothing -> Nothing
 
@@ -177,8 +205,8 @@ onOffMonitor st = onOffThing (disabledMonitors st) $ \bname sname index cname ar
 
 -- | Enable or disable a command for a channel. If applied outside of
 -- a channel, this command does nothing.
-onOffCommand :: BuiltinState -> Bool -> Command
-onOffCommand st = onOffThing (disabledCommands st) $ \bname sname index cname arg -> case toCmd arg of
+onOffCommand :: Bool -> BuiltinState -> Command
+onOffCommand enable st = onOffThing enable (disabledCommands st) $ \bname sname index cname arg -> case toCmd arg of
   Just (pn, mn) -> Just (bname, sname, index, cname, pn, mn)
   Nothing -> Nothing
 
@@ -187,23 +215,25 @@ onOffCommand st = onOffThing (disabledCommands st) $ \bname sname index cname ar
       (pn, cn) | T.null cn -> Nothing
                | otherwise -> Just (PluginName pn, CommandName $ T.tail cn)
 
--- | Enable or disable a <thing> for a channel. If applied outside of
--- a channel, this command does nothing.
-onOffThing :: (Eq x, Hashable x)
-  => TVar (HashSet x)
-  -> (BackendName -> Text -> Int -> ChannelName -> Text -> Maybe x)
-  -> Bool
-  -> Command
-onOffThing var f enable = Command $ \ev args -> atomically . whenJust (eventChannel ev) $ \cname -> do
+-- | Deify a list of users.
+deify :: BuiltinState -> Command
+deify st = Command $ \ev args -> do
   let (bname, sname, index) = backendAddress ev
-  let vals = HS.fromList [x | arg <- args, let Just x = f bname sname index cname arg]
-  modifyTVar var $ \s -> (if enable then difference else HS.union) s vals
+  let users = map (\u -> (bname, sname, index, UserName u)) args
+  atomically $ mapM_ (modifyTVar (deifiedUsers st) . HS.insert) users
 
-  where
-    difference l r = HS.filter (not . (`HS.member` r)) l
+-- | Un-deify a list of users.
+degrade :: BuiltinState -> Command
+degrade st = Command $ \ev args -> do
+  let (bname, sname, index) = backendAddress ev
+  let users = map (\u -> (bname, sname, index, UserName u)) args
+  atomically $ mapM_ (modifyTVar (deifiedUsers st) . HS.delete) users
 
 -------------------------------------------------------------------------------
 -- Queries
+
+data Disabled = Disabled | NotADeity
+  deriving (Eq, Ord, Enum, Bounded, Read, Show)
 
 -- | Get the prefix for a channel.
 builtinGetPrefix :: BuiltinState -> BackendName -> Text -> Int -> Maybe ChannelName -> IO Text
@@ -243,3 +273,46 @@ backendAddress ev =
       sname = specificName $ eventHandle ev
       index = backendIndex $ eventHandle ev
   in (bname, sname, index)
+
+-- | Enable or disable a <thing> for a channel. If applied outside of
+-- a channel, this command does nothing.
+onOffThing :: (Eq x, Hashable x)
+  => Bool
+  -> TVar (HashSet x)
+  -> (BackendName -> Text -> Int -> ChannelName -> Text -> Maybe x)
+  -> Command
+onOffThing enable var f = Command $ \ev args -> atomically . whenJust (eventChannel ev) $ \cname -> do
+  let (bname, sname, index) = backendAddress ev
+  let vals = HS.fromList [x | arg <- args, let Just x = f bname sname index cname arg]
+  modifyTVar var $ \s -> (if enable then difference else HS.union) s vals
+
+  where
+    difference l r = HS.filter (not . (`HS.member` r)) l
+
+-- | Check that the user of a command is a deity.
+wrapCommand :: (BuiltinState -> Command) -> BuiltinState -> Command
+wrapCommand cf st = Command $ \ev args -> do
+  let (Command cmd) = cf st
+  let (bname, sname, index) = backendAddress ev
+  let user = eventUser ev
+  d <- atomically $ HS.member (bname, sname, index, user)
+                 <$> readTVar (deifiedUsers st)
+  if d
+    then cmd ev args
+    else case eventChannel ev of
+           Just c  -> sendAction (eventHandle ev) . Say c [user] =<< randomMessage
+           Nothing -> sendAction (eventHandle ev) . Whisper user =<< randomMessage
+
+  where
+    randomMessage = do
+      let messages = [ "You are not an administrator."
+                     , "I'm afraid I can't let you do that."
+                     , "Such power is not meant for mere mortals."
+                     , "Only the chosen few have that power!"
+                     , "You are trying to mess with forces beyond your comprehension!"
+                     , "No."
+                     , "LA LA LA I'M NOT LISTENING TO YOU."
+                     , "I feel like you *thought* your words had meaning, but they didn't."
+                     ]
+      idx <- randomIO
+      pure $ messages !! (idx `mod` length messages)
