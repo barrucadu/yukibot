@@ -144,6 +144,8 @@ getDeities cfg0 = HS.fromList [ (BackendName bname, sname, index, UserName user)
 -------------------------------------------------------------------------------
 -- Plugin
 
+data OnOff = On | Off deriving (Eq, Ord, Read, Show, Enum, Bounded)
+
 builtinPlugin :: BuiltinState -> config -> Either error Plugin
 builtinPlugin state _ = Right Plugin
   { pluginMonitors = H.empty
@@ -151,12 +153,12 @@ builtinPlugin state _ = Right Plugin
     [ ("set-default-prefix",   setDefaultPrefix)
     , ("set-channel-prefix",   setChannelPrefix)
     , ("unset-channel-prefix", unsetChannelPrefix)
-    , ("disable-plugin",       onOffPlugin  False)
-    , ("enable-plugin",        onOffPlugin  True)
-    , ("disable-monitor",      onOffMonitor False)
-    , ("enable-monitor",       onOffMonitor True)
-    , ("disable-command",      onOffCommand False)
-    , ("enable-command",       onOffCommand True)
+    , ("enable-plugin",        onOffPlugin  On)
+    , ("disable-plugin",       onOffPlugin  Off)
+    , ("enable-monitor",       onOffMonitor On)
+    , ("disable-monitor",      onOffMonitor Off)
+    , ("enable-command",       onOffCommand On)
+    , ("disable-command",      onOffCommand Off)
     , ("deify",                deify)
     , ("degrade",              degrade)
     ]
@@ -188,14 +190,14 @@ unsetChannelPrefix st = Command $ \ev _ -> liftIO $ do
 
 -- | Enable or disable a plugin for a channel. If applied outside of
 -- a channel, this command does nothing.
-onOffPlugin :: Bool -> BuiltinState -> Command
-onOffPlugin enable st = onOffThing enable (disabledPlugins st) $
+onOffPlugin :: OnOff -> BuiltinState -> Command
+onOffPlugin mode st = onOffThing mode (disabledPlugins st) $
   \bname sname index cname arg -> Just (bname, sname, index, cname, PluginName arg)
 
 -- | Enable or disable a monitor for a channel. If applied outside of
 -- a channel, this command does nothing.
-onOffMonitor :: Bool -> BuiltinState -> Command
-onOffMonitor enable st = onOffThing enable (disabledMonitors st) $ \bname sname index cname arg -> case toMon arg of
+onOffMonitor :: OnOff -> BuiltinState -> Command
+onOffMonitor mode st = onOffThing mode (disabledMonitors st) $ \bname sname index cname arg -> case toMon arg of
   Just (pn, mn) -> Just (bname, sname, index, cname, pn, mn)
   Nothing -> Nothing
 
@@ -206,8 +208,8 @@ onOffMonitor enable st = onOffThing enable (disabledMonitors st) $ \bname sname 
 
 -- | Enable or disable a command for a channel. If applied outside of
 -- a channel, this command does nothing.
-onOffCommand :: Bool -> BuiltinState -> Command
-onOffCommand enable st = onOffThing enable (disabledCommands st) $ \bname sname index cname arg -> case toCmd arg of
+onOffCommand :: OnOff -> BuiltinState -> Command
+onOffCommand mode st = onOffThing mode (disabledCommands st) $ \bname sname index cname arg -> case toCmd arg of
   Just (pn, mn) -> Just (bname, sname, index, cname, pn, mn)
   Nothing -> Nothing
 
@@ -278,16 +280,17 @@ backendAddress ev =
 -- | Enable or disable a <thing> for a channel. If applied outside of
 -- a channel, this command does nothing.
 onOffThing :: (Eq x, Hashable x)
-  => Bool
+  => OnOff
   -> TVar (HashSet x)
   -> (BackendName -> Text -> Int -> ChannelName -> Text -> Maybe x)
   -> Command
-onOffThing enable var f = Command $ \ev args -> liftIO . atomically . whenJust (eventChannel ev) $ \cname -> do
+onOffThing mode var f = Command $ \ev args -> liftIO . atomically . whenJust (eventChannel ev) $ \cname -> do
   let (bname, sname, index) = backendAddress ev
   let vals = HS.fromList [x | arg <- args, let Just x = f bname sname index cname arg]
-  modifyTVar var $ \s -> (if enable then difference else HS.union) s vals
+  modifyTVar var (`combine` vals)
 
   where
+    combine = if mode == On then HS.union else difference
     difference l r = HS.filter (not . (`HS.member` r)) l
 
 -- | Check that the user of a command is a deity.
