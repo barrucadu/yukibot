@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
@@ -6,7 +7,7 @@
 -- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Stability   : experimental
--- Portability : GADTs, GeneralizedNewtypeDeriving
+-- Portability : DeriveFunctor, GADTs, GeneralizedNewtypeDeriving
 module Yukibot.Types
   ( -- * Events
     ChannelName(..)
@@ -15,6 +16,8 @@ module Yukibot.Types
   -- * Actions
   , Action(..)
   -- * Backends
+  , BackendF(..)
+  , BackendM
   , BackendName(..)
   , Backend(..)
   , InstantiatedBackend(..)
@@ -38,6 +41,7 @@ module Yukibot.Types
 
 import Control.Concurrent.STM (TQueue, TVar)
 import Control.Monad.Catch (Exception)
+import Control.Monad.Trans.Free (FreeT)
 import Data.ByteString (ByteString)
 import Data.Hashable (Hashable)
 import Data.HashMap.Strict (HashMap)
@@ -79,6 +83,14 @@ data Action
 
 -------------------------------------------------------------------------------
 -- Backends
+
+data BackendF a
+  = SendAction Action a
+  | Reply Text a
+  | GetCommandPrefix (Maybe ChannelName) (Text -> a)
+  deriving Functor
+
+type BackendM = FreeT BackendF IO
 
 newtype BackendName = BackendName { getBackendName :: Text }
   deriving (Eq, Ord, Read, Show, Hashable, IsString)
@@ -176,13 +188,13 @@ data InstantiatedPlugin = InstantiatedPlugin
 
 -- | Monitors are activated on every message. They can communicate
 -- with the backend using the supplied 'Event'.
-newtype Monitor = Monitor (Event -> IO ())
+newtype Monitor = Monitor (Event -> BackendM ())
 
 -- | Commands are like monitors, but they have a \"verb\" (specified
 -- in the configuration) and are only activated when that verb begins
 -- a message. All of the words in the message after the verb are
 -- passed as an argument list.
-newtype Command = Command (Event -> [Text] -> IO ())
+newtype Command = Command (Event -> [Text] -> BackendM ())
 
 -------------------------------------------------------------------------------
 -- Errors

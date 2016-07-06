@@ -18,6 +18,7 @@
 module Yukibot.Plugin.LinkInfo (linkInfoPlugin) where
 
 import Control.Arrow ((&&&))
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Either (lefts, rights)
 import qualified Data.HashMap.Strict as H
 import Data.List (nub)
@@ -53,12 +54,11 @@ plugin numLinks hs = Plugin
 
   where
     -- Respond with linkinfo for a collection of links.
-    linkinfo lim (Event h _ (Just c) _ m) = mapM_ (sendAction h . Say c [])  =<< linkTitles lim m
-    linkinfo lim (Event h _ Nothing n  m) = mapM_ (sendAction h . Whisper n) =<< linkTitles lim m
+    linkinfo lim ev = mapM_ reply  =<< linkTitles lim (eventMessage ev)
 
     -- Get a title for every link in a message
-    linkTitles :: Bool -> Text -> IO [Text]
-    linkTitles lim m = do
+    linkTitles :: MonadIO m => Bool -> Text -> m [Text]
+    linkTitles lim m = liftIO $ do
       let uris = nub $ mapMaybe (parseURI . unpack) (T.words m)
       titles <- mapMaybe showTitle <$> mapM fetchLinkInfo uris
       pure $ if lim then take numLinks titles else titles

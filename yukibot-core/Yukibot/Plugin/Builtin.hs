@@ -59,6 +59,7 @@ module Yukibot.Plugin.Builtin
   ) where
 
 import Control.Concurrent.STM (TVar, atomically, newTVar, modifyTVar, readTVar)
+import Control.Monad.IO.Class (liftIO)
 import Data.Foldable (toList)
 import Data.Hashable (Hashable)
 import Data.HashMap.Strict (HashMap)
@@ -163,7 +164,7 @@ builtinPlugin state _ = Right Plugin
 
 -- | Set the default prefix for a backend.
 setDefaultPrefix :: BuiltinState -> Command
-setDefaultPrefix st = Command $ \ev args -> do
+setDefaultPrefix st = Command $ \ev args -> liftIO $ do
   let newPrefix = T.unwords args
   let addr = backendAddress ev
   atomically $ modifyTVar (defaultPrefixes st) (H.insert addr newPrefix)
@@ -171,7 +172,7 @@ setDefaultPrefix st = Command $ \ev args -> do
 -- | Set the custom prefix for a channel. If applied outside of a
 -- channel, this command does nothing.
 setChannelPrefix :: BuiltinState -> Command
-setChannelPrefix st = Command $ \ev args -> do
+setChannelPrefix st = Command $ \ev args -> liftIO $ do
   let newPrefix = T.unwords args
   let (bname, sname, index) = backendAddress ev
   atomically . whenJust (eventChannel ev) $ \cname ->
@@ -180,7 +181,7 @@ setChannelPrefix st = Command $ \ev args -> do
 -- | Unset the custom prefix for a channel. If applied outside of a
 -- channel, this command does nothing.
 unsetChannelPrefix :: BuiltinState -> Command
-unsetChannelPrefix st = Command $ \ev _ -> do
+unsetChannelPrefix st = Command $ \ev _ -> liftIO $ do
   let (bname, sname, index) = backendAddress ev
   atomically . whenJust (eventChannel ev) $ \cname ->
     modifyTVar (channelPrefixes st) $ H.delete (bname, sname, index, cname)
@@ -217,14 +218,14 @@ onOffCommand enable st = onOffThing enable (disabledCommands st) $ \bname sname 
 
 -- | Deify a list of users.
 deify :: BuiltinState -> Command
-deify st = Command $ \ev args -> do
+deify st = Command $ \ev args -> liftIO $ do
   let (bname, sname, index) = backendAddress ev
   let users = map (\u -> (bname, sname, index, UserName u)) args
   atomically $ mapM_ (modifyTVar (deifiedUsers st) . HS.insert) users
 
 -- | Un-deify a list of users.
 degrade :: BuiltinState -> Command
-degrade st = Command $ \ev args -> do
+degrade st = Command $ \ev args -> liftIO $ do
   let (bname, sname, index) = backendAddress ev
   let users = map (\u -> (bname, sname, index, UserName u)) args
   atomically $ mapM_ (modifyTVar (deifiedUsers st) . HS.delete) users
@@ -281,7 +282,7 @@ onOffThing :: (Eq x, Hashable x)
   -> TVar (HashSet x)
   -> (BackendName -> Text -> Int -> ChannelName -> Text -> Maybe x)
   -> Command
-onOffThing enable var f = Command $ \ev args -> atomically . whenJust (eventChannel ev) $ \cname -> do
+onOffThing enable var f = Command $ \ev args -> liftIO . atomically . whenJust (eventChannel ev) $ \cname -> do
   let (bname, sname, index) = backendAddress ev
   let vals = HS.fromList [x | arg <- args, let Just x = f bname sname index cname arg]
   modifyTVar var $ \s -> (if enable then difference else HS.union) s vals
@@ -295,11 +296,12 @@ wrapCommand cf st = Command $ \ev args -> do
   let (Command cmd) = cf st
   let (bname, sname, index) = backendAddress ev
   let user = eventUser ev
-  d <- atomically $ HS.member (bname, sname, index, user)
-                 <$> readTVar (deifiedUsers st)
+  d <- liftIO . atomically $
+    HS.member (bname, sname, index, user)
+    <$> readTVar (deifiedUsers st)
   if d
     then cmd ev args
-    else case eventChannel ev of
+    else liftIO $ case eventChannel ev of
            Just c  -> sendAction (eventHandle ev) . Say c [user] =<< randomMessage
            Nothing -> sendAction (eventHandle ev) . Whisper user =<< randomMessage
 

@@ -9,6 +9,7 @@ module Yukibot.Core
     , module Yukibot.Configuration
     , module Yukibot.Log
     , module Yukibot.Main
+    , module Yukibot.Monad
     , module Yukibot.Types
     ) where
 
@@ -16,6 +17,7 @@ import Yukibot.Backend
 import Yukibot.Configuration
 import Yukibot.Log
 import Yukibot.Main
+import Yukibot.Monad
 import Yukibot.Types
 
 {-# ANN module ("HLint: ignore Use import/export shortcut" :: String) #-}

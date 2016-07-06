@@ -34,8 +34,7 @@ helloPlugin cfg = Right Plugin
     monitor ev@(Event _ _ _ _ m) | T.toLower m == "hello" = command ev []
     monitor _ = pure ()
 
-    command (Event h _ (Just c) n _) _ = sendAction h $ Say c [n] msg
-    command (Event h _ Nothing  n _) _ = sendAction h $ Whisper n msg
+    command _ _ = reply msg
 
 -- | Get the message from the configuration. Defaults to @"Hello!"@.
 message :: Table -> T.Text
