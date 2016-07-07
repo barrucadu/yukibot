@@ -25,6 +25,7 @@ module Yukibot.Log
   , logAction
   ) where
 
+import Control.Monad (when)
 import Data.ByteString (ByteString)
 import Data.Monoid ((<>))
 import Data.Text (unpack)
@@ -61,21 +62,21 @@ rawLoggerFromBackend b = rawLogger (Tag $ describe b) (rawLogFile b)
 
 -- | A message sent from the backend to the server.
 logRawTo :: Tag -> FilePath -> ByteString -> IO ()
-logRawTo tag fp = logInternalTo tag fp . init . tail . show
+logRawTo tag fp = logInternalTo True tag fp . init . tail . show
 
 -- | A message sent from the server to the backend.
 logRawFrom :: Tag -> FilePath -> ByteString -> IO ()
-logRawFrom tag fp = logInternalFrom tag fp . init . tail . show
+logRawFrom tag fp = logInternalFrom True tag fp . init . tail . show
 
 -- | Events come in from the server.
 logEvent :: Tag -> FilePath -> Event -> IO ()
-logEvent tag fp (Event _ _ mc u txt) = logInternalFrom tag fp . unpack $ case mc of
+logEvent tag fp (Event _ _ mc u txt) = logInternalFrom False tag fp . unpack $ case mc of
   Just c  -> "[in: " <> getChannelName c <> "] [from: " <> getUserName u <> "]: " <> txt
   Nothing -> "[from: " <> getUserName u <> "]: " <> txt
 
 -- | Actions are used to instruct the backend.
 logAction :: Tag -> FilePath -> Action -> IO ()
-logAction tag fp act = logInternalTo tag fp . unpack $ case act of
+logAction tag fp act = logInternalTo False tag fp . unpack $ case act of
   Join  c -> "[join: "  <> getChannelName c <> "]"
   Leave c -> "[leave: " <> getChannelName c <> "]"
   Say c []  m -> "[in: " <> getChannelName c <> "]: " <> m
@@ -87,17 +88,17 @@ logAction tag fp act = logInternalTo tag fp . unpack $ case act of
 -- Helpers
 
 -- | Log a message sent TO something.
-logInternalTo :: Tag -> FilePath -> String -> IO ()
+logInternalTo :: Bool -> Tag -> FilePath -> String -> IO ()
 logInternalTo = logInternal " ---> "
 
 -- | Log a message received FROM something.
-logInternalFrom :: Tag -> FilePath -> String -> IO ()
+logInternalFrom :: Bool -> Tag -> FilePath -> String -> IO ()
 logInternalFrom = logInternal " <--- "
 
 -- | Log a message.
-logInternal :: String -> Tag -> FilePath -> String -> IO ()
-logInternal arrow (Tag tag) fp msg = do
+logInternal :: String -> Bool -> Tag -> FilePath -> String -> IO ()
+logInternal arrow stdout (Tag tag) fp msg = do
   now <- getCurrentTime
   let logEntry = unwords [formatTime defaultTimeLocale "%c" now, arrow, msg]
   appendFile fp (logEntry ++ "\n")
-  putStrLn (unpack tag ++ " " ++ logEntry)
+  when stdout . putStrLn $ unpack tag ++ " " ++ logEntry
