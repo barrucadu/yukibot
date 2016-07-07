@@ -75,6 +75,7 @@ import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as H
 import Data.List (nub)
 import Data.Maybe (fromMaybe)
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
 import System.Random (randomIO)
@@ -182,7 +183,8 @@ data OnOff = On | Off deriving (Eq, Ord, Read, Show, Enum, Bounded)
 
 plugin :: BuiltinState -> config -> Either error Plugin
 plugin state _ = Right Plugin
-  { pluginMonitors = H.empty
+  { pluginHelp = "special built-in functionality"
+  , pluginMonitors = H.empty
   , pluginCommands = H.fromList $ map (\(cn, cf) -> (cn, wrapCommand cf state))
     [ ("set-default-prefix",   setDefaultPrefix)
     , ("set-channel-prefix",   setChannelPrefix)
@@ -201,86 +203,116 @@ plugin state _ = Right Plugin
 
 -- | Set the default prefix for a backend.
 setDefaultPrefix :: BuiltinState -> Command
-setDefaultPrefix st = Command $ \_ args ->
-  modifyState st $ \state -> state & defaultPrefix .~ T.unwords args
+setDefaultPrefix st = Command
+  { commandHelp = "set the default command prefix"
+  , commandAction = \_ args ->
+    modifyState st $ \state -> state & defaultPrefix .~ T.unwords args
+  }
 
 -- | Set the custom prefix for a channel. If applied outside of a
 -- channel, this command does nothing.
 setChannelPrefix :: BuiltinState -> Command
-setChannelPrefix st = Command $ \ev args ->
-  modifyState st $ \state -> case eventChannel ev of
-    Just c  -> state & channelPrefixes %~ H.insert c (T.unwords args)
-    Nothing -> state
+setChannelPrefix st = Command
+  { commandHelp = "set the command prefix for this channel"
+  , commandAction = \ev args ->
+    modifyState st $ \state -> case eventChannel ev of
+      Just c  -> state & channelPrefixes %~ H.insert c (T.unwords args)
+      Nothing -> state
+  }
 
 -- | Unset the custom prefix for a channel. If applied outside of a
 -- channel, this command does nothing.
 unsetChannelPrefix :: BuiltinState -> Command
-unsetChannelPrefix st = Command $ \ev _ ->
-  modifyState st $ \state -> case eventChannel ev of
-    Just c  -> state & channelPrefixes %~ H.delete c
-    Nothing -> state
+unsetChannelPrefix st = Command
+  { commandHelp = "remove any custom command prefix for this channel"
+  , commandAction = \ev _ ->
+    modifyState st $ \state -> case eventChannel ev of
+      Just c  -> state & channelPrefixes %~ H.delete c
+      Nothing -> state
+  }
 
 -- | Enable or disable a plugin for a channel. If not in a channel,
 -- this applies to whispers.
 onOffPlugin :: OnOff -> BuiltinState -> Command
-onOffPlugin mode st = Command $ \ev args ->
-  let plugins = map PluginName args
-      go = if mode == On then filter (`notElem` plugins) else nub . (plugins++)
-  in modifyState st $ disabledPlugins . at (eventChannel ev) %~ (Just . go . fromMaybe [])
+onOffPlugin mode st = Command
+  { commandHelp = (if mode == On then "enable" else "disable") <> " a plugin in this channel"
+  , commandAction = \ev args ->
+    let plugins = map PluginName args
+        go = if mode == On then filter (`notElem` plugins) else nub . (plugins++)
+    in modifyState st $ disabledPlugins . at (eventChannel ev) %~ (Just . go . fromMaybe [])
+  }
 
 -- | Enable or disable a monitor for a channel. If not in a channel,
 -- this applies to whispers.
 onOffMonitor :: OnOff -> BuiltinState -> Command
-onOffMonitor mode st = Command $ \ev args ->
-  let monitors = [ (PluginName pn, MonitorName mn)
-                 | arg <- args
-                 , let (pn, mn) = second T.tail (T.breakOn ":" arg)
-                 , not (T.null mn)
-                 ]
-      go = if mode == On then nub . (monitors++) else filter (`notElem` monitors)
-  in modifyState st $ enabledMonitors . at (eventChannel ev) %~ (Just . go . fromMaybe [])
+onOffMonitor mode st = Command
+  { commandHelp = (if mode == On then "start" else "stop") <> " a monitor in this channel"
+  , commandAction = \ev args ->
+    let monitors = [ (PluginName pn, MonitorName mn)
+                   | arg <- args
+                   , let (pn, mn) = second T.tail (T.breakOn ":" arg)
+                   , not (T.null mn)
+                   ]
+        go = if mode == On then nub . (monitors++) else filter (`notElem` monitors)
+    in modifyState st $ enabledMonitors . at (eventChannel ev) %~ (Just . go . fromMaybe [])
+  }
 
 -- | Bind a command.
 bindCommand :: BuiltinState -> Command
-bindCommand st = Command $ \ev args -> case args of
-  (cmd:vs) ->
-    let (pname, cname) = second T.tail (T.breakOn ":" cmd)
-        go = ((PluginName pname, CommandName cname, T.unwords vs):)
-    in if T.null cname || null vs
-       then pure ()
-       else modifyState st $ enabledCommands . at (eventChannel ev) %~ (Just . go . fromMaybe [])
-  _ -> pure ()
+bindCommand st = Command
+  { commandHelp = "bind a verb to a command in this channel"
+  , commandAction = \ev args -> case args of
+    (cmd:vs) ->
+      let (pname, cname) = second T.tail (T.breakOn ":" cmd)
+          go = ((PluginName pname, CommandName cname, T.unwords vs):)
+      in if T.null cname || null vs
+         then pure ()
+         else modifyState st $ enabledCommands . at (eventChannel ev) %~ (Just . go . fromMaybe [])
+    _ -> pure ()
+  }
 
 -- | Unbind a command.
 unbindCommand :: BuiltinState -> Command
-unbindCommand st = Command $ \ev args ->
-  let go = filter (\(_,_,vs) -> vs /= T.unwords args)
-  in if null args
-     then pure ()
-     else modifyState st $ enabledCommands . at (eventChannel ev) %~ (Just . go . fromMaybe [])
+unbindCommand st = Command
+  { commandHelp = "unbind a verb in this channel"
+  , commandAction = \ev args ->
+    let go = filter (\(_,_,vs) -> vs /= T.unwords args)
+    in if null args
+       then pure ()
+       else modifyState st $ enabledCommands . at (eventChannel ev) %~ (Just . go . fromMaybe [])
+  }
 
 -- | Unbind all commands of the given type.
 unbindAllCommand :: BuiltinState -> Command
-unbindAllCommand st = Command $ \ev args ->
-  let commands = [ (PluginName pn, CommandName cn)
-                 | arg <- args
-                 , let (pn, cn) = second T.tail (T.breakOn ":" arg)
-                 , not (T.null cn)
-                 ]
-      go = filter (\(cn,pn,_) -> (cn,pn) `notElem` commands)
-  in modifyState st $ enabledCommands . at (eventChannel ev) %~ (Just . go . fromMaybe [])
+unbindAllCommand st = Command
+  { commandHelp = "unbind all verbs for a command in this channel"
+  , commandAction = \ev args ->
+    let commands = [ (PluginName pn, CommandName cn)
+                   | arg <- args
+                   , let (pn, cn) = second T.tail (T.breakOn ":" arg)
+                   , not (T.null cn)
+                   ]
+        go = filter (\(cn,pn,_) -> (cn,pn) `notElem` commands)
+    in modifyState st $ enabledCommands . at (eventChannel ev) %~ (Just . go . fromMaybe [])
+  }
 
 -- | Deify a list of users.
 deify :: BuiltinState -> Command
-deify st = Command $ \_ args ->
-  let users = map UserName args
-  in modifyState st $ deifiedUsers %~ (nub . (users++))
+deify st = Command
+  { commandHelp = "elevate a user to godhood"
+  , commandAction = \_ args ->
+    let users = map UserName args
+    in modifyState st $ deifiedUsers %~ (nub . (users++))
+  }
 
 -- | Un-deify a list of users.
 degrade :: BuiltinState -> Command
-degrade st = Command $ \_ args ->
-  let users = map UserName args
-  in modifyState st $ deifiedUsers %~ filter (`notElem` users)
+degrade st = Command
+  { commandHelp = "cast down a god"
+  , commandAction = \_ args ->
+    let users = map UserName args
+    in modifyState st $ deifiedUsers %~ filter (`notElem` users)
+  }
 
 -------------------------------------------------------------------------------
 -- Queries
@@ -387,12 +419,11 @@ buildBackendMap f cfg0 = H.fromList
 
 -- | Check that the user of a command is a deity.
 wrapCommand :: (BuiltinState -> Command) -> BuiltinState -> Command
-wrapCommand cf st = Command $ \ev args -> do
-  let (Command cmd) = cf st
+wrapCommand cf st = let cmd = cf st in cmd { commandAction = \ev args -> do
   isDeified <- liftF (IsDeified id)
   if isDeified
-    then cmd ev args
-    else notDeityMessage >>= \msg -> liftF (Reply msg ())
+    then commandAction cmd ev args
+    else notDeityMessage >>= \msg -> liftF (Reply msg ())}
 
 -- | A random message to be given when the user is not a deity.
 notDeityMessage :: MonadIO m => m Text

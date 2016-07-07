@@ -28,8 +28,8 @@ import Yukibot.Types
 
 -- | Make a command only available for deities.
 privilegedCommand :: Command -> Command
-privilegedCommand (Command cmd) = Command $ \ev args -> do
+privilegedCommand cmd = cmd { commandAction = \ev args -> do
   d <- isDeified
   if d
-    then cmd ev args
-    else reply =<< notDeityMessage
+    then commandAction cmd ev args
+    else reply =<< notDeityMessage}

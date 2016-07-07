@@ -179,19 +179,26 @@ newtype CommandName = CommandName { getCommandName :: Text }
 
 -- | A plugin provides a collection of named monitors and commands.
 data Plugin = Plugin
-  { pluginMonitors :: HashMap MonitorName Monitor
+  { pluginHelp :: Text
+  , pluginMonitors :: HashMap MonitorName Monitor
   , pluginCommands :: HashMap CommandName Command
   }
 
 -- | Monitors are activated on every message. They can communicate
 -- with the backend using the supplied 'Event'.
-newtype Monitor = Monitor (Event -> BackendM ())
+data Monitor = Monitor
+  { monitorHelp :: Text
+  , monitorAction :: Event -> BackendM ()
+  }
 
 -- | Commands are like monitors, but they have a \"verb\" (specified
 -- in the configuration) and are only activated when that verb begins
 -- a message. All of the words in the message after the verb are
 -- passed as an argument list.
-newtype Command = Command (Event -> [Text] -> BackendM ())
+data Command = Command
+  { commandHelp :: Text
+  , commandAction :: Event -> [Text] -> BackendM ()
+  }
 
 -------------------------------------------------------------------------------
 -- Errors

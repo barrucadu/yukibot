@@ -25,7 +25,8 @@ import Yukibot.Core
 
 channelPlugin :: config -> Either error Plugin
 channelPlugin _ = Right Plugin
-  { pluginMonitors = H.empty
+  { pluginHelp = "channel management"
+  , pluginMonitors = H.empty
   , pluginCommands = H.fromList [ ("join",  joinCommand)
                                 , ("leave", leaveCommand)
                                 ]
@@ -33,10 +34,14 @@ channelPlugin _ = Right Plugin
 
 -- | Join a collection of channels.
 joinCommand :: Command
-joinCommand = privilegedCommand . Command $ \_ args ->
-  mapM_ (joinChannel . ChannelName) args
+joinCommand = privilegedCommand Command
+  { commandHelp = "join a channel"
+  , commandAction = \_ args -> mapM_ (joinChannel . ChannelName) args
+  }
 
 -- | Leave the current channel.
 leaveCommand :: Command
-leaveCommand = privilegedCommand . Command $ \ev _ ->
-  maybe (pure ()) leaveChannel (eventChannel ev)
+leaveCommand = privilegedCommand Command
+  { commandHelp = "leave the current channel"
+  , commandAction = \ev _ -> maybe (pure ()) leaveChannel (eventChannel ev)
+  }

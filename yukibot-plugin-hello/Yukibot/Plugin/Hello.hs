@@ -24,8 +24,9 @@ import Yukibot.Core
 
 helloPlugin :: Table -> Either a Plugin
 helloPlugin cfg = Right Plugin
-  { pluginMonitors = H.fromList [("hello", Monitor monitor)]
-  , pluginCommands = H.fromList [("hello", Command command)]
+  { pluginHelp = "hello, world"
+  , pluginMonitors = H.fromList [("hello", Monitor "monitor for 'hello'" monitor)]
+  , pluginCommands = H.fromList [("hello", Command "respond with a friendly greeting" command)]
   }
 
   where

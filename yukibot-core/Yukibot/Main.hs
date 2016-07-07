@@ -120,7 +120,7 @@ makeBot st0 builtinst cfg = do
         enabledMonitors <- Builtin.getEnabledMonitors builtinst ib (eventChannel ev)
         let monitors = filterMonitors enabledMonitors
         runBackendM builtinst ib ev $
-          mapM_ (\(Monitor m) -> m ev) monitors
+          mapM_ (\(Monitor _ m) -> m ev) monitors
 
         -- Then the commands
         prefix <- Builtin.getCommandPrefix builtinst ib (eventChannel ev)
@@ -131,7 +131,7 @@ makeBot st0 builtinst cfg = do
             enabledCommands <- Builtin.getEnabledCommands builtinst ib (eventChannel ev)
             let commands = filterCommands enabledCommands (T.words rest)
             runBackendM builtinst ib ev $
-              mapM_ (\(Command c,args) -> c ev args) commands
+              mapM_ (\(Command _ c,args) -> c ev args) commands
           Nothing -> pure ()
 
       -- Extract all the monitors which are in the enabled list.

@@ -48,8 +48,9 @@ linkInfoPlugin cfg =
 -- allows a priority ordering.
 plugin :: Int -> [LinkHandler URI] -> Plugin
 plugin numLinks hs = Plugin
-  { pluginMonitors = H.fromList [("linkinfo", Monitor $ linkinfo True)]
-  , pluginCommands = H.fromList [("linkinfo", Command $ \ev _ -> linkinfo False ev)]
+  { pluginHelp = "fetch link titles"
+  , pluginMonitors = H.fromList [("linkinfo", Monitor "fetch titles for URLs in messages" $ linkinfo True)]
+  , pluginCommands = H.fromList [("linkinfo", Command "fetch ttiles for the given URLs" $ \ev _ -> linkinfo False ev)]
   }
 
   where
