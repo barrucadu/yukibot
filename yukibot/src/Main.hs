@@ -9,6 +9,7 @@ import Yukibot.Core
 import Yukibot.Plugin.Channel (channelPlugin)
 import Yukibot.Plugin.Hello (helloPlugin)
 import Yukibot.Plugin.LinkInfo (linkInfoPlugin)
+import Yukibot.Plugin.Mueval (muevalPlugin)
 
 main :: IO ()
 main = case initialState of
@@ -20,4 +21,5 @@ initialState = addBackend "irc"     ircBackend     =<<
                addPlugin "channel"  channelPlugin  =<<
                addPlugin "hello"    helloPlugin    =<<
                addPlugin "linkinfo" linkInfoPlugin =<<
+               addPlugin "mueval"   muevalPlugin   =<<
                pure emptyBotState

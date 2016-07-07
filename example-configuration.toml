@@ -105,3 +105,24 @@
 # defines its own configuration, there is nothing globally necessary.
 [plugin.hello]
   message = "Hello!"
+
+[plugin.mueval]
+  # Use "stack exec ghci/mueval" rather than GHCi and mueval directly.
+  # This is useful for setting up the environment (eg, package paths).
+  use-stack = true ## default: false
+
+  # Path (relative or absolute) to GHCi. This can also be the name of
+  # a binary in $PATH. GHCi is used to get types and kinds, it is
+  # never used to evaluate expressions.
+  ghci-path = "ghci" ## default: "ghci"
+
+  # Path (relative or absolute) to mueval. This can also be the name
+  # of a binary in $PATH.
+  mueval-path = "mueval" ## default: "mueval"
+
+  # Path (relative or absolute) to stack. This can also be the name of
+  # a binary in $PATH. This is only used if "with-stack" is true.
+  stack-path = "stack" ## default: "stack"
+
+  # Path (relative or absolute) to the load file.
+  load-file = "L.hs" ## default: "L.hs"
