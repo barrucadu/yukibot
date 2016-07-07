@@ -269,7 +269,8 @@ bindCommand st = Command
   , commandAction = \ev args -> case args of
     (cmd:vs) ->
       let (pname, cname) = second T.tail (T.breakOn ":" cmd)
-          go = ((PluginName pname, CommandName cname, T.unwords vs):)
+          newVerb = T.unwords vs
+          go = ((PluginName pname, CommandName cname, newVerb):) . filter (\(_,_,verb) -> verb /= newVerb)
       in if T.null cname || null vs
          then pure ()
          else modifyState st $ enabledCommands . at (eventChannel ev) %~ (Just . go . fromMaybe [])
