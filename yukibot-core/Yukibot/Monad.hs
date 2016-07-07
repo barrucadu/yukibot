@@ -20,7 +20,6 @@ module Yukibot.Monad
   , isDeified
   ) where
 
-import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Free (liftF, iterT)
 import Data.Text (Text)
 
@@ -40,19 +39,18 @@ runBackendM :: Builtin.BuiltinState
   -> IO a
 runBackendM st ib ev = iterT go where
   go (SendAction act k) = do
-    liftIO (sendAction (eventHandle ev) act)
+    sendAction (eventHandle ev) act
     k
   go (Reply msg k) = do
-    liftIO $ case eventChannel ev of
+    case eventChannel ev of
       Just cname -> sendAction (eventHandle ev) (Say cname [eventUser ev] msg)
       Nothing    -> sendAction (eventHandle ev) (Whisper (eventUser ev) msg)
     k
-  go (GetCommandPrefix mcname k) = do
-    prefix <- liftIO $ Builtin.getCommandPrefix st ib mcname
-    k prefix
+  go (GetCommandPrefix mcname k) =
+    k =<< Builtin.getCommandPrefix st ib mcname
   go (GetInstance k) = k ib
   go (IsDeified k) = do
-    deities <- liftIO $ Builtin.getDeities st ib
+    deities <- Builtin.getDeities st ib
     k (eventUser ev `elem` deities)
 
 -------------------------------------------------------------------------------
