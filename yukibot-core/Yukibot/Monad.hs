@@ -16,6 +16,8 @@ module Yukibot.Monad
   , whisper
   , disconnect
   , getCommandPrefix
+  , getInstance
+  , isDeified
   ) where
 
 import Control.Monad.IO.Class (MonadIO(liftIO))
@@ -23,11 +25,11 @@ import Control.Monad.Trans.Free (liftF, iterT)
 import Data.Text (Text)
 
 import Yukibot.Backend (sendAction)
-import Yukibot.Plugin.Builtin
+import qualified Yukibot.Plugin.Builtin as Builtin
 import Yukibot.Types
 
 -- | Run a 'BackendM' computation.
-runBackendM :: BuiltinState
+runBackendM :: Builtin.BuiltinState
   -- ^ The state of the \"builtin\" plugin.
   -> InstantiatedBackend
   -- ^ The instantiated backend.
@@ -46,8 +48,12 @@ runBackendM st ib ev = iterT go where
       Nothing    -> sendAction (eventHandle ev) (Whisper (eventUser ev) msg)
     k
   go (GetCommandPrefix mcname k) = do
-    prefix <- liftIO $ builtinGetPrefix st (instBackendName ib) (instSpecificName ib) (instIndex ib) mcname
+    prefix <- liftIO $ Builtin.getCommandPrefix st ib mcname
     k prefix
+  go (GetInstance k) = k ib
+  go (IsDeified k) = do
+    deities <- liftIO $ Builtin.getDeities st ib
+    k (eventUser ev `elem` deities)
 
 -------------------------------------------------------------------------------
 -- Actions
@@ -79,6 +85,14 @@ disconnect = sendActionM Terminate
 -- | Get the prefix for command verbs.
 getCommandPrefix :: Maybe ChannelName -> BackendM Text
 getCommandPrefix cname = liftF $ GetCommandPrefix cname id
+
+-- | Get the instantiated backend.
+getInstance :: BackendM InstantiatedBackend
+getInstance = liftF $ GetInstance id
+
+-- | Check if the current user is deified.
+isDeified :: BackendM Bool
+isDeified = liftF $ IsDeified id
 
 -------------------------------------------------------------------------------
 -- Utilities

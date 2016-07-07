@@ -1,4 +1,3 @@
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -8,7 +7,7 @@
 -- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Stability   : experimental
--- Portability : GADTs, LambdaCase, OverloadedStrings, ScopedTypeVariables
+-- Portability : LambdaCase, OverloadedStrings, ScopedTypeVariables
 module Yukibot.Main
     ( -- * Execution
       defaultMain
@@ -18,13 +17,10 @@ module Yukibot.Main
     , instantiateBackends
     , instantiateBackend
     , instantiatePlugins
-    , instantiatePlugin
 
       -- * State
     , BotState
-    , BuiltinState
     , emptyBotState
-    , initialBuiltinState
       -- ** Backends
     , addBackend
     -- ** Plugins
@@ -35,14 +31,14 @@ module Yukibot.Main
     ) where
 
 import Control.Arrow ((&&&))
-import Control.Monad (guard, when, void)
+import Control.Monad (void)
 import Control.Monad.Catch (SomeException, catch)
 import Data.Either (lefts, rights)
-import Data.Foldable (for_, toList)
+import Data.Foldable (toList)
 import qualified Data.HashMap.Strict as H
 import Data.List (isPrefixOf, nub)
 import Data.List.NonEmpty (NonEmpty(..), fromList)
-import Data.Maybe (isNothing, fromMaybe, mapMaybe)
+import Data.Maybe (isNothing, fromMaybe)
 import Data.Monoid ((<>), mconcat)
 import Data.Semigroup (Semigroup, sconcat)
 import Data.Text (Text, unpack)
@@ -54,7 +50,7 @@ import System.Posix.Signals (Handler(..), installHandler, sigINT, sigTERM)
 import Yukibot.Backend
 import Yukibot.Configuration
 import Yukibot.Monad
-import Yukibot.Plugin.Builtin
+import qualified Yukibot.Plugin.Builtin as Builtin
 import Yukibot.Types
 
 -- | A default @main@ function: parse the config file and either
@@ -64,7 +60,7 @@ defaultMain st0 fp = do
   mcfg <- parseConfigFile fp
   case mcfg of
     Right cfg -> do
-      builtinst <- initialBuiltinState cfg
+      builtinst <- Builtin.initialState cfg
       case makeBot st0 builtinst cfg of
         Right go   -> go
         Left  errs -> die ("En error while creating the bot: " ++ show errs)
@@ -90,7 +86,7 @@ defaultMain st0 fp = do
 -- sets up the \"builtin\" plugin.
 makeBot :: BotState
   -- ^ The initial state of the bot.
-  -> BuiltinState
+  -> Builtin.BuiltinState
   -- ^ The initial state of the \"builtin\" plugin. This is normally
   -- supplied by 'defaultMain'.
   -> Table
@@ -99,7 +95,7 @@ makeBot :: BotState
 makeBot st0 builtinst cfg = do
   -- Add the \"builtin\" plugin
   st <- either (Left . (:|[])) Right $
-        addPlugin "builtin" (builtinPlugin builtinst) st0
+        addPlugin "builtin" (Builtin.plugin builtinst) st0
   -- Deal with the configuration
   bs <- instantiateBackends (getBackends st) (getPlugins st) cfg
   -- Return the bot action
@@ -114,37 +110,67 @@ makeBot st0 builtinst cfg = do
   where
     -- Start a backend with the provided plugins.
     startWithPlugins ib = startInstantiatedBackend handle ib where
-      -- Unlike in original yukibot, the monitors (for a single
+      -- Unlike in original yukibot, the plugins (for a single
       -- backend) are run in a single thread. This makes output more
-      -- deterministic when multiple monitors fire on the same event,
-      -- and in practice most events are only handled by one monitor,
+      -- deterministic when multiple plugins fire on the same event,
+      -- and in practice most events are only handled by one plugin,
       -- so this saves needless forking as well.
-      handle ev = for_ enabledMonitors $ \(pn, mnOrCn, Monitor monitor) -> do
-        enabled <- isEnabled pn (eventChannel ev) mnOrCn
-        when enabled . runBackendM builtinst ib ev $ monitor ev
+      handle ev = do
+        -- First run the monitors
+        enabledMonitors <- Builtin.getEnabledMonitors builtinst ib (eventChannel ev)
+        let monitors = filterMonitors enabledMonitors
+        runBackendM builtinst ib ev $
+          mapM_ (\(Monitor m) -> m ev) monitors
 
-      -- All monitors enabled in the backend.
-      enabledMonitors = [ (instPluginName ip, mnOrCn, mon)
-                        | ip <- instPlugins ib
-                        , (mnOrCn, mon) <- instMonitors ip
-                        ]
+        -- Then the commands
+        prefix <- Builtin.getCommandPrefix builtinst ib (eventChannel ev)
+        let UserName user = eventWhoAmI ev
+        let prefixes = [prefix, user <> ": ", user <> ", ", user <> " "]
+        case checkPrefixes ev prefixes of
+          Just rest -> do
+            enabledCommands <- Builtin.getEnabledCommands builtinst ib (eventChannel ev)
+            let commands = filterCommands enabledCommands (T.words rest)
+            runBackendM builtinst ib ev $
+              mapM_ (\(Command c,args) -> c ev args) commands
+          Nothing -> pure ()
 
-      -- Check if a monitor or command is enabled in a channel.
-      isEnabled pn (Just cname) (Right cn) = isCommandEnabled' cname pn cn
-      isEnabled pn (Just cname) (Left  mn) = isMonitorEnabled' cname pn mn
-      isEnabled _ Nothing _ = pure True
+      -- Extract all the monitors which are in the enabled list.
+      filterMonitors enabled =
+        [ mon
+        | (pname, plugin) <- instPlugins ib
+        , (mn, mon) <- H.toList $ pluginMonitors plugin
+        , (pname, mn) `elem` enabled
+        ]
 
-      isCommandEnabled' = isCommandEnabled (instBackendName ib) (instSpecificName ib) (instIndex ib)
-      isMonitorEnabled' = isMonitorEnabled (instBackendName ib) (instSpecificName ib) (instIndex ib)
+      -- Extract all of the commands which are in the enabled list and
+      -- where the verb matches.
+      filterCommands enabled msg =
+        [ (cmd, args)
+        | (pname, plugin) <- instPlugins ib
+        , (cn, cmd) <- H.toList $ pluginCommands plugin
+        , args <- checkVerb pname cn msg enabled
+        ]
+
+      -- Check if any of the prefixes match the message, and return
+      -- suffix if so.
+      checkPrefixes ev (p:ps) = case T.stripPrefix p (eventMessage ev) of
+        Just rest -> Just rest
+        Nothing   -> checkPrefixes ev ps
+      checkPrefixes ev []
+        | isNothing (eventChannel ev) = Just (eventMessage ev)
+        | otherwise = Nothing
+
+      -- Check if a message contains the verbs for a command,
+      -- returning the arguments if so.
+      checkVerb pn cn msg ((pn', cn', verb):rest) =
+        let v = T.words verb
+        in if pn == pn' && cn == cn' && v `isPrefixOf` msg
+           then drop (length v) msg : checkVerb pn cn msg rest
+           else checkVerb pn cn msg rest
+      checkVerb _ _ _ [] = []
 
     -- Kill a backend
     killBackend h = stopBackend h `catch` (\(_ :: SomeException) -> pure ())
-
-    -- Check if a monitor is enabled in a channel.
-    isMonitorEnabled = builtinIsMonitorEnabled builtinst
-
-    -- Check if a command is enabled in a channel.
-    isCommandEnabled = builtinIsCommandEnabled builtinst
 
 -------------------------------------------------------------------------------
 -- Configuration
@@ -217,68 +243,21 @@ instantiatePlugins :: H.HashMap PluginName (Table -> Either Text Plugin)
   -- ^ The name of this particular instance of the backend.
   -> Table
   -- ^ The configuration.
-  -> [Either (NonEmpty CoreError) InstantiatedPlugin]
+  -> [Either (NonEmpty CoreError) (PluginName, Plugin)]
 instantiatePlugins allPlugins bname name cfg =
   [make (PluginName n) | n <- nub $ "builtin":getStrings "plugins" cfg]
   where
     -- Instantiate a plugin.
-    make :: PluginName -> Either (NonEmpty CoreError) InstantiatedPlugin
+    make :: PluginName -> Either (NonEmpty CoreError) (PluginName, Plugin)
     make n = case H.lookup n allPlugins of
       Just toP -> case toP (pcfg n) of
-        Right plugin -> instantiatePlugin bname name n plugin cfg
+        Right plugin -> Right (n, plugin)
         Left err -> Left (PluginBadConfig bname name n err:|[])
       Nothing  -> Left (PluginUnknown bname name n:|[])
 
     -- Get the configuration of a plugin
     pcfg :: PluginName -> Table
     pcfg n = fromMaybe H.empty $ getNestedTable ["plugin", getPluginName n] cfg
-
--- | Instantiate an individual plugin.
-instantiatePlugin :: BackendName
-  -- ^ The name of the backend.
-  -> Text
-  -- ^ The name of this particular instance of the backend.
-  -> PluginName
-  -- ^ The name of the plugin.
-  -> Plugin
-  -- ^ The plugin.
-  -> Table
-  -- ^ The configuration.
-  -> Either (NonEmpty CoreError) InstantiatedPlugin
-instantiatePlugin bname name pname plugin cfg = case (lefts &&& rights) components of
-  ([], mons) -> Right (InstantiatedPlugin pname mons)
-  (e:es, _)  -> Left (e:|es)
-
-  where
-    components :: [Either CoreError (Either MonitorName CommandName, Monitor)]
-    components = map makeMonitor theMonitors ++ map makeCommandMonitor theCommands
-
-    -- Look up a monitor by name.
-    makeMonitor :: MonitorName -> Either CoreError (Either MonitorName r, Monitor)
-    makeMonitor m = case H.lookup m (pluginMonitors plugin) of
-      Just monitor -> Right (Left m, monitor)
-      Nothing      -> Left (MonitorUnknown bname name pname m)
-
-    -- Look up a command by name and turn it into a monitor.
-    makeCommandMonitor :: (Text, CommandName) -> Either CoreError (Either l CommandName, Monitor)
-    makeCommandMonitor (v, c) = case H.lookup c (pluginCommands plugin) of
-      Just command -> Right (Right c, commandToMonitor v command)
-      Nothing      -> Left (CommandUnknown bname name pname c)
-
-    -- All enabled monitors for this plugin/backend.
-    theMonitors :: [MonitorName]
-    theMonitors = mapMaybe restrict $ getStrings "monitors" cfg where
-      restrict m = case T.breakOn ":" m of
-        (pn, mn) | pn == getPluginName pname -> Just (MonitorName $ T.tail mn)
-                 | otherwise -> Nothing
-
-    -- All enabled commands for this plugin/backend.
-    theCommands :: [(Text, CommandName)]
-    theCommands = maybe [] (mapMaybe restrict . H.toList) $ getTable "commands" cfg where
-      restrict (v, VString c) = case T.breakOn ":" c of
-        (pn, cn) | pn == getPluginName pname -> Just (v, CommandName $ T.tail cn)
-                 | otherwise -> Nothing
-      restrict _ = Nothing
 
 -------------------------------------------------------------------------------
 -- State
@@ -335,32 +314,3 @@ mangle :: (Semigroup s, Monoid m) => (a -> s) -> (b -> m) -> [Either a b] -> Eit
 mangle toS toM xs = case (lefts &&& rights) xs of
   ([], bs) -> let ms = map toM bs in Right (mconcat ms)
   (as, _)  -> let ss = map toS as in Left  (sconcat $ fromList ss)
-
--- | Given a verb, convert a 'Command' to a 'Monitor'.
-commandToMonitor :: Text
-  -- ^ The verb.
-  -> Command -> Monitor
-commandToMonitor v (Command cmd) = Monitor $ \ev@(Event _ _ c _ m) -> do
-  prefix <- getCommandPrefix c
-  let UserName user = eventWhoAmI ev
-  let prefixes = [prefix, user <> ": ", user <> ", ", user <> " "]
-  case check (isNothing c) prefixes m of
-    Just args -> cmd ev args
-    Nothing   -> pure ()
-
-  where
-    -- Check if any of the prefixes match the message, and return the
-    -- args if so.
-    check allowEmpty [] m
-      | allowEmpty = stripVerb m
-      | otherwise = Nothing
-    check allowEmpty (p:ps) m = case stripVerb =<< T.stripPrefix p m of
-      Just args -> Just args
-      Nothing   -> check allowEmpty ps m
-
-    -- Strip the verb from the start of a message.
-    stripVerb m =
-      let verbParts = T.words v
-          msgParts  = T.words m
-          args = drop (length verbParts) msgParts
-      in guard (verbParts `isPrefixOf` msgParts) >> pure args

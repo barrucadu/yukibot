@@ -73,18 +73,19 @@
     # "plugin:command". As with monitors, commands belonging to
     # plugins which aren't enabled are silently ignored.
     [backend.irc."irc.freenode.net".commands] ## default: {}
-      "greet" = "hello:hello"
       "set default prefix"   = "builtin:set-default-prefix"
       "set channel prefix"   = "builtin:set-channel-prefix"
       "unset channel prefix" = "builtin:unset-channel-prefix"
-      "disable plugin"       = "builtin:disable-plugin"
-      "enable plugin"        = "builtin:enable-plugin"
-      "disable monitor"      = "builtin:disable-monitor"
-      "enable monitor"       = "builtin:enable-monitor"
-      "disable command"      = "builtin:disable-command"
-      "enable command"       = "builtin:enable-command"
-      "deify"                = "builtin:deify"
-      "degrade"              = "builtin:degrade"
+      "enable plugin"  = "builtin:enable-plugin"
+      "disable plugin" = "builtin:disable-plugin"
+      "start monitor"  = "builtin:start-monitor"
+      "stop monitor"   = "builtin:stop-monitor"
+      "bind"    = "builtin:bind"
+      "unbind"  = "builtin:unbind"
+      "unbind!" = "builtin:unbind-all"
+      "deify"   = "builtin:deify"
+      "degrade" = "builtin:degrade"
+      "greet"  = "hello:hello"
 
     # Commands in a channel must be prefixed with the following string
     # in order to be activated. It is optional for whispered commands.

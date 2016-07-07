@@ -1,12 +1,12 @@
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 -- |
 -- Module      : Yukibot.Plugin.Builtin
 -- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Stability   : experimental
--- Portability : LambdaCase, OverloadedStrings
+-- Portability : OverloadedStrings, TemplateHaskell
 --
 -- Special functionality that regular plugins cannot provide. This is
 -- mostly a normal plugin, but provides some extra functions used in
@@ -23,21 +23,23 @@
 --     * "unset-channel-prefix", remove the custom command prefix for
 --       this channel.
 --
---     * "disable-plugin", disable a plugin in this channel.
---
 --     * "enable-plugin", enable a previously-disabled plugin in this
 --       channel. Monitors and commands retain their prior
 --       enabled/disabled state.
 --
---     * "disable-monitor", disable a monitor in this channel.
+--     * "disable-plugin", disable a plugin in this channel.
 --
---     * "enable-monitor", enable a previously-disabled monitor in
---       this channel.
+--     * "start-monitor", start a monitor in this channel.
 --
---     * "disable-command", disable a command in this channel.
+--     * "stop-monitor", stop a monitor in this channel.
 --
---     * "enable-command", enable a previously-disabled command in
---       this channel.
+--     * "bind", bind a new command in this channel, first argument is
+--       the command name.
+--
+--     * "unbind", unbind a command in this channel, args are the
+--       verb.
+--
+--     * "unbind-all", unbind all verbs for a command in this channel.
 --
 --     * "deify", grant a user administrator privileges for this
 --       backend.
@@ -47,266 +49,347 @@
 module Yukibot.Plugin.Builtin
   ( -- * State
     BuiltinState
-  , initialBuiltinState
+  , initialState
 
   -- * Plugin
-  , builtinPlugin
+  , plugin
 
-  -- * Actions
-  , builtinGetPrefix
-  , builtinIsMonitorEnabled
-  , builtinIsCommandEnabled
+  -- * Queries
+  , getCommandPrefix
+  , getEnabledCommands
+  , getEnabledMonitors
+  , getDeities
   ) where
 
-import Control.Concurrent.STM (TVar, atomically, newTVar, modifyTVar, readTVar)
+import Control.Arrow (second)
+import Control.Concurrent.STM (STM, TVar, atomically, newTVar, modifyTVar, readTVar)
+import Control.Lens ((&), (.~), (%~), at)
+import Control.Lens.TH (makeLenses)
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Free (liftF)
 import Data.Foldable (toList)
-import Data.Hashable (Hashable)
 import Data.HashMap.Strict (HashMap)
-import Data.HashSet (HashSet)
 import qualified Data.HashMap.Strict as H
-import qualified Data.HashSet as HS
+import Data.List (nub)
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import System.Random (randomIO)
 
-import Yukibot.Backend (sendAction)
 import Yukibot.Configuration
 import Yukibot.Types
 
 -------------------------------------------------------------------------------
 -- State
 
+type BackendMap v = HashMap (BackendName, Text, Int) v
+
 -- | Abstract mutable state.
-data BuiltinState = BuiltinState
-  { defaultPrefixes  :: TVar (HashMap (BackendName, Text, Int) Text)
-  , channelPrefixes  :: TVar (HashMap (BackendName, Text, Int, ChannelName) Text)
-  , disabledPlugins  :: TVar (HashSet (BackendName, Text, Int, ChannelName, PluginName))
-  , disabledMonitors :: TVar (HashSet (BackendName, Text, Int, ChannelName, PluginName, MonitorName))
-  , disabledCommands :: TVar (HashSet (BackendName, Text, Int, ChannelName, PluginName, CommandName))
-  , deifiedUsers     :: TVar (HashSet (BackendName, Text, Int, UserName))
+newtype BuiltinState = BuiltinState (TVar (BackendMap BackendState))
+
+-- | State about a backend.
+data BackendState = BackendState
+  { _defaultPrefix :: Text
+  -- ^ Command prefix.
+  , _channelPrefixes :: HashMap ChannelName Text
+  -- ^ Per-channel command prefix.
+  , _disabledPlugins :: HashMap (Maybe ChannelName) [PluginName]
+  -- ^ Plugins default to enabled.
+  , _enabledMonitors :: HashMap (Maybe ChannelName) [(PluginName, MonitorName)]
+  -- ^ Monitors default to disabled.
+  , _defaultMonitors :: [(PluginName, MonitorName)]
+  -- ^ Default monitors to enable when joining a new channel.
+  , _enabledCommands :: HashMap (Maybe ChannelName) [(PluginName, CommandName, Text)]
+  -- ^ Commands default to disabled.
+  , _defaultCommands :: [(PluginName, CommandName, Text)]
+  -- ^ Commands to enable when joining a new channel.
+  , _deifiedUsers    :: [UserName]
+  -- ^ Users who can execute commands from this plugin.
   }
 
+makeLenses ''BackendState
+
 -- | Create the initial state.
-initialBuiltinState :: Table -> IO BuiltinState
-initialBuiltinState cfg = atomically $
-  BuiltinState <$> newTVar (getDefaultPrefixes cfg)
-               <*> newTVar (getChannelPrefixes cfg)
-               <*> newTVar HS.empty
-               <*> newTVar HS.empty
-               <*> newTVar HS.empty
-               <*> newTVar (getDeities cfg)
+initialState :: Table -> IO BuiltinState
+initialState cfg0 = atomically $ do
+  var <- newTVar states
+  pure (BuiltinState var)
+
+  where
+    defPrefixes = initialDefaultPrefixes cfg0
+    chanPrefixes = initialChannelPrefixes cfg0
+    defMonitors = initialDefaultMonitors cfg0
+    defCommands = initialDefaultCommands cfg0
+    deities = initialDeities cfg0
+    backends = nub $ H.keys defPrefixes ++
+                     H.keys chanPrefixes ++
+                     H.keys defMonitors ++
+                     H.keys defCommands ++
+                     H.keys deities
+    states = H.fromList [ (b, state b) | b <- backends ]
+    state b = BackendState { _defaultPrefix   = H.lookupDefault "!" b defPrefixes
+                           , _channelPrefixes = H.lookupDefault H.empty b chanPrefixes
+                           , _disabledPlugins = H.empty
+                           , _enabledMonitors = H.empty
+                           , _defaultMonitors = H.lookupDefault [] b defMonitors
+                           , _enabledCommands = H.empty
+                           , _defaultCommands = H.lookupDefault [] b defCommands
+                           , _deifiedUsers    = H.lookupDefault [] b deities
+                           }
 
 -- | Get the default prefixes.
-getDefaultPrefixes :: Table -> HashMap (BackendName, Text, Int) Text
-getDefaultPrefixes cfg0 = H.fromList [ ((BackendName bname, sname, index), prefix)
-                                     | (bname, VTable cfgs) <- maybe [] H.toList (getTable "backend" cfg0)
-                                     , (sname, cfg)         <- H.toList cfgs
-                                     , (index, Just prefix) <- prefixesOf cfg
-                                     ]
-  where
-    prefixesOf (VTable  c)  = [(0, get (c `override` cfg0))]
-    prefixesOf (VTArray cs) = [(i, get (c `override` cfg0)) | (i, c) <- zip [0..] (toList cs)]
-    prefixesOf _ = [(0, get cfg0)]
-
-    get = getString "default-prefix"
+initialDefaultPrefixes :: Table -> BackendMap Text
+initialDefaultPrefixes = buildBackendMap (getString "default-prefix")
 
 -- | Get the channel prefixes.
-getChannelPrefixes :: Table -> HashMap (BackendName, Text, Int, ChannelName) Text
-getChannelPrefixes cfg0 = H.fromList [ ((BackendName bname, sname, index, ChannelName cname), prefix)
-                                     | (bname, VTable cfgs)    <- maybe [] H.toList (getTable "backend" cfg0)
-                                     , (sname, cfg)            <- H.toList cfgs
-                                     , (index, chans)          <- prefixesOf cfg
-                                     , (cname, VString prefix) <- chans
-                                     ]
-  where
-    prefixesOf (VTable  c)  = [(0, get (c `override` cfg0))]
-    prefixesOf (VTArray cs) = [(i, get (c `override` cfg0)) | (i, c) <- zip [0..] (toList cs)]
-    prefixesOf _ = [(0, get cfg0)]
+initialChannelPrefixes :: Table -> BackendMap (HashMap ChannelName Text)
+initialChannelPrefixes = buildBackendMap $ \cfg -> Just . H.fromList $
+  [ (ChannelName cname, prefix)
+  | let tbl = getTable "channel-prefixes" cfg
+  , (cname, VString prefix) <- maybe [] H.toList tbl
+  ]
 
-    get = maybe [] H.toList . getTable "channel-prefixes"
+-- | Get the default monitors.
+initialDefaultMonitors :: Table -> BackendMap [(PluginName, MonitorName)]
+initialDefaultMonitors = buildBackendMap $ \cfg -> Just
+  [ (PluginName pname, MonitorName mname)
+  | monitor <- getStrings "monitors" cfg
+  , let (pname, mname) = second T.tail (T.breakOn ":" monitor)
+  , not (T.null mname)
+  ]
+
+-- | Get the default commands.
+initialDefaultCommands :: Table -> BackendMap [(PluginName, CommandName, Text)]
+initialDefaultCommands = buildBackendMap $ \cfg -> Just
+  [ (PluginName pname, CommandName cname, verb)
+  | (verb, VString cmd) <- maybe [] H.toList $ getTable "commands" cfg
+  , let (pname, cname) = second T.tail (T.breakOn ":" cmd)
+  , not (T.null cname)
+  , not (null $ T.words verb)
+  ]
 
 -- | Get the deities.
-getDeities :: Table -> HashSet (BackendName, Text, Int, UserName)
-getDeities cfg0 = HS.fromList [ (BackendName bname, sname, index, UserName user)
-                              | (bname, VTable cfgs) <- maybe [] H.toList (getTable "backend" cfg0)
-                              , (sname, cfg)         <- H.toList cfgs
-                              , (index, users)       <- usersOf cfg
-                              , user                 <- users
-                              ]
-  where
-    usersOf (VTable c) = [(0, get (c `override` cfg0))]
-    usersOf (VTArray cs) = [(i, get (c `override` cfg0)) | (i, c) <- zip [0..] (toList cs)]
-    usersOf _ = [(0, get cfg0)]
-
-    get = getStrings "deities"
+initialDeities :: Table -> BackendMap [UserName]
+initialDeities = buildBackendMap (Just . map UserName . getStrings "deities")
 
 -------------------------------------------------------------------------------
 -- Plugin
 
 data OnOff = On | Off deriving (Eq, Ord, Read, Show, Enum, Bounded)
 
-builtinPlugin :: BuiltinState -> config -> Either error Plugin
-builtinPlugin state _ = Right Plugin
+plugin :: BuiltinState -> config -> Either error Plugin
+plugin state _ = Right Plugin
   { pluginMonitors = H.empty
   , pluginCommands = H.fromList $ map (\(cn, cf) -> (cn, wrapCommand cf state))
     [ ("set-default-prefix",   setDefaultPrefix)
     , ("set-channel-prefix",   setChannelPrefix)
     , ("unset-channel-prefix", unsetChannelPrefix)
-    , ("enable-plugin",        onOffPlugin  On)
-    , ("disable-plugin",       onOffPlugin  Off)
-    , ("enable-monitor",       onOffMonitor On)
-    , ("disable-monitor",      onOffMonitor Off)
-    , ("enable-command",       onOffCommand On)
-    , ("disable-command",      onOffCommand Off)
-    , ("deify",                deify)
-    , ("degrade",              degrade)
+    , ("enable-plugin",  onOffPlugin  On)
+    , ("disable-plugin", onOffPlugin  Off)
+    , ("start-monitor",  onOffMonitor On)
+    , ("stop-monitor",   onOffMonitor Off)
+    , ("bind",       bindCommand)
+    , ("unbind",     unbindCommand)
+    , ("unbind-all", unbindAllCommand)
+    , ("deify",      deify)
+    , ("degrade",    degrade)
     ]
   }
 
 -- | Set the default prefix for a backend.
 setDefaultPrefix :: BuiltinState -> Command
-setDefaultPrefix st = Command $ \ev args -> liftIO $ do
-  let newPrefix = T.unwords args
-  let addr = backendAddress ev
-  atomically $ modifyTVar (defaultPrefixes st) (H.insert addr newPrefix)
+setDefaultPrefix st = Command $ \_ args ->
+  modifyState st $ \state -> state & defaultPrefix .~ T.unwords args
 
 -- | Set the custom prefix for a channel. If applied outside of a
 -- channel, this command does nothing.
 setChannelPrefix :: BuiltinState -> Command
-setChannelPrefix st = Command $ \ev args -> liftIO $ do
-  let newPrefix = T.unwords args
-  let (bname, sname, index) = backendAddress ev
-  atomically . whenJust (eventChannel ev) $ \cname ->
-    modifyTVar (channelPrefixes st) $ H.insert (bname, sname, index, cname) newPrefix
+setChannelPrefix st = Command $ \ev args ->
+  modifyState st $ \state -> case eventChannel ev of
+    Just c  -> state & channelPrefixes %~ H.insert c (T.unwords args)
+    Nothing -> state
 
 -- | Unset the custom prefix for a channel. If applied outside of a
 -- channel, this command does nothing.
 unsetChannelPrefix :: BuiltinState -> Command
-unsetChannelPrefix st = Command $ \ev _ -> liftIO $ do
-  let (bname, sname, index) = backendAddress ev
-  atomically . whenJust (eventChannel ev) $ \cname ->
-    modifyTVar (channelPrefixes st) $ H.delete (bname, sname, index, cname)
+unsetChannelPrefix st = Command $ \ev _ ->
+  modifyState st $ \state -> case eventChannel ev of
+    Just c  -> state & channelPrefixes %~ H.delete c
+    Nothing -> state
 
--- | Enable or disable a plugin for a channel. If applied outside of
--- a channel, this command does nothing.
+-- | Enable or disable a plugin for a channel. If not in a channel,
+-- this applies to whispers.
 onOffPlugin :: OnOff -> BuiltinState -> Command
-onOffPlugin mode st = onOffThing mode (disabledPlugins st) $
-  \bname sname index cname arg -> Just (bname, sname, index, cname, PluginName arg)
+onOffPlugin mode st = Command $ \ev args ->
+  let plugins = map PluginName args
+      go = if mode == On then filter (`notElem` plugins) else nub . (plugins++)
+  in modifyState st $ disabledPlugins . at (eventChannel ev) %~ (Just . go . fromMaybe [])
 
--- | Enable or disable a monitor for a channel. If applied outside of
--- a channel, this command does nothing.
+-- | Enable or disable a monitor for a channel. If not in a channel,
+-- this applies to whispers.
 onOffMonitor :: OnOff -> BuiltinState -> Command
-onOffMonitor mode st = onOffThing mode (disabledMonitors st) $ \bname sname index cname arg -> case toMon arg of
-  Just (pn, mn) -> Just (bname, sname, index, cname, pn, mn)
-  Nothing -> Nothing
+onOffMonitor mode st = Command $ \ev args ->
+  let monitors = [ (PluginName pn, MonitorName mn)
+                 | arg <- args
+                 , let (pn, mn) = second T.tail (T.breakOn ":" arg)
+                 , not (T.null mn)
+                 ]
+      go = if mode == On then nub . (monitors++) else filter (`notElem` monitors)
+  in modifyState st $ enabledMonitors . at (eventChannel ev) %~ (Just . go . fromMaybe [])
 
-  where
-    toMon arg = case T.breakOn ":" arg of
-      (pn, mn) | T.null mn -> Nothing
-               | otherwise -> Just (PluginName pn, MonitorName $ T.tail mn)
+-- | Bind a command.
+bindCommand :: BuiltinState -> Command
+bindCommand st = Command $ \ev args -> case args of
+  (cmd:vs) ->
+    let (pname, cname) = second T.tail (T.breakOn ":" cmd)
+        go = ((PluginName pname, CommandName cname, T.unwords vs):)
+    in if T.null cname || null vs
+       then pure ()
+       else modifyState st $ enabledCommands . at (eventChannel ev) %~ (Just . go . fromMaybe [])
+  _ -> pure ()
 
--- | Enable or disable a command for a channel. If applied outside of
--- a channel, this command does nothing.
-onOffCommand :: OnOff -> BuiltinState -> Command
-onOffCommand mode st = onOffThing mode (disabledCommands st) $ \bname sname index cname arg -> case toCmd arg of
-  Just (pn, mn) -> Just (bname, sname, index, cname, pn, mn)
-  Nothing -> Nothing
+-- | Unbind a command.
+unbindCommand :: BuiltinState -> Command
+unbindCommand st = Command $ \ev args ->
+  let go = filter (\(_,_,vs) -> vs /= T.unwords args)
+  in if null args
+     then pure ()
+     else modifyState st $ enabledCommands . at (eventChannel ev) %~ (Just . go . fromMaybe [])
 
-  where
-    toCmd arg = case T.breakOn ":" arg of
-      (pn, cn) | T.null cn -> Nothing
-               | otherwise -> Just (PluginName pn, CommandName $ T.tail cn)
+-- | Unbind all commands of the given type.
+unbindAllCommand :: BuiltinState -> Command
+unbindAllCommand st = Command $ \ev args ->
+  let commands = [ (PluginName pn, CommandName cn)
+                 | arg <- args
+                 , let (pn, cn) = second T.tail (T.breakOn ":" arg)
+                 , not (T.null cn)
+                 ]
+      go = filter (\(cn,pn,_) -> (cn,pn) `notElem` commands)
+  in modifyState st $ enabledCommands . at (eventChannel ev) %~ (Just . go . fromMaybe [])
 
 -- | Deify a list of users.
 deify :: BuiltinState -> Command
-deify st = Command $ \ev args -> liftIO $ do
-  let (bname, sname, index) = backendAddress ev
-  let users = map (\u -> (bname, sname, index, UserName u)) args
-  atomically $ mapM_ (modifyTVar (deifiedUsers st) . HS.insert) users
+deify st = Command $ \_ args ->
+  let users = map UserName args
+  in modifyState st $ deifiedUsers %~ (nub . (users++))
 
 -- | Un-deify a list of users.
 degrade :: BuiltinState -> Command
-degrade st = Command $ \ev args -> liftIO $ do
-  let (bname, sname, index) = backendAddress ev
-  let users = map (\u -> (bname, sname, index, UserName u)) args
-  atomically $ mapM_ (modifyTVar (deifiedUsers st) . HS.delete) users
+degrade st = Command $ \_ args ->
+  let users = map UserName args
+  in modifyState st $ deifiedUsers %~ filter (`notElem` users)
 
 -------------------------------------------------------------------------------
 -- Queries
 
-data Disabled = Disabled | NotADeity
-  deriving (Eq, Ord, Enum, Bounded, Read, Show)
+-- | Get the command prefix.
+getCommandPrefix :: BuiltinState
+  -> InstantiatedBackend
+  -> Maybe ChannelName
+  -> IO Text
+getCommandPrefix (BuiltinState statesVar) ib cname = atomically $ do
+  state <- bmLookup ib <$> readTVar statesVar
+  let def = _defaultPrefix state
+  pure $ case cname of
+    Just cname' -> H.lookupDefault def cname' (_channelPrefixes state)
+    Nothing -> def
 
--- | Get the prefix for a channel.
-builtinGetPrefix :: BuiltinState -> BackendName -> Text -> Int -> Maybe ChannelName -> IO Text
-builtinGetPrefix st bname sname index mcname = atomically $ do
-  defaultPrefix <- H.lookupDefault "!" (bname, sname, index) <$> readTVar (defaultPrefixes st)
-  case mcname of
-    Just cname ->
-      H.lookupDefault defaultPrefix (bname, sname, index, cname) <$> readTVar (channelPrefixes st)
-    Nothing -> pure defaultPrefix
+-- | Get the enabled commands. If there is no enabled command map for
+-- this channel, copy over the defaults.
+getEnabledCommands :: BuiltinState
+  -> InstantiatedBackend
+  -> Maybe ChannelName
+  -> IO [(PluginName, CommandName, Text)]
+getEnabledCommands st@(BuiltinState statesVar) ib cname = atomically $ do
+  state <- bmLookup ib <$> readTVar statesVar
+  let def = _defaultCommands state
+  case H.lookup cname (_enabledCommands state) of
+    Just enabled -> pure enabled
+    Nothing -> do
+      setupNewChannel st ib cname
+      pure def
 
--- | Check if a monitor is enabled.
-builtinIsMonitorEnabled :: BuiltinState -> BackendName -> Text -> Int -> ChannelName -> PluginName -> MonitorName -> IO Bool
-builtinIsMonitorEnabled st bname sname index cname pn mn = atomically $ do
-  p <- HS.member (bname, sname, index, cname, pn)     <$> readTVar (disabledPlugins  st)
-  m <- HS.member (bname, sname, index, cname, pn, mn) <$> readTVar (disabledMonitors st)
-  pure . not $ p || m
+-- | Get the enabled monitors.
+getEnabledMonitors :: BuiltinState
+  -> InstantiatedBackend
+  -> Maybe ChannelName
+  -> IO [(PluginName, MonitorName)]
+getEnabledMonitors st@(BuiltinState statesVar) ib cname = atomically $ do
+  state <- bmLookup ib <$> readTVar statesVar
+  let def = _defaultMonitors state
+  case H.lookup cname (_enabledMonitors state) of
+    Just enabled -> pure enabled
+    Nothing -> do
+      setupNewChannel st ib cname
+      pure def
 
--- | Check if a command is enabled.
-builtinIsCommandEnabled :: BuiltinState -> BackendName -> Text -> Int -> ChannelName -> PluginName -> CommandName -> IO Bool
-builtinIsCommandEnabled st bname sname index cname pn cn = atomically $ do
-  p <- HS.member (bname, sname, index, cname, pn)     <$> readTVar (disabledPlugins  st)
-  c <- HS.member (bname, sname, index, cname, pn, cn) <$> readTVar (disabledCommands st)
-  pure . not $ p || c
+-- | Get the deities.
+getDeities :: BuiltinState
+  -> InstantiatedBackend
+  -> IO [UserName]
+getDeities (BuiltinState statesVar) ib = atomically $ do
+  state <- bmLookup ib <$> readTVar statesVar
+  pure (_deifiedUsers state)
+
+-------------------------------------------------------------------------------
+-- 'BackendMap's
+
+-- | Modify the state of the current backend.
+modifyState :: BuiltinState -> (BackendState -> BackendState) -> BackendM ()
+modifyState (BuiltinState statesVar) f = do
+  ib <- liftF (GetInstance id)
+  liftIO . atomically $ do
+    state <- bmLookup ib <$> readTVar statesVar
+    modifyTVar statesVar (bmInsert ib $ f state)
+
+-- | Set up the state for a new channel.
+setupNewChannel :: BuiltinState
+  -> InstantiatedBackend
+  -> Maybe ChannelName
+  -> STM ()
+setupNewChannel (BuiltinState statesVar) ib cname = do
+  state <- bmLookup ib <$> readTVar statesVar
+  let state'  = state  & enabledMonitors . at cname .~ Just (_defaultMonitors state)
+  let state'' = state' & enabledCommands . at cname .~ Just (_defaultCommands state)
+  modifyTVar statesVar (bmInsert ib state'')
+
+-- | Look up a value in a 'BackendMap'.
+bmLookup :: InstantiatedBackend -> BackendMap v -> v
+bmLookup ib = H.lookupDefault (error "Missing backend state!") sig where
+  sig = (instBackendName ib, instSpecificName ib, instIndex ib)
+
+-- | Insert a value into a 'BackendMap'.
+bmInsert :: InstantiatedBackend -> v -> BackendMap v -> BackendMap v
+bmInsert ib = H.insert sig where
+  sig = (instBackendName ib, instSpecificName ib, instIndex ib)
+
+-- | Build a 'BackendMap' by extracting every instance from the
+-- configuration.
+buildBackendMap :: (Table -> Maybe v) -> Table -> BackendMap v
+buildBackendMap f cfg0 = H.fromList
+  [ (sig, v)
+  | (bname, VTable cfgs) <- maybe [] H.toList (getTable "backend" cfg0)
+  , (sname, cfg)         <- H.toList cfgs
+  , (index, Just v)      <- go cfg
+  , let sig = (BackendName bname, sname, index)
+  ]
+
+  where
+    go (VTable  c)  = [(0, f (c `override` cfg0))]
+    go (VTArray cs) = [(i, f (c `override` cfg0)) | (i, c) <- zip [0..] (toList cs)]
+    go _ = [(0, f cfg0)]
 
 -------------------------------------------------------------------------------
 -- Utilities
-
--- | Apply a monadic function when a value is @Just@.
-whenJust :: Monad m => Maybe a -> (a -> m ()) -> m ()
-whenJust (Just a) f = f a
-whenJust Nothing  _ = pure ()
-
--- | Get the unique \"address\" of a backend.
-backendAddress :: Event -> (BackendName, Text, Int)
-backendAddress ev =
-  let bname = backendName  $ eventHandle ev
-      sname = specificName $ eventHandle ev
-      index = backendIndex $ eventHandle ev
-  in (bname, sname, index)
-
--- | Enable or disable a <thing> for a channel. If applied outside of
--- a channel, this command does nothing.
-onOffThing :: (Eq x, Hashable x)
-  => OnOff
-  -> TVar (HashSet x)
-  -> (BackendName -> Text -> Int -> ChannelName -> Text -> Maybe x)
-  -> Command
-onOffThing mode var f = Command $ \ev args -> liftIO . atomically . whenJust (eventChannel ev) $ \cname -> do
-  let (bname, sname, index) = backendAddress ev
-  let vals = HS.fromList [x | arg <- args, let Just x = f bname sname index cname arg]
-  modifyTVar var (`combine` vals)
-
-  where
-    combine = if mode == On then HS.union else difference
-    difference l r = HS.filter (not . (`HS.member` r)) l
 
 -- | Check that the user of a command is a deity.
 wrapCommand :: (BuiltinState -> Command) -> BuiltinState -> Command
 wrapCommand cf st = Command $ \ev args -> do
   let (Command cmd) = cf st
-  let (bname, sname, index) = backendAddress ev
-  let user = eventUser ev
-  d <- liftIO . atomically $
-    HS.member (bname, sname, index, user)
-    <$> readTVar (deifiedUsers st)
-  if d
+  isDeified <- liftF (IsDeified id)
+  if isDeified
     then cmd ev args
-    else liftIO $ case eventChannel ev of
-           Just c  -> sendAction (eventHandle ev) . Say c [user] =<< randomMessage
-           Nothing -> sendAction (eventHandle ev) . Whisper user =<< randomMessage
+    else liftIO randomMessage >>= \msg -> liftF (Reply msg ())
 
   where
     randomMessage = do

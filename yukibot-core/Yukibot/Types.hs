@@ -30,7 +30,6 @@ module Yukibot.Types
   -- * Plugins
   , PluginName(..)
   , Plugin(..)
-  , InstantiatedPlugin(..)
   , MonitorName(..)
   , Monitor(..)
   , CommandName(..)
@@ -43,7 +42,7 @@ import Control.Concurrent.STM (TQueue, TVar)
 import Control.Monad.Catch (Exception)
 import Control.Monad.Trans.Free (FreeT)
 import Data.ByteString (ByteString)
-import Data.Hashable (Hashable)
+import Data.Hashable (Hashable(..))
 import Data.HashMap.Strict (HashMap)
 import Data.String (IsString)
 import Data.Text (Text)
@@ -88,6 +87,8 @@ data BackendF a
   = SendAction Action a
   | Reply Text a
   | GetCommandPrefix (Maybe ChannelName) (Text -> a)
+  | GetInstance (InstantiatedBackend -> a)
+  | IsDeified (Bool -> a)
   deriving Functor
 
 type BackendM = FreeT BackendF IO
@@ -111,8 +112,11 @@ data InstantiatedBackend = InstantiatedBackend
   , instSpecificName :: Text
   , instIndex        :: Int
   , instBackend      :: Backend
-  , instPlugins      :: [InstantiatedPlugin]
+  , instPlugins      :: [(PluginName, Plugin)]
   }
+
+instance Hashable InstantiatedBackend where
+  hashWithSalt salt ib = hashWithSalt salt (instBackendName ib, instSpecificName ib, instIndex ib)
 
 -- | A handle to a backend, which can be used to interact with it.
 data BackendHandle = BackendHandle
@@ -177,13 +181,6 @@ newtype CommandName = CommandName { getCommandName :: Text }
 data Plugin = Plugin
   { pluginMonitors :: HashMap MonitorName Monitor
   , pluginCommands :: HashMap CommandName Command
-  }
-
--- | An instantiated plugin, corresponding to either a monitor or a
--- command in the backend configuration.
-data InstantiatedPlugin = InstantiatedPlugin
-  { instPluginName :: PluginName
-  , instMonitors   :: [(Either MonitorName CommandName, Monitor)]
   }
 
 -- | Monitors are activated on every message. They can communicate
