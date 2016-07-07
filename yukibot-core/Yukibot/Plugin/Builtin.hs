@@ -46,6 +46,9 @@
 --
 --     * "degrade", remove a user's administrator privileges for this
 --       backend.
+--
+--     * "help", display help about a plugin, monitor, or command.
+--       This does not require the user to be a deity.
 module Yukibot.Plugin.Builtin
   ( -- * State
     BuiltinState
@@ -56,6 +59,7 @@ module Yukibot.Plugin.Builtin
 
   -- * Queries
   , getCommandPrefix
+  , getDisabledPlugins
   , getEnabledCommands
   , getEnabledMonitors
   , getDeities
@@ -73,8 +77,8 @@ import Control.Monad.Trans.Free (liftF)
 import Data.Foldable (toList)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as H
-import Data.List (nub)
-import Data.Maybe (fromMaybe)
+import Data.List (nub, sort)
+import Data.Maybe (fromMaybe, fromJust)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -198,6 +202,7 @@ plugin state _ = Right Plugin
     , ("unbind-all", unbindAllCommand)
     , ("deify",      deify)
     , ("degrade",    degrade)
+    , ("help", help)
     ]
   }
 
@@ -314,57 +319,142 @@ degrade st = Command
     in modifyState st $ deifiedUsers %~ filter (`notElem` users)
   }
 
+-- | Give help: in general, for a plugin, monitor, or command.
+help :: BuiltinState -> Command
+help st = Command
+  { commandHelp = "display help text for a plugin, monitor, or command"
+  , commandAction = \_ args -> do
+      allPlugins <- liftF (GetInstance instPlugins)
+
+      verbs    <- getVerbs    allPlugins
+      plugins  <- getPlugins  allPlugins
+      commands <- getCommands allPlugins
+      monitors <- getMonitors allPlugins
+
+      liftF . flip Reply () $ case args of
+        -- General help text
+        [] -> showListOf verbs <> " (see also 'plugin', 'command', and 'monitor')"
+        -- List plugins
+        ["plugin"] -> showAll "plugin" plugins
+        -- Help for one plugin
+        ("plugin":p:_) -> showOne p plugins
+        -- List commands
+        ["command"] -> showAll "command" commands
+        -- Help for one command
+        ("command":c:_) -> showOne c commands
+        -- List monitors
+        ["monitor"] -> showAll "monitor" monitors
+        -- Help for one monitor
+        ("monitor":m:_) -> showOne m monitors
+        -- Verb
+        _ -> showOne (T.unwords args) verbs
+  }
+
+  where
+    getVerbs allPlugins = do
+      allCommands <- getEnabledCommands st
+      let toCHelp (pn, cn, verb) = (verb, (helpFor allPlugins pn (Right cn), True))
+      pure $ map toCHelp allCommands
+
+    getPlugins allPlugins = do
+      disabled <- getDisabledPlugins st
+      let toPHelp (pn, p) = (getPluginName pn, (pluginHelp p, pn `notElem` disabled))
+      pure $ map toPHelp allPlugins
+
+    getCommands allPlugins = do
+      allCommands <- getEnabledCommands st
+      let checkE _ _ [] = False
+          checkE pn cn ((pn', cn', _):rest) = pn == pn' && cn == cn' || checkE pn cn rest
+      let toCHelp (pn, cn, _) = ( getPluginName pn <> ":" <> getCommandName cn
+                                , (helpFor allPlugins pn (Right cn), checkE pn cn allCommands))
+      pure $ map toCHelp allCommands
+
+    getMonitors :: [(PluginName, Plugin)] -> BackendM [(Text, (Text, Bool))]
+    getMonitors allPlugins = do
+      let allMonitors = [(pn, mn) | (pn, p) <- allPlugins, mn <- H.keys (pluginMonitors p)]
+      enabled <- getEnabledMonitors st
+      let toMHelp (pn, mn) = ( getPluginName pn <> ":" <> getMonitorName mn
+                             , (helpFor allPlugins pn (Left mn), (pn,mn) `elem` enabled))
+      pure $ map toMHelp allMonitors
+
+    helpFor plugins pn key =
+      let plugin = fromJust (lookup pn plugins)
+      in case key of
+           Right cn -> commandHelp . fromJust $ H.lookup cn (pluginCommands plugin)
+           Left  mn -> monitorHelp . fromJust $ H.lookup mn (pluginMonitors plugin)
+
+    showAll thing things = thing <> "s: " <> showListOf things <> " (see also '" <> thing <> " <name>')"
+    showOne key things = case lookup key things of
+      Just (helpText, True)  -> key <> ": " <> helpText
+      Just (helpText, False) -> key <> ": " <> helpText <> " [disabled]"
+      Nothing -> "cannot find help for '" <> key <> "'"
+    showListOf = T.intercalate ", " . sort . map fst
+
 -------------------------------------------------------------------------------
 -- Queries
 
 -- | Get the command prefix.
-getCommandPrefix :: BuiltinState
-  -> InstantiatedBackend
-  -> Maybe ChannelName
-  -> IO Text
-getCommandPrefix (BuiltinState statesVar) ib cname = atomically $ do
-  state <- bmLookup ib <$> readTVar statesVar
-  let def = _defaultPrefix state
-  pure $ case cname of
-    Just cname' -> H.lookupDefault def cname' (_channelPrefixes state)
-    Nothing -> def
+getCommandPrefix :: BuiltinState -> BackendM Text
+getCommandPrefix (BuiltinState statesVar) = do
+  ib    <- liftF (GetInstance id)
+  cname <- liftF (GetEvent eventChannel)
+
+  liftIO . atomically $ do
+    state <- bmLookup ib <$> readTVar statesVar
+    let def = _defaultPrefix state
+    pure $ case cname of
+      Just cname' -> H.lookupDefault def cname' (_channelPrefixes state)
+      Nothing -> def
+
+-- | Get the disabled plugins.
+getDisabledPlugins :: BuiltinState -> BackendM [PluginName]
+getDisabledPlugins (BuiltinState statesVar) = do
+  ib    <- liftF (GetInstance id)
+  cname <- liftF (GetEvent eventChannel)
+
+  liftIO . atomically $ do
+    state <- bmLookup ib <$> readTVar statesVar
+    pure $ H.lookupDefault [] cname (_disabledPlugins state)
 
 -- | Get the enabled commands. If there is no enabled command map for
 -- this channel, copy over the defaults.
-getEnabledCommands :: BuiltinState
-  -> InstantiatedBackend
-  -> Maybe ChannelName
-  -> IO [(PluginName, CommandName, Text)]
-getEnabledCommands st@(BuiltinState statesVar) ib cname = atomically $ do
-  state <- bmLookup ib <$> readTVar statesVar
-  let def = _defaultCommands state
-  case H.lookup cname (_enabledCommands state) of
-    Just enabled -> pure enabled
-    Nothing -> do
-      setupNewChannel st ib cname
-      pure def
+getEnabledCommands :: BuiltinState -> BackendM [(PluginName, CommandName, Text)]
+getEnabledCommands st@(BuiltinState statesVar) = do
+  ib    <- liftF (GetInstance id)
+  cname <- liftF (GetEvent eventChannel)
+
+  liftIO . atomically $ do
+    state <- bmLookup ib <$> readTVar statesVar
+    let def = _defaultCommands state
+    case H.lookup cname (_enabledCommands state) of
+      Just enabled -> pure enabled
+      Nothing -> do
+        setupNewChannel st ib cname
+        pure def
 
 -- | Get the enabled monitors.
-getEnabledMonitors :: BuiltinState
-  -> InstantiatedBackend
-  -> Maybe ChannelName
-  -> IO [(PluginName, MonitorName)]
-getEnabledMonitors st@(BuiltinState statesVar) ib cname = atomically $ do
-  state <- bmLookup ib <$> readTVar statesVar
-  let def = _defaultMonitors state
-  case H.lookup cname (_enabledMonitors state) of
-    Just enabled -> pure enabled
-    Nothing -> do
-      setupNewChannel st ib cname
-      pure def
+getEnabledMonitors :: BuiltinState -> BackendM [(PluginName, MonitorName)]
+getEnabledMonitors st@(BuiltinState statesVar) = do
+  ib    <- liftF (GetInstance id)
+  cname <- liftF (GetEvent eventChannel)
+
+  liftIO . atomically $ do
+    state <- bmLookup ib <$> readTVar statesVar
+    let def = _defaultMonitors state
+    case H.lookup cname (_enabledMonitors state) of
+      Just enabled -> pure enabled
+      Nothing -> do
+        setupNewChannel st ib cname
+        pure def
 
 -- | Get the deities.
-getDeities :: BuiltinState
-  -> InstantiatedBackend
-  -> IO [UserName]
-getDeities (BuiltinState statesVar) ib = atomically $ do
-  state <- bmLookup ib <$> readTVar statesVar
-  pure (_deifiedUsers state)
+getDeities :: BuiltinState -> BackendM [UserName]
+getDeities (BuiltinState statesVar) = do
+  ib <- liftF (GetInstance id)
+
+  liftIO . atomically $ do
+    state <- bmLookup ib <$> readTVar statesVar
+    pure (_deifiedUsers state)
 
 -------------------------------------------------------------------------------
 -- 'BackendMap's

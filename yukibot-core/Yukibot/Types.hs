@@ -88,6 +88,7 @@ data BackendF a
   | Reply Text a
   | GetCommandPrefix (Maybe ChannelName) (Text -> a)
   | GetInstance (InstantiatedBackend -> a)
+  | GetEvent (Event -> a)
   | IsDeified (Bool -> a)
   deriving Functor
 

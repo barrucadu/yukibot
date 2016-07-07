@@ -17,6 +17,7 @@ module Yukibot.Monad
   , disconnect
   , getCommandPrefix
   , getInstance
+  , getEvent
   , isDeified
   ) where
 
@@ -47,10 +48,11 @@ runBackendM st ib ev = iterT go where
       Nothing    -> sendAction (eventHandle ev) (Whisper (eventUser ev) msg)
     k
   go (GetCommandPrefix mcname k) =
-    k =<< Builtin.getCommandPrefix st ib mcname
+    k =<< runBackendM st ib ev (Builtin.getCommandPrefix st)
   go (GetInstance k) = k ib
+  go (GetEvent k) = k ev
   go (IsDeified k) = do
-    deities <- Builtin.getDeities st ib
+    deities <- runBackendM st ib ev (Builtin.getDeities st)
     k (eventUser ev `elem` deities)
 
 -------------------------------------------------------------------------------
@@ -87,6 +89,10 @@ getCommandPrefix cname = liftF $ GetCommandPrefix cname id
 -- | Get the instantiated backend.
 getInstance :: BackendM InstantiatedBackend
 getInstance = liftF $ GetInstance id
+
+-- | Get the current event.
+getEvent :: BackendM Event
+getEvent = liftF $ GetEvent id
 
 -- | Check if the current user is deified.
 isDeified :: BackendM Bool

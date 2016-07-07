@@ -115,23 +115,21 @@ makeBot st0 builtinst cfg = do
       -- deterministic when multiple plugins fire on the same event,
       -- and in practice most events are only handled by one plugin,
       -- so this saves needless forking as well.
-      handle ev = do
+      handle ev = runBackendM builtinst ib ev $ do
         -- First run the monitors
-        enabledMonitors <- Builtin.getEnabledMonitors builtinst ib (eventChannel ev)
+        enabledMonitors <- Builtin.getEnabledMonitors builtinst
         let monitors = filterMonitors enabledMonitors
-        runBackendM builtinst ib ev $
-          mapM_ (\(Monitor _ m) -> m ev) monitors
+        mapM_ (\(Monitor _ m) -> m ev) monitors
 
         -- Then the commands
-        prefix <- Builtin.getCommandPrefix builtinst ib (eventChannel ev)
+        prefix <- Builtin.getCommandPrefix builtinst
         let UserName user = eventWhoAmI ev
         let prefixes = [prefix, user <> ": ", user <> ", ", user <> " "]
         case checkPrefixes ev prefixes of
           Just rest -> do
-            enabledCommands <- Builtin.getEnabledCommands builtinst ib (eventChannel ev)
+            enabledCommands <- Builtin.getEnabledCommands builtinst
             let commands = filterCommands enabledCommands (T.words rest)
-            runBackendM builtinst ib ev $
-              mapM_ (\(Command _ c,args) -> c ev args) commands
+            mapM_ (\(Command _ c,args) -> c ev args) commands
           Nothing -> pure ()
 
       -- Extract all the monitors which are in the enabled list.
