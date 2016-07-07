@@ -12,6 +12,8 @@ module Yukibot.Main
     ( -- * Execution
       defaultMain
     , makeBot
+    , getChannelMonitors
+    , getChannelCommands
 
     -- * Configuration
     , instantiateBackends
@@ -117,58 +119,67 @@ makeBot st0 builtinst cfg = do
       -- so this saves needless forking as well.
       handle ev = runBackendM builtinst ib ev $ do
         -- First run the monitors
-        enabledMonitors <- Builtin.getEnabledMonitors builtinst
-        let monitors = filterMonitors enabledMonitors
+        monitors <- getChannelMonitors builtinst
         mapM_ (\(Monitor _ m) -> m ev) monitors
 
         -- Then the commands
-        prefix <- Builtin.getCommandPrefix builtinst
-        let UserName user = eventWhoAmI ev
-        let prefixes = [prefix, user <> ": ", user <> ", ", user <> " "]
-        case checkPrefixes ev prefixes of
-          Just rest -> do
-            enabledCommands <- Builtin.getEnabledCommands builtinst
-            let commands = filterCommands enabledCommands (T.words rest)
-            mapM_ (\(Command _ c,args) -> c ev args) commands
-          Nothing -> pure ()
-
-      -- Extract all the monitors which are in the enabled list.
-      filterMonitors enabled =
-        [ mon
-        | (pname, plugin) <- instPlugins ib
-        , (mn, mon) <- H.toList $ pluginMonitors plugin
-        , (pname, mn) `elem` enabled
-        ]
-
-      -- Extract all of the commands which are in the enabled list and
-      -- where the verb matches.
-      filterCommands enabled msg =
-        [ (cmd, args)
-        | (pname, plugin) <- instPlugins ib
-        , (cn, cmd) <- H.toList $ pluginCommands plugin
-        , args <- checkVerb pname cn msg enabled
-        ]
-
-      -- Check if any of the prefixes match the message, and return
-      -- suffix if so.
-      checkPrefixes ev (p:ps) = case T.stripPrefix p (eventMessage ev) of
-        Just rest -> Just rest
-        Nothing   -> checkPrefixes ev ps
-      checkPrefixes ev []
-        | isNothing (eventChannel ev) = Just (eventMessage ev)
-        | otherwise = Nothing
-
-      -- Check if a message contains the verbs for a command,
-      -- returning the arguments if so.
-      checkVerb pn cn msg ((pn', cn', verb):rest) =
-        let v = T.words verb
-        in if pn == pn' && cn == cn' && v `isPrefixOf` msg
-           then drop (length v) msg : checkVerb pn cn msg rest
-           else checkVerb pn cn msg rest
-      checkVerb _ _ _ [] = []
+        commands <- getChannelCommands builtinst
+        mapM_ (\(Command _ c, args) -> c ev args) commands
 
     -- Kill a backend
     killBackend h = stopBackend h `catch` (\(_ :: SomeException) -> pure ())
+
+-- | Return all monitors enabled in this channel.
+getChannelMonitors :: Builtin.BuiltinState -> BackendM [Monitor]
+getChannelMonitors st = do
+  ib      <- getInstance
+  enabled <- Builtin.getEnabledMonitors st
+
+  pure [ mon
+       | (pname, plugin) <- instPlugins ib
+       , (mn, mon) <- H.toList $ pluginMonitors plugin
+       , (pname, mn) `elem` enabled
+       ]
+
+-- | Return all commands enabled in this channel which match the given
+-- message.
+getChannelCommands :: Builtin.BuiltinState -> BackendM [(Command, [Text])]
+getChannelCommands st = do
+  ib      <- getInstance
+  ev      <- getEvent
+  prefix  <- Builtin.getCommandPrefix   st
+  enabled <- Builtin.getEnabledCommands st
+
+  let UserName user = eventWhoAmI ev
+  let prefixes = [prefix, user <> ": ", user <> ", ", user <> " "]
+
+  pure $ case checkPrefixes ev prefixes of
+    Just rest ->
+      [ (cmd, args)
+      | (pname, plugin) <- instPlugins ib
+      , (cn, cmd) <- H.toList $ pluginCommands plugin
+      , args <- checkVerb pname cn (T.words rest) enabled
+      ]
+    Nothing -> []
+
+  where
+    -- Check if any of the prefixes match the message, and return
+    -- suffix if so.
+    checkPrefixes ev (p:ps) = case T.stripPrefix p (eventMessage ev) of
+      Just rest -> Just rest
+      Nothing   -> checkPrefixes ev ps
+    checkPrefixes ev []
+      | isNothing (eventChannel ev) = Just (eventMessage ev)
+      | otherwise = Nothing
+
+    -- Check if a message contains the verbs for a command, returning
+    -- the arguments if so.
+    checkVerb pn cn msg ((pn', cn', verb):rest) =
+      let v = T.words verb
+      in if pn == pn' && cn == cn' && v `isPrefixOf` msg
+         then drop (length v) msg : checkVerb pn cn msg rest
+         else checkVerb pn cn msg rest
+    checkVerb _ _ _ [] = []
 
 -------------------------------------------------------------------------------
 -- Configuration

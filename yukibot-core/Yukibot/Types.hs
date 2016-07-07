@@ -86,10 +86,14 @@ data Action
 data BackendF a
   = SendAction Action a
   | Reply Text a
-  | GetCommandPrefix (Maybe ChannelName) (Text -> a)
+  | QuickReply Text a
+  | GetCommandPrefixIn (Maybe ChannelName) (Text -> a)
+  | GetDisabledPluginsIn (Maybe ChannelName) ([PluginName] -> a)
+  | GetEnabledCommandsIn (Maybe ChannelName) ([(PluginName, CommandName, Text)] -> a)
+  | GetEnabledMonitorsIn (Maybe ChannelName) ([(PluginName, MonitorName)] -> a)
   | GetInstance (InstantiatedBackend -> a)
   | GetEvent (Event -> a)
-  | IsDeified (Bool -> a)
+  | GetDeities ([UserName] -> a)
   deriving Functor
 
 type BackendM = FreeT BackendF IO

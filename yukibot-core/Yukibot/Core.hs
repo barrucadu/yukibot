@@ -5,9 +5,7 @@
 -- Stability   : experimental
 -- Portability : portable
 module Yukibot.Core
-    ( module Yukibot.Backend
-    , module Yukibot.Configuration
-    , module Yukibot.Log
+    ( module Yukibot.Configuration
     , module Yukibot.Main
     , module Yukibot.Monad
     , module Yukibot.Types
@@ -16,9 +14,7 @@ module Yukibot.Core
     , privilegedCommand
     ) where
 
-import Yukibot.Backend
 import Yukibot.Configuration
-import Yukibot.Log
 import Yukibot.Main
 import Yukibot.Monad
 import Yukibot.Plugin.Builtin

@@ -4,29 +4,18 @@
 -- License     : MIT
 -- Stability   : experimental
 -- Portability : portable
-module Yukibot.Monad
-  ( -- * Monad
-    BackendM
-  , runBackendM
-  -- * Actions
-  , joinChannel
-  , leaveChannel
-  , reply
-  , say
-  , whisper
-  , disconnect
-  , getCommandPrefix
-  , getInstance
-  , getEvent
-  , isDeified
-  ) where
+module Yukibot.Monad where
 
+import Control.Applicative ((<*))
 import Control.Monad.Trans.Free (liftF, iterT)
 import Data.Text (Text)
 
-import Yukibot.Backend (sendAction)
+import qualified Yukibot.Backend as Backend
 import qualified Yukibot.Plugin.Builtin as Builtin
 import Yukibot.Types
+
+-------------------------------------------------------------------------------
+-- * Monad
 
 -- | Run a 'BackendM' computation.
 runBackendM :: Builtin.BuiltinState
@@ -39,52 +28,83 @@ runBackendM :: Builtin.BuiltinState
   -- ^ The effectful computation to perform.
   -> IO a
 runBackendM st ib ev = iterT go where
-  go (SendAction act k) = do
-    sendAction (eventHandle ev) act
-    k
-  go (Reply msg k) = do
-    case eventChannel ev of
-      Just cname -> sendAction (eventHandle ev) (Say cname [eventUser ev] msg)
-      Nothing    -> sendAction (eventHandle ev) (Whisper (eventUser ev) msg)
-    k
-  go (GetCommandPrefix mcname k) =
-    k =<< runBackendM st ib ev (Builtin.getCommandPrefix st)
+  go (Reply msg k) = k <* Backend.sendAction (eventHandle ev) (case eventChannel ev of
+    Just cname -> Say cname [eventUser ev] msg
+    Nothing    -> Whisper (eventUser ev) msg)
+  go (QuickReply msg k) = k <* Backend.sendAction (eventHandle ev) (case eventChannel ev of
+    Just cname -> Say cname [] msg
+    Nothing    -> Whisper (eventUser ev) msg)
+  go (GetCommandPrefixIn   mcname k) = k =<< runBackendM st ib ev (Builtin.getCommandPrefixIn   st mcname)
+  go (GetDisabledPluginsIn mcname k) = k =<< runBackendM st ib ev (Builtin.getDisabledPluginsIn st mcname)
+  go (GetEnabledCommandsIn mcname k) = k =<< runBackendM st ib ev (Builtin.getEnabledCommandsIn st mcname)
+  go (GetEnabledMonitorsIn mcname k) = k =<< runBackendM st ib ev (Builtin.getEnabledMonitorsIn st mcname)
+  go (SendAction act k) = k <* Backend.sendAction (eventHandle ev) act
   go (GetInstance k) = k ib
-  go (GetEvent k) = k ev
-  go (IsDeified k) = do
-    deities <- runBackendM st ib ev (Builtin.getDeities st)
-    k (eventUser ev `elem` deities)
+  go (GetEvent    k) = k ev
+  go (GetDeities  k) = k =<< runBackendM st ib ev (Builtin.getDeities st)
 
 -------------------------------------------------------------------------------
--- Actions
+-- * Actions
 
 -- | Join a channel.
 joinChannel :: ChannelName -> BackendM ()
-joinChannel cname = sendActionM (Join cname)
+joinChannel cname = sendAction (Join cname)
 
 -- | Leave a channel.
 leaveChannel :: ChannelName -> BackendM ()
-leaveChannel cname = sendActionM (Leave cname)
+leaveChannel cname = sendAction (Leave cname)
 
 -- | Reply to the last message.
 reply :: Text -> BackendM ()
 reply msg = liftF $ Reply msg ()
 
+-- | Reply to the last message, without addressing the user.
+quickReply :: Text -> BackendM ()
+quickReply msg = liftF $ QuickReply msg ()
+
 -- | Send a message to a channel, optionally addressed to some users.
 say :: ChannelName -> [UserName] -> Text -> BackendM ()
-say cname users msg = sendActionM (Say cname users msg)
+say cname users msg = sendAction (Say cname users msg)
 
 -- | Send a message to a user.
 whisper :: UserName -> Text -> BackendM ()
-whisper user msg = sendActionM (Whisper user msg)
+whisper user msg = sendAction (Whisper user msg)
 
 -- | Disconnect from the backend.
 disconnect :: BackendM ()
-disconnect = sendActionM Terminate
+disconnect = sendAction Terminate
 
--- | Get the prefix for command verbs.
-getCommandPrefix :: Maybe ChannelName -> BackendM Text
-getCommandPrefix cname = liftF $ GetCommandPrefix cname id
+-- | Get the command prefix in the current channel.
+getCommandPrefix :: BackendM Text
+getCommandPrefix = getCommandPrefixIn . eventChannel =<< getEvent
+
+-- | Get the command prefix in an arbitrary channel.
+getCommandPrefixIn :: Maybe ChannelName -> BackendM Text
+getCommandPrefixIn mcname = liftF $ GetCommandPrefixIn mcname id
+
+-- | Get the disabled plugins in the current channel.
+getDisabledPlugins :: BackendM [PluginName]
+getDisabledPlugins = getDisabledPluginsIn . eventChannel =<< getEvent
+
+-- | Get the disabled plugins in an arbitrary channel.
+getDisabledPluginsIn :: Maybe ChannelName -> BackendM [PluginName]
+getDisabledPluginsIn mcname = liftF $ GetDisabledPluginsIn mcname id
+
+-- | Get the enabled commands in the current channel.
+getEnabledCommands :: BackendM [(PluginName, CommandName, Text)]
+getEnabledCommands = getEnabledCommandsIn . eventChannel =<< getEvent
+
+-- | Get the enabled commands in an arbitrary channel.
+getEnabledCommandsIn :: Maybe ChannelName -> BackendM [(PluginName, CommandName, Text)]
+getEnabledCommandsIn mcname = liftF $ GetEnabledCommandsIn mcname id
+
+-- | Get the enabled monitors in the current channel.
+getEnabledMonitors :: BackendM [(PluginName, MonitorName)]
+getEnabledMonitors = getEnabledMonitorsIn . eventChannel =<< getEvent
+
+-- | Get the enabled monitors in an arbitrary channel.
+getEnabledMonitorsIn :: Maybe ChannelName -> BackendM [(PluginName, MonitorName)]
+getEnabledMonitorsIn mcname = liftF $ GetEnabledMonitorsIn mcname id
 
 -- | Get the instantiated backend.
 getInstance :: BackendM InstantiatedBackend
@@ -94,12 +114,17 @@ getInstance = liftF $ GetInstance id
 getEvent :: BackendM Event
 getEvent = liftF $ GetEvent id
 
+-- | Get the deities.
+getDeities :: BackendM [UserName]
+getDeities = liftF $ GetDeities id
+
 -- | Check if the current user is deified.
 isDeified :: BackendM Bool
-isDeified = liftF $ IsDeified id
+isDeified = do
+  deities <- getDeities
+  ev      <- getEvent
+  pure (eventUser ev `elem` deities)
 
--------------------------------------------------------------------------------
--- Utilities
-
-sendActionM :: Action -> BackendM ()
-sendActionM act = liftF $ SendAction act ()
+-- | Send a backend action.
+sendAction :: Action -> BackendM ()
+sendAction act = liftF $ SendAction act ()

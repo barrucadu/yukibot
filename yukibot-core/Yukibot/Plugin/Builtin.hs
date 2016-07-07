@@ -59,9 +59,13 @@ module Yukibot.Plugin.Builtin
 
   -- * Queries
   , getCommandPrefix
+  , getCommandPrefixIn
   , getDisabledPlugins
+  , getDisabledPluginsIn
   , getEnabledCommands
+  , getEnabledCommandsIn
   , getEnabledMonitors
+  , getEnabledMonitorsIn
   , getDeities
 
   -- * Misc
@@ -332,23 +336,23 @@ help st = Command
       commands <- getCommands allPlugins
       monitors <- getMonitors allPlugins
 
-      liftF . flip Reply () $ case args of
-        -- General help text
-        [] -> showListOf verbs <> " (see also 'plugin', 'command', and 'monitor')"
-        -- List plugins
-        ["plugin"] -> showAll "plugin" plugins
+      liftF . flip QuickReply () $ case args of
         -- Help for one plugin
-        ("plugin":p:_) -> showOne p plugins
-        -- List commands
-        ["command"] -> showAll "command" commands
+        ("plugin":p:_)  -> showOne p plugins
         -- Help for one command
         ("command":c:_) -> showOne c commands
-        -- List monitors
-        ["monitor"] -> showAll "monitor" monitors
         -- Help for one monitor
         ("monitor":m:_) -> showOne m monitors
+        -- List plugins
+        ["plugin"]  -> showAll "plugin" plugins
+        -- List commands
+        ["command"] -> showAll "command" commands
+        -- List monitors
+        ["monitor"] -> showAll "monitor" monitors
+        -- General help text
+        [] -> showListOf verbs <> " (see also 'plugin', 'command', and 'monitor')"
         -- Verb
-        _ -> showOne (T.unwords args) verbs
+        _  -> showOne (T.unwords args) verbs
   }
 
   where
@@ -370,7 +374,6 @@ help st = Command
                                 , (helpFor allPlugins pn (Right cn), checkE pn cn allCommands))
       pure $ map toCHelp allCommands
 
-    getMonitors :: [(PluginName, Plugin)] -> BackendM [(Text, (Text, Bool))]
     getMonitors allPlugins = do
       let allMonitors = [(pn, mn) | (pn, p) <- allPlugins, mn <- H.keys (pluginMonitors p)]
       enabled <- getEnabledMonitors st
@@ -394,11 +397,14 @@ help st = Command
 -------------------------------------------------------------------------------
 -- Queries
 
--- | Get the command prefix.
+-- | Get the command prefix in the current channel.
 getCommandPrefix :: BuiltinState -> BackendM Text
-getCommandPrefix (BuiltinState statesVar) = do
-  ib    <- liftF (GetInstance id)
-  cname <- liftF (GetEvent eventChannel)
+getCommandPrefix st = getCommandPrefixIn st =<< liftF (GetEvent eventChannel)
+
+-- | Get the command prefix in an arbitrary channel.
+getCommandPrefixIn :: BuiltinState -> Maybe ChannelName -> BackendM Text
+getCommandPrefixIn (BuiltinState statesVar) cname = do
+  ib <- liftF (GetInstance id)
 
   liftIO . atomically $ do
     state <- bmLookup ib <$> readTVar statesVar
@@ -407,50 +413,34 @@ getCommandPrefix (BuiltinState statesVar) = do
       Just cname' -> H.lookupDefault def cname' (_channelPrefixes state)
       Nothing -> def
 
--- | Get the disabled plugins.
+-- | Get the disabled plugins in the current channel.
 getDisabledPlugins :: BuiltinState -> BackendM [PluginName]
-getDisabledPlugins (BuiltinState statesVar) = do
-  ib    <- liftF (GetInstance id)
-  cname <- liftF (GetEvent eventChannel)
+getDisabledPlugins st = getDisabledPluginsIn st =<< liftF (GetEvent eventChannel)
+
+-- | Get the disabled plugins in an arbitrary channel.
+getDisabledPluginsIn :: BuiltinState -> Maybe ChannelName -> BackendM [PluginName]
+getDisabledPluginsIn (BuiltinState statesVar) cname = do
+  ib <- liftF (GetInstance id)
 
   liftIO . atomically $ do
     state <- bmLookup ib <$> readTVar statesVar
     pure $ H.lookupDefault [] cname (_disabledPlugins state)
 
--- | Get the enabled commands. If there is no enabled command map for
--- this channel, copy over the defaults.
+-- | Get the enabled commands in the current channel.
 getEnabledCommands :: BuiltinState -> BackendM [(PluginName, CommandName, Text)]
-getEnabledCommands st@(BuiltinState statesVar) = do
-  ib    <- liftF (GetInstance id)
-  cname <- liftF (GetEvent eventChannel)
-  dplugins <- getDisabledPlugins st
+getEnabledCommands st = getEnabledCommandsIn st =<< liftF (GetEvent eventChannel)
 
-  liftIO . atomically $ do
-    state <- bmLookup ib <$> readTVar statesVar
-    let def = _defaultCommands state
-    case H.lookup cname (_enabledCommands state) of
-      Just cmds -> pure $
-        filter (\(pn,_,_) -> pn `notElem` dplugins) cmds
-      Nothing -> do
-        setupNewChannel st ib cname
-        pure def
+-- | Get the enabled commands in an arbitrary channel.
+getEnabledCommandsIn :: BuiltinState -> Maybe ChannelName -> BackendM [(PluginName, CommandName, Text)]
+getEnabledCommandsIn = getEnabledIn _enabledCommands _defaultCommands (\(pn,_,_) -> pn)
 
--- | Get the enabled monitors.
+-- | Get the enabled monitors in the current channel.
 getEnabledMonitors :: BuiltinState -> BackendM [(PluginName, MonitorName)]
-getEnabledMonitors st@(BuiltinState statesVar) = do
-  ib    <- liftF (GetInstance id)
-  cname <- liftF (GetEvent eventChannel)
-  dplugins <- getDisabledPlugins st
+getEnabledMonitors st = getEnabledMonitorsIn st =<< liftF (GetEvent eventChannel)
 
-  liftIO . atomically $ do
-    state <- bmLookup ib <$> readTVar statesVar
-    let def = _defaultMonitors state
-    case H.lookup cname (_enabledMonitors state) of
-      Just mons -> pure $
-        filter (\(pn,_) -> pn `notElem` dplugins) mons
-      Nothing -> do
-        setupNewChannel st ib cname
-        pure def
+-- | Get the enabled monitors in an arbitrary channel.
+getEnabledMonitorsIn :: BuiltinState -> Maybe ChannelName -> BackendM [(PluginName, MonitorName)]
+getEnabledMonitorsIn = getEnabledIn _enabledMonitors _defaultMonitors fst
 
 -- | Get the deities.
 getDeities :: BuiltinState -> BackendM [UserName]
@@ -512,11 +502,31 @@ buildBackendMap f cfg0 = H.fromList
 -------------------------------------------------------------------------------
 -- Utilities
 
+-- | Helper function for 'getEnabledCommandsIn' and
+-- 'getEnabledMonitorsIn'.
+getEnabledIn :: (BackendState -> HashMap (Maybe ChannelName) [a])
+  -> (BackendState -> [a])
+  -> (a -> PluginName)
+  -> BuiltinState
+  -> Maybe ChannelName
+  -> BackendM [a]
+getEnabledIn getMap getDef p st@(BuiltinState statesVar) cname = do
+  ib       <- liftF (GetInstance id)
+  dplugins <- getDisabledPlugins st
+
+  liftIO . atomically $ do
+    state <- bmLookup ib <$> readTVar statesVar
+    case H.lookup cname (getMap state) of
+      Just as -> pure (filter (\a -> p a `notElem` dplugins) as)
+      Nothing -> do
+        setupNewChannel st ib cname
+        pure (getDef state)
+
 -- | Check that the user of a command is a deity.
 wrapCommand :: (BuiltinState -> Command) -> BuiltinState -> Command
 wrapCommand cf st = let cmd = cf st in cmd { commandAction = \ev args -> do
-  isDeified <- liftF (IsDeified id)
-  if isDeified
+  deities <- liftF (GetDeities id)
+  if eventUser ev `elem` deities
     then commandAction cmd ev args
     else notDeityMessage >>= \msg -> liftF (Reply msg ())}
 
