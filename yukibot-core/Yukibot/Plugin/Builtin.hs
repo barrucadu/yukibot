@@ -59,13 +59,16 @@ module Yukibot.Plugin.Builtin
   , getEnabledCommands
   , getEnabledMonitors
   , getDeities
+
+  -- * Misc
+  , notDeityMessage
   ) where
 
 import Control.Arrow (second)
 import Control.Concurrent.STM (STM, TVar, atomically, newTVar, modifyTVar, readTVar)
 import Control.Lens ((&), (.~), (%~), at)
 import Control.Lens.TH (makeLenses)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Free (liftF)
 import Data.Foldable (toList)
 import Data.HashMap.Strict (HashMap)
@@ -389,18 +392,19 @@ wrapCommand cf st = Command $ \ev args -> do
   isDeified <- liftF (IsDeified id)
   if isDeified
     then cmd ev args
-    else liftIO randomMessage >>= \msg -> liftF (Reply msg ())
+    else notDeityMessage >>= \msg -> liftF (Reply msg ())
 
-  where
-    randomMessage = do
-      let messages = [ "You are not an administrator."
-                     , "I'm afraid I can't let you do that."
-                     , "Such power is not meant for mere mortals."
-                     , "Only the chosen few have that power!"
-                     , "You are trying to mess with forces beyond your comprehension!"
-                     , "No."
-                     , "LA LA LA I'M NOT LISTENING TO YOU."
-                     , "I feel like you *thought* your words had meaning, but they didn't."
-                     ]
-      idx <- randomIO
-      pure $ messages !! (idx `mod` length messages)
+-- | A random message to be given when the user is not a deity.
+notDeityMessage :: MonadIO m => m Text
+notDeityMessage = liftIO $ do
+  let messages = [ "You are not an administrator."
+                 , "I'm afraid I can't let you do that."
+                 , "Such power is not meant for mere mortals."
+                 , "Only the chosen few have that power!"
+                 , "You are trying to mess with forces beyond your comprehension!"
+                 , "No."
+                 , "LA LA LA I'M NOT LISTENING TO YOU."
+                 , "I feel like you *thought* your words had meaning, but they didn't."
+                 ]
+  idx <- randomIO
+  pure $ messages !! (idx `mod` length messages)
