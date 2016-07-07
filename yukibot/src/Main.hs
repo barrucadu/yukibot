@@ -6,6 +6,7 @@ import System.Exit (die)
 
 import Yukibot.Backend.IRC (ircBackend)
 import Yukibot.Core
+import Yukibot.Plugin.Channel (channelPlugin)
 import Yukibot.Plugin.Hello (helloPlugin)
 import Yukibot.Plugin.LinkInfo (linkInfoPlugin)
 
@@ -16,6 +17,7 @@ main = case initialState of
 
 initialState :: Either CoreError BotState
 initialState = addBackend "irc"     ircBackend     =<<
+               addPlugin "channel"  channelPlugin  =<<
                addPlugin "hello"    helloPlugin    =<<
                addPlugin "linkinfo" linkInfoPlugin =<<
                pure emptyBotState
