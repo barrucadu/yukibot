@@ -423,12 +423,14 @@ getEnabledCommands :: BuiltinState -> BackendM [(PluginName, CommandName, Text)]
 getEnabledCommands st@(BuiltinState statesVar) = do
   ib    <- liftF (GetInstance id)
   cname <- liftF (GetEvent eventChannel)
+  dplugins <- getDisabledPlugins st
 
   liftIO . atomically $ do
     state <- bmLookup ib <$> readTVar statesVar
     let def = _defaultCommands state
     case H.lookup cname (_enabledCommands state) of
-      Just enabled -> pure enabled
+      Just cmds -> pure $
+        filter (\(pn,_,_) -> pn `notElem` dplugins) cmds
       Nothing -> do
         setupNewChannel st ib cname
         pure def
@@ -438,12 +440,14 @@ getEnabledMonitors :: BuiltinState -> BackendM [(PluginName, MonitorName)]
 getEnabledMonitors st@(BuiltinState statesVar) = do
   ib    <- liftF (GetInstance id)
   cname <- liftF (GetEvent eventChannel)
+  dplugins <- getDisabledPlugins st
 
   liftIO . atomically $ do
     state <- bmLookup ib <$> readTVar statesVar
     let def = _defaultMonitors state
     case H.lookup cname (_enabledMonitors state) of
-      Just enabled -> pure enabled
+      Just mons -> pure $
+        filter (\(pn,_) -> pn `notElem` dplugins) mons
       Nothing -> do
         setupNewChannel st ib cname
         pure def
