@@ -162,7 +162,7 @@ initialDefaultMonitors :: Table -> BackendMap [(PluginName, MonitorName)]
 initialDefaultMonitors = buildBackendMap $ \cfg -> Just
   [ (PluginName pname, MonitorName mname)
   | monitor <- getStrings "monitors" cfg
-  , let (pname, mname) = second T.tail (T.breakOn ":" monitor)
+  , let (pname, mname) = second (T.drop 1) (T.breakOn ":" monitor)
   , not (T.null mname)
   ]
 
@@ -171,7 +171,7 @@ initialDefaultCommands :: Table -> BackendMap [(PluginName, CommandName, Text)]
 initialDefaultCommands = buildBackendMap $ \cfg -> Just
   [ (PluginName pname, CommandName cname, verb)
   | (verb, VString cmd) <- maybe [] H.toList $ getTable "commands" cfg
-  , let (pname, cname) = second T.tail (T.breakOn ":" cmd)
+  , let (pname, cname) = second (T.drop 1) (T.breakOn ":" cmd)
   , not (T.null cname)
   , not (null $ T.words verb)
   ]
@@ -255,7 +255,7 @@ onOffMonitor mode st = Command
   , commandAction = \ev args ->
     let monitors = [ (PluginName pn, MonitorName mn)
                    | arg <- args
-                   , let (pn, mn) = second T.tail (T.breakOn ":" arg)
+                   , let (pn, mn) = second (T.drop 1) (T.breakOn ":" arg)
                    , not (T.null mn)
                    ]
         go = if mode == On then nub . (monitors++) else filter (`notElem` monitors)
@@ -268,7 +268,7 @@ bindCommand st = Command
   { commandHelp = "bind a verb to a command in this channel"
   , commandAction = \ev args -> case args of
     (cmd:vs) ->
-      let (pname, cname) = second T.tail (T.breakOn ":" cmd)
+      let (pname, cname) = second (T.drop 1) (T.breakOn ":" cmd)
           newVerb = T.unwords vs
           go = ((PluginName pname, CommandName cname, newVerb):) . filter (\(_,_,verb) -> verb /= newVerb)
       in if T.null cname || null vs
@@ -295,7 +295,7 @@ unbindAllCommand st = Command
   , commandAction = \ev args ->
     let commands = [ (PluginName pn, CommandName cn)
                    | arg <- args
-                   , let (pn, cn) = second T.tail (T.breakOn ":" arg)
+                   , let (pn, cn) = second (T.drop 1) (T.breakOn ":" arg)
                    , not (T.null cn)
                    ]
         go = filter (\(cn,pn,_) -> (cn,pn) `notElem` commands)
