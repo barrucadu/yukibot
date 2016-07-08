@@ -236,7 +236,10 @@ formatTypeOrKind :: String -> String
 formatTypeOrKind = go . filter (" :: " `isInfixOf`) . lines where
   go [line] =
     let (_, tK) = second (T.unpack . T.strip . T.drop 4) $ T.breakOn " :: " (T.pack line)
-    in "<" ++ tK ++ ">"
+    in if " :: " `isInfixOf` tK
+       -- Strip out the extra "::" in the result of things like ":t foo :: a"
+       then go [tK]
+       else "<" ++ tK ++ ">"
   go _ = ""
 
 -- | Format some errors: return the first sentence of the first error
