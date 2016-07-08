@@ -37,6 +37,7 @@
 --     * "load-file" (string), path to load file.
 module Yukibot.Plugin.Mueval where
 
+import Control.Arrow (second)
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (newEmptyMVar, takeMVar, putMVar)
 import Control.Exception (SomeException, catch, evaluate)
@@ -44,7 +45,7 @@ import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Data.ByteString.Lazy (toStrict)
 import qualified Data.HashMap.Strict as H
-import Data.List (isInfixOf, isPrefixOf)
+import Data.List (intercalate, isInfixOf, isPrefixOf)
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -229,32 +230,46 @@ formatTypeOrKind = go . filter (" :: " `isInfixOf`) . lines where
 -- | Format some errors: return the first sentence of the first error
 -- message, and upload the full output if there is more than one.
 formatErrors :: String -> IO String
-formatErrors errStr
+formatErrors errs0
   | null errors = pure ""
-  | numErrs <= 1 = pure firstSentence
+  | length errors == 1 = pure firstSentence
   | otherwise = do
-      murl <- paste errors
+      murl <- paste (intercalate sep errors)
       pure $ case murl of
         Just url -> firstSentence ++ " (additional errors suppressed, see " ++ url ++ ")"
         Nothing ->  firstSentence ++ " (additional errors suppressed)"
   where
-    errors = T.unpack . T.strip . T.pack $ errStr
+    -- List of all errors.
+    errors = filter (not . null) . go [] $ lines errs0 where
+      go soFar (l:ls)
+        | "error:" `isInfixOf` l =
+            let (_, l') = second (T.unpack . T.strip . T.drop 6) $ T.breakOn "error:" (T.pack l)
+                rest = if isEmpty l' then go [] ls else go [l'] ls
+            in unlines (reverse soFar) : rest
+        | isEmpty l = go soFar ls
+        | otherwise = go (l:soFar) ls
+      go soFar [] = [unlines (reverse soFar)]
 
-    numErrs = length . filter ("<interactive>" `isPrefixOf`) $ lines errors
+    -- First sentence of the first error
+    firstSentence =
+      let -- Sentence enders
+          go _    False ('.':_) = ""
+          go True False ('•':_) = ""
+          go _ _ "" = ""
+          -- Quoting (disabled sentence enders)
+          go b False ('‘':cs) = '‘' : go b True cs
+          go b True  ('’':cs) = '’' : go b False cs
+          -- First bullet (seeing a second bullet is a sentence ender)
+          go False m ('•':cs) = '•' : go True m cs
+          -- Anything else
+          go b m (c:cs) = c : go b m cs
 
-    firstSentence
-      | smallError `isPrefixOf` errors = drop (length smallError) errors
-      | otherwise = unwords . words . filter (/='\n') $ go 0 errors where
-          go :: Int -> String -> String
-          go 0 ('•':cs) = go 1 cs
-          go 0 (_:cs) = go 0 cs
-          go 1 ('.':_) = ""
-          go 1 ('‘':cs) = '‘' : go 2 cs
-          go 2  ('’':cs) = '’' : go 1 cs
-          go m (c:cs) = c : go m cs
-          go _ "" = ""
+          sentence = unwords . words $ go False False (head errors)
+      in if "• " `isPrefixOf` sentence then drop 2 sentence else sentence
 
-    smallError = "<interactive>:1:1: error: " :: String
+    sep = "\n-------------------------------------------------\n\n"
+
+    isEmpty = (=="") . T.strip . T.pack
 
 -- | Upload some text to sprunge and return the response body (the
 -- URL).
