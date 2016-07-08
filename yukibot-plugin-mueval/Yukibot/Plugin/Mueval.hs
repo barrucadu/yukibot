@@ -46,7 +46,7 @@ import Control.Monad.IO.Class (liftIO)
 import Data.ByteString.Lazy (toStrict)
 import qualified Data.HashMap.Strict as H
 import Data.List (intercalate, isInfixOf, isPrefixOf)
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.Maybe (catMaybes, fromMaybe, isNothing)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -54,7 +54,6 @@ import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import qualified Network.HTTP.Client.MultipartFormData as WM
 import qualified Network.HTTP.Simple as W
 import System.Environment (getEnvironment)
-import System.Exit (ExitCode)
 import System.IO (hGetContents, hPutStr, hClose)
 import System.Process (CreateProcess(..), StdStream(CreatePipe), createProcess, proc, waitForProcess)
 import System.Random (randomIO)
@@ -77,9 +76,9 @@ inlineMonitor :: Table -> Monitor
 inlineMonitor cfg = Monitor
   { monitorHelp = "automatically interpret lines starting with '> ', ':t ', and ':k '"
   , monitorAction = \ev -> case eventMessage ev of
-      msg | "> "  `T.isPrefixOf` msg -> mueval cfg (T.strip $ T.drop 1 msg)
-          | ":t " `T.isPrefixOf` msg -> queryGHCi cfg ":t" (T.strip $ T.drop 2 msg)
-          | ":k " `T.isPrefixOf` msg -> queryGHCi cfg ":k" (T.strip $ T.drop 2 msg)
+      msg | "> "  `T.isPrefixOf` msg -> muevalOrGHCi False cfg Nothing     (T.strip $ T.drop 1 msg)
+          | ":t " `T.isPrefixOf` msg -> muevalOrGHCi False cfg (Just ":t") (T.strip $ T.drop 2 msg)
+          | ":k " `T.isPrefixOf` msg -> muevalOrGHCi False cfg (Just ":k") (T.strip $ T.drop 2 msg)
       _ -> pure ()
   }
 
@@ -87,40 +86,63 @@ inlineMonitor cfg = Monitor
 evalCommand :: Table -> Command
 evalCommand cfg = Command
   { commandHelp = "evaluate Haskell expressions"
-  , commandAction = const (mueval cfg . T.unwords)
+  , commandAction = const (muevalOrGHCi False cfg Nothing . T.unwords)
   }
 
 -- | Get the type of a Haskell expression.
 typeCommand :: Table -> Command
 typeCommand cfg = Command
   { commandHelp = "get the type of a Haskell expression"
-  , commandAction = const (queryGHCi cfg ":t" . T.unwords)
+  , commandAction = const (muevalOrGHCi False cfg (Just ":t") . T.unwords)
   }
 
 -- | Get the kind of a Haskell type.
 kindCommand :: Table -> Command
 kindCommand cfg = Command
   { commandHelp = "get the kind of a Haskell type"
-  , commandAction = const (queryGHCi cfg ":k" . T.unwords)
+  , commandAction = const (muevalOrGHCi False cfg (Just ":k") . T.unwords)
   }
 
 -------------------------------------------------------------------------------
 -- Evaluation
 
--- | Evaluate an expression.
-mueval :: Table -> Text -> BackendM ()
-mueval cfg expr = do
-  (_, out, _) <- liftIO $ do
+-- | Evaluate an expression, or get its type or kind.
+muevalOrGHCi :: Bool -> Table -> Maybe String -> Text -> BackendM ()
+muevalOrGHCi seeded cfg mcmd expr = do
+  expr' <- liftIO $ if seeded || mcmd == Just ":k" then pure (T.unpack expr) else do
     seed <- randomIO :: IO Int
-    let expr' = "let seed = " ++ show seed ++ " in " ++ T.unpack expr
+    pure ("let seed = " ++ show seed ++ " in " ++ T.unpack expr)
 
-    env <- (("LC_ALL", "C"):) <$> getEnvironment
-    runProcess binary (opts ++ baseOpts expr') (Just env) ""
+  (out, err) <- liftIO $ maybe (mueval cfg) (queryGHCi cfg) mcmd expr'
 
   -- mueval doesn't use stderr, grr
-  niceErr <- liftIO (formatErrors out)
-  quickReply . T.pack $
-    if "error:" `isPrefixOf` out then niceErr else formatExpr out
+  let isMueval = isNothing mcmd
+
+  case formatErrors err of
+    Just (short, full)
+      -- If we get a horrible type error froom mueval, use queryGHCi
+      -- to get a nicer one (or show the type, as it might be a
+      -- Typeable thing).
+      | isMueval && "arising from a use of ‘show_M" `isInfixOf` short -> muevalOrGHCi True cfg (Just ":t") (T.pack expr')
+      | otherwise -> case full of
+          Just errors -> do
+            murl <- liftIO (paste errors)
+            quickReply . T.pack $ case murl of
+              Just url -> short ++ " (additional errors suppressed, see " ++ url ++ ")"
+              Nothing ->  short ++ " (additional errors suppressed)"
+          Nothing -> quickReply (T.pack short)
+    Nothing
+      | isMueval  -> quickReply . T.pack $ formatExpr       out
+      | otherwise -> quickReply . T.pack $ formatTypeOrKind out
+
+-- | Evaluate an expression.
+mueval :: Table -> String -> IO (String, String)
+mueval cfg expr = do
+  env <- (("LC_ALL", "C"):) <$> getEnvironment
+  (out, _) <- runProcess binary (opts ++ baseOpts expr) (Just env) ""
+
+  -- mueval doesn't use stderr because it is special.
+  pure $ if "error:" `isPrefixOf` out then ("", out) else (out, "")
 
   where
     binary     = T.unpack (if useStack then stackPath else muevalPath)
@@ -136,22 +158,16 @@ mueval cfg expr = do
       ]
 
 -- | Query GHCi.
-queryGHCi :: Table -> String -> Text -> BackendM ()
+queryGHCi :: Table -> String -> String -> IO (String, String)
 queryGHCi cfg cmd expr = do
-  (_, out, err) <- liftIO $ do
-    env <- (("LC_ALL", "C"):) <$> getEnvironment
-    runProcess binary (opts ++ baseOpts) (Just env) input
-
-  niceErr <- liftIO (formatErrors err)
-
-  quickReply . T.pack $
-    if null niceErr then formatTypeOrKind out else niceErr
+  env <- (("LC_ALL", "C"):) <$> getEnvironment
+  runProcess binary (opts ++ baseOpts) (Just env) input
 
   where
-    input = T.unpack $ case getString "load-file" cfg of
+    input = case getString "load-file" cfg of
       Just loadFile | not (T.null loadFile) ->
-        ":load " <> loadFile <> "\n:m *L\n" <> T.pack cmd <> " " <> expr
-      _ -> T.pack cmd <> " " <> expr
+        ":load " <> T.unpack loadFile <> "\n:m *L\n" <> cmd <> " " <> expr
+      _ -> cmd <> " " <> expr
 
     binary    = T.unpack (if useStack then stackPath else ghciPath)
     opts      = if useStack then ["exec", T.unpack ghciPath, "--"] else []
@@ -167,7 +183,7 @@ queryGHCi cfg cmd expr = do
 --
 -- Copied from 'readProcessWithExitCode', but with environment
 -- setting.
-runProcess :: FilePath -> [String] -> Maybe [(String, String)] -> String -> IO (ExitCode, String, String)
+runProcess :: FilePath -> [String] -> Maybe [(String, String)] -> String -> IO (String, String)
 runProcess cmd args env input = do
     -- Create the process
   (Just inh, Just outh, Just errh, pid) <-
@@ -201,7 +217,7 @@ runProcess cmd args env input = do
   -- Wait for termination
   ex <- waitForProcess pid
 
-  pure (ex, out, err)
+  pure (out, err)
 
 -------------------------------------------------------------------------------
 -- Output
@@ -218,26 +234,19 @@ formatExpr str =
 -- containing " :: " and strip the module prefix.
 formatTypeOrKind :: String -> String
 formatTypeOrKind = go . filter (" :: " `isInfixOf`) . lines where
-  go [line] | l `isPrefixOf` line = go [drop (length l) line]
-            | p `isPrefixOf` line = go [drop (length p) line]
-            | otherwise = line
+  go [line] =
+    let (_, tK) = second (T.unpack . T.strip . T.drop 4) $ T.breakOn " :: " (T.pack line)
+    in "<" ++ tK ++ ">"
   go _ = ""
 
-  l, p :: String
-  l = "*L> "
-  p = "Prelude> "
-
 -- | Format some errors: return the first sentence of the first error
--- message, and upload the full output if there is more than one.
-formatErrors :: String -> IO String
+-- message, and some extra output to paste.
+formatErrors :: String -> Maybe (String, Maybe String)
 formatErrors errs0
-  | null errors = pure ""
-  | length errors == 1 = pure firstSentence
-  | otherwise = do
-      murl <- paste (intercalate sep errors)
-      pure $ case murl of
-        Just url -> firstSentence ++ " (additional errors suppressed, see " ++ url ++ ")"
-        Nothing ->  firstSentence ++ " (additional errors suppressed)"
+  | null errors = Nothing
+  | length errors == 1 = Just (firstSentence, Nothing)
+  | otherwise = Just (firstSentence, Just (intercalate sep errors))
+
   where
     -- List of all errors.
     errors = filter (not . null) . go [] $ lines errs0 where
