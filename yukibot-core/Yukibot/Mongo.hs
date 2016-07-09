@@ -63,4 +63,4 @@ doMongo cfg pn cf = do
 collectionFor :: MongoConfig -> PluginName -> M.Collection
 collectionFor cfg pn
   | T.null (mongoNamespace cfg) = getPluginName pn
-  | otherwise = mongoNamespace cfg <> "-" <> getPluginName pn
+  | otherwise = mongoNamespace cfg <> "_" <> getPluginName pn

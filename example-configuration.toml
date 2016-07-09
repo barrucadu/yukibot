@@ -126,3 +126,14 @@
 
   # Path (relative or absolute) to the load file.
   load-file = "L.hs" ## default: "L.hs"
+
+# MongoDB is used for plugin persistent state. Make sure you have a
+# server running!
+[mongodb]
+  host = "localhost" ## default: "localhost"
+  port = 27017       ## default: 27017
+
+  # All state is held in a collection named after the plugin with an
+  # optional namespace prepended. This is to avoid clashes with any
+  # other uses of the same database you might have.
+  namespace = "yukibot" ## default: "yukibot"
