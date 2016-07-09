@@ -41,6 +41,7 @@ module Yukibot.Types
 import Control.Concurrent.STM (TQueue, TVar)
 import Control.Monad.Catch (Exception)
 import Control.Monad.Trans.Free (FreeT)
+import Data.Bson (Val)
 import Data.ByteString (ByteString)
 import Data.Hashable (Hashable(..))
 import Data.HashMap.Strict (HashMap)
@@ -52,10 +53,10 @@ import qualified Database.MongoDB as M
 -- Events
 
 newtype ChannelName = ChannelName { getChannelName :: Text }
-  deriving (Eq, Ord, Read, Show, Hashable, IsString)
+  deriving (Eq, Ord, Read, Show, Hashable, IsString, Val)
 
 newtype UserName = UserName { getUserName :: Text }
-  deriving (Eq, Ord, Read, Show, Hashable, IsString)
+  deriving (Eq, Ord, Read, Show, Hashable, IsString, Val)
 
 data Event = Event
   { eventHandle  :: BackendHandle
@@ -124,7 +125,7 @@ data BackendF a
 type BackendM = FreeT BackendF IO
 
 newtype BackendName = BackendName { getBackendName :: Text }
-  deriving (Eq, Ord, Read, Show, Hashable, IsString)
+  deriving (Eq, Ord, Read, Show, Hashable, IsString, Val)
 
 -- | A representation of a backend.
 data Backend where
@@ -193,19 +194,19 @@ data RawLogger = RawLogger
 -- message is from. Tags are not included in the backend-specific log
 -- files.
 newtype Tag = Tag { getTag :: Text }
-  deriving (Eq, Ord, Read, Show, Hashable, IsString)
+  deriving (Eq, Ord, Read, Show, Hashable, IsString, Val)
 
 -------------------------------------------------------------------------------
 -- Plugins
 
 newtype PluginName = PluginName { getPluginName :: Text }
-  deriving (Eq, Ord, Read, Show, Hashable, IsString)
+  deriving (Eq, Ord, Read, Show, Hashable, IsString, Val)
 
 newtype MonitorName = MonitorName { getMonitorName :: Text }
-  deriving (Eq, Ord, Read, Show, Hashable, IsString)
+  deriving (Eq, Ord, Read, Show, Hashable, IsString, Val)
 
 newtype CommandName = CommandName { getCommandName :: Text }
-  deriving (Eq, Ord, Read, Show, Hashable, IsString)
+  deriving (Eq, Ord, Read, Show, Hashable, IsString, Val)
 
 -- | A plugin provides a collection of named monitors and commands.
 data Plugin = Plugin

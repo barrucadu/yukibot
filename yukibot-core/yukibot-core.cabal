@@ -29,6 +29,7 @@ library
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base                 >=4.9  && <4.10
+                     , bson                 >=0.3  && <0.4
                      , bytestring           >=0.10 && <0.11
                      , exceptions           >=0.7  && <0.9
                      , filepath             >=1.0  && <2
