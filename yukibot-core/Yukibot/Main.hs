@@ -31,6 +31,9 @@ module Yukibot.Main
 
     -- * Errors
     , CoreError(..)
+    , dieWithErrors
+    , formatCoreError
+    , formatParseError
     ) where
 
 import Control.Arrow ((&&&), (***))
@@ -67,23 +70,13 @@ defaultMain st0 fp = do
       builtinst <- Builtin.initialState cfg
       case makeBot st0 builtinst cfg of
         Right go   -> go
-        Left  errs -> die ("En error while creating the bot: " ++ show errs)
+        Left  errs -> dieWithErrors formatCoreError "creating the bot" (toList errs)
     Left err ->
-      let pos     = errorPos err
-          line    = show (sourceLine   pos)
-          col     = show (sourceColumn pos)
-          msgs    = errorMessages err
-          msgs'   = if null msgs then ["Unknown error."] else map formatMsg msgs
-          msgList = mconcat . map ("\n  • "<>) $ msgs'
-      in die ("An error occurred while parsing the configuration file at line " <> line <> ":, column " <> col <> ":" <> msgList)
-
-  where
-    -- Pretty-print a parse error.
-    formatMsg :: Message -> String
-    formatMsg (SysUnExpect str) = "Unexpected: " <> str
-    formatMsg (UnExpect    str) = "Unexpected: " <> str
-    formatMsg (Expect      str) = "Expected: "   <> str
-    formatMsg (Message     str) = str
+      let pos  = errorPos err
+          line = show (sourceLine   pos)
+          col  = show (sourceColumn pos)
+          errs = errorMessages err
+      in dieWithErrors formatParseError ("parsing the configuration file at line " <> line <> ":, column " <> col) errs
 
 -- | Create a bot with the given state and configuration, the returned
 -- action terminates when all backends are stopped. This automatically
@@ -367,6 +360,59 @@ addPlugin name plugin st
 -- | Get the plugins.
 getPlugins :: BotState -> H.HashMap PluginName (Table -> Either Text Plugin)
 getPlugins = stPlugins
+
+-------------------------------------------------------------------------------
+-- Errors
+
+-- | Pretty-print an error list and die
+dieWithErrors :: (error -> String) -> String -> [error] -> IO ()
+dieWithErrors _ what [] = die ("An unknown error occurred while " <> what <> ".")
+dieWithErrors showE what errs =
+  let showErrs = mconcat . map (("\n  • "<>) . showE)
+  in die ("An error occurred while " <> what <> ":" <> showErrs errs)
+
+-- | Pretty-print a 'CoreError'.
+formatCoreError :: CoreError -> String
+formatCoreError = T.unpack . go where
+  go (BackendNameClash bname) =
+    "The backend " <> getBackendName bname <> " is already defined"
+  go (BackendUnknown bname) =
+    "Unknown backend " <> getBackendName bname
+  go (BackendBadConfig bname sname err) =
+    "The configuration for the backend " <> goB bname sname <> " is invalid: " <> err
+  go (PluginNameClash pname) =
+    "The plugin " <> getPluginName pname <> " is already defined"
+  go (PluginUnknown bname sname pname) =
+    "Unknown plugin " <> getPluginName pname <> " in the backend " <> goB bname sname
+  go (PluginBadConfig bname sname pname err) =
+    "The configuration for the plugin " <> getPluginName pname <> " in the backend " <> goB bname sname <> " is invalid: " <> err
+  go (MonitorNoSuchPlugin bname sname pname mname) =
+    "Unknown plugin in the monitor " <> goM pname mname <> " in the backend " <> goB bname sname
+  go (MonitorMissingName bname sname _) =
+    "Missing monitor name in the backend " <> goB bname sname
+  go (MonitorUnknown bname sname pname mname) =
+    "Unknown monitor " <> goM pname mname <> " in the backend " <> goB bname sname
+  go (CommandNoSuchPlugin bname sname pname cname verb) =
+    "Unknown plugin in the command " <> goC pname cname verb <> " in the backend " <> goB bname sname
+  go (CommandMissingName bname sname _ _) =
+    "Missing command name in the backend " <> goB bname sname
+  go (CommandBadFormat bname sname _) =
+    "Bad command format in the backend " <> goB bname sname
+  go (CommandMissingVerb bname sname pname cname) =
+    "Missing verb in the command " <> goC pname cname "" <> " in the backend " <> goB bname sname
+  go (CommandUnknown bname sname pname cname verb) =
+    "Unknown command " <> goC pname cname verb <> " in the backend " <> goB bname sname
+
+  goB bname sname = "'" <> getBackendName bname <> ".\"" <> sname <> "\"'"
+  goM pname mname = "'" <> getPluginName pname <> ":" <> getMonitorName mname <> "'"
+  goC pname cname verb = "'" <> verb <> " = " <> getPluginName pname <> ":" <> getCommandName cname <> "'"
+
+-- | Pretty-print a parse error.
+formatParseError :: Message -> String
+formatParseError (SysUnExpect str) = "Unexpected: " <> str
+formatParseError (UnExpect    str) = "Unexpected: " <> str
+formatParseError (Expect      str) = "Expected: "   <> str
+formatParseError (Message     str) = str
 
 -------------------------------------------------------------------------------
 -- Utilities
