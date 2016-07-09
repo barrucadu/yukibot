@@ -53,8 +53,12 @@ runBackendM st mc ib pn ev = iterT go where
     k =<< Mongo.queryMongo mc pname selBy sortBy
   go (InsertMongo ds k) = requirePlugin $ \pname ->
     k <* Mongo.insertMongo mc pname ds
+  go (UpsertMongo selBy doc k) = requirePlugin $ \pname ->
+    k <* Mongo.upsertMongo mc pname selBy doc
   go (DeleteMongo selBy k) = requirePlugin $ \pname ->
     k <* Mongo.deleteMongo mc pname selBy
+  go (DoMongo act k) = requirePlugin $ \pname ->
+    k <* Mongo.doMongo mc pname act
 
   requirePlugin f = maybe (error "Expected PluginName in action executing outside of a plugin context.") f pn
 
@@ -144,6 +148,9 @@ isDeified = do
 sendAction :: Action -> BackendM ()
 sendAction act = liftF $ SendAction act ()
 
+-------------------------------------------------------------------------------
+-- ** Database
+
 -- | Query the MongoDB collection for this plugin. Each plugin has its
 -- own collection.
 queryMongo :: M.Selector -> M.Order -> BackendM [M.Document]
@@ -153,6 +160,17 @@ queryMongo selBy sortBy = liftF $ QueryMongo selBy sortBy id
 insertMongo :: [M.Document] -> BackendM ()
 insertMongo ds = liftF $ InsertMongo ds ()
 
+-- | Upsert a value in the MongoDB collection: replace the first
+-- document in the selection if there is one; otherwise insert a new
+-- document.
+upsertMongo :: M.Selector -> M.Document -> BackendM ()
+upsertMongo selBy doc = liftF $ UpsertMongo selBy doc ()
+
 -- | Delete from the MongoDB collection.
 deleteMongo :: M.Selector -> BackendM ()
 deleteMongo selBy = liftF $ DeleteMongo selBy ()
+
+-- | Perform an arbitrary sequence of operations against the MongoDB
+-- collection.
+doMongo :: (M.Collection -> M.Action IO ()) -> BackendM ()
+doMongo act = liftF $ DoMongo act ()

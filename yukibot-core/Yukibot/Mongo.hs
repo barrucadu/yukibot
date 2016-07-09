@@ -45,6 +45,11 @@ queryMongo cfg pn selBy sortBy = doMongo cfg pn $ \c -> M.rest =<< M.find (M.sel
 insertMongo :: MongoConfig -> PluginName -> [M.Document] -> IO ()
 insertMongo cfg pn ds = doMongo cfg pn $ \c -> M.insertMany_ c ds
 
+-- | Upsert a value: replace the first document in the selection if
+-- there is one; otherwise insert a new document.
+upsertMongo :: MongoConfig -> PluginName -> M.Selector -> M.Document -> IO ()
+upsertMongo cfg pn selBy doc = doMongo cfg pn $ \c -> M.upsert (M.Select selBy c) doc
+
 -- | Delete values.
 deleteMongo :: MongoConfig -> PluginName -> M.Selector -> IO ()
 deleteMongo cfg pn selBy = doMongo cfg pn $ \c -> M.delete (M.select selBy c)

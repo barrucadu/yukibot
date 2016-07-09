@@ -117,8 +117,15 @@ data BackendF a
   -- its own collection.
   | InsertMongo [M.Document] a
   -- ^ Insert into the MongoDB collection.
+  | UpsertMongo M.Selector M.Document a
+  -- ^ Upsert a value in the MongoDB collection: replace the first
+  -- document in the selection if there is one; otherwise insert a new
+  -- document.
   | DeleteMongo M.Selector a
   -- ^ Delete from the MongoDB collection.
+  | DoMongo (M.Collection -> M.Action IO ()) a
+  -- ^ Perform an arbitrary sequence of operations against the MongoDB
+  -- collection.
   deriving Functor
 
 -- | The monad in commands and monitors operate.
