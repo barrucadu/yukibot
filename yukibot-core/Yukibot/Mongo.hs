@@ -12,6 +12,7 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
+import Database.MongoDB ((=:))
 import qualified Database.MongoDB as M
 
 import Yukibot.Configuration
@@ -38,24 +39,53 @@ mongoConfig cfg =
      }
 
 -- | Run a query.
-queryMongo :: MongoConfig -> PluginName -> M.Selector -> M.Order -> IO [M.Document]
-queryMongo cfg pn selBy sortBy = doMongo cfg pn $ \c -> M.rest =<< M.find (M.select selBy c) { M.sort = sortBy }
+--
+-- This automatically namespaces by backend signature. The current
+-- backend signature is added as a \"_backendsig\" field to the
+-- selector.
+queryMongo :: MongoConfig -> PluginName -> BackendSig -> M.Selector -> M.Order -> IO [M.Document]
+queryMongo cfg pn bsig selBy sortBy =
+  let selBy' = addBSig bsig selBy
+  in doMongo cfg pn $ \c -> M.rest =<< M.find (M.select selBy' c) { M.sort = sortBy }
 
 -- | Insert values.
-insertMongo :: MongoConfig -> PluginName -> [M.Document] -> IO ()
-insertMongo cfg pn ds = doMongo cfg pn $ \c -> M.insertMany_ c ds
+--
+-- This automatically namespaces by backend signature. The current
+-- backend signature is added as a \"_backendsig\" field to the
+-- inserted documents.
+insertMongo :: MongoConfig -> PluginName -> BackendSig -> [M.Document] -> IO ()
+insertMongo cfg pn bsig ds =
+  let ds' = map (addBSig bsig) ds
+  in doMongo cfg pn $ \c -> M.insertMany_ c ds'
 
 -- | Upsert a value: replace the first document in the selection if
 -- there is one; otherwise insert a new document.
-upsertMongo :: MongoConfig -> PluginName -> M.Selector -> M.Document -> IO ()
-upsertMongo cfg pn selBy doc = doMongo cfg pn $ \c -> M.upsert (M.Select selBy c) doc
+--
+-- This automatically namespaces by backend signature. The current
+-- backend signature is added as a \"_backendsig\" field to the
+-- selector and new document.
+upsertMongo :: MongoConfig -> PluginName -> BackendSig -> M.Selector -> M.Document -> IO ()
+upsertMongo cfg pn bsig selBy doc =
+  let selBy' = addBSig bsig selBy
+      doc'   = addBSig bsig doc
+  in doMongo cfg pn $ \c -> M.upsert (M.Select selBy' c) doc'
 
 -- | Delete values.
-deleteMongo :: MongoConfig -> PluginName -> M.Selector -> IO ()
-deleteMongo cfg pn selBy = doMongo cfg pn $ \c -> M.delete (M.select selBy c)
+--
+-- This automatically namespaces by backend signature. The current
+-- backend signature is added as a \"_backendsig\" field to the
+-- selector.
+deleteMongo :: MongoConfig -> PluginName -> BackendSig -> M.Selector -> IO ()
+deleteMongo cfg pn bsig selBy =
+  let selBy' = addBSig bsig selBy
+  in doMongo cfg pn $ \c -> M.delete (M.select selBy' c)
 
 -- | Run a function over a MongoDB database, using the collection
 -- belonging to a plugin.
+--
+-- This does NOT automatically namespace things by the backend
+-- signature! Make sure to appropriately manage the \"_backendsig\"
+-- field of any documents if you want this scoping!
 doMongo :: MongoConfig -> PluginName -> (M.Collection -> M.Action IO a) -> IO a
 doMongo cfg pn cf = do
   pipe <- M.connect $ mongoHost cfg
@@ -69,3 +99,13 @@ collectionFor :: MongoConfig -> PluginName -> M.Collection
 collectionFor cfg pn
   | T.null (mongoNamespace cfg) = getPluginName pn
   | otherwise = mongoNamespace cfg <> "_" <> getPluginName pn
+
+-- | Add the \"_backendsig\" field to a 'Document'. This overwrites
+-- any prior \"_backendsig\" field.
+addBSig :: BackendSig -> M.Document -> M.Document
+addBSig (bname, sname, index) doc = newBSig : removeOldBSig doc where
+  removeOldBSig = filter ((/="_backendsig") . M.label)
+  newBSig = "_backendsig" =: [ "bname" =: bname
+                             , "sname" =: sname
+                             , "index" =: index
+                             ]

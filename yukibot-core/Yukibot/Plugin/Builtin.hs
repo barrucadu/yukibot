@@ -92,7 +92,7 @@ import Yukibot.Types
 -------------------------------------------------------------------------------
 -- State
 
-type BackendMap v = HashMap (BackendName, Text, Int) v
+type BackendMap v = HashMap BackendSig v
 
 -- | Abstract mutable state.
 newtype BuiltinState = BuiltinState (TVar (BackendMap BackendState))

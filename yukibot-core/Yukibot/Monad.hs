@@ -49,18 +49,22 @@ runBackendM st mc ib pn ev = iterT go where
   go (GetInstance k) = k ib
   go (GetEvent    k) = k ev
   go (GetDeities  k) = k =<< runBackendM st mc ib pn ev (Builtin.getDeities st)
+  go (GetBackendSig k) = k bsig
   go (QueryMongo selBy sortBy k) = requirePlugin $ \pname ->
-    k =<< Mongo.queryMongo mc pname selBy sortBy
+    k =<< Mongo.queryMongo mc pname bsig selBy sortBy
   go (InsertMongo ds k) = requirePlugin $ \pname ->
-    k <* Mongo.insertMongo mc pname ds
+    k <* Mongo.insertMongo mc pname bsig ds
   go (UpsertMongo selBy doc k) = requirePlugin $ \pname ->
-    k <* Mongo.upsertMongo mc pname selBy doc
+    k <* Mongo.upsertMongo mc pname bsig selBy doc
   go (DeleteMongo selBy k) = requirePlugin $ \pname ->
-    k <* Mongo.deleteMongo mc pname selBy
+    k <* Mongo.deleteMongo mc pname bsig selBy
   go (DoMongo act k) = requirePlugin $ \pname ->
     k <* Mongo.doMongo mc pname act
 
   requirePlugin f = maybe (error "Expected PluginName in action executing outside of a plugin context.") f pn
+
+  -- Backend signature
+  bsig = (instBackendName ib, instSpecificName ib, instIndex ib)
 
 -------------------------------------------------------------------------------
 -- * Actions
@@ -136,6 +140,12 @@ getEvent = liftF $ GetEvent id
 -- | Get the deities.
 getDeities :: BackendM [UserName]
 getDeities = liftF $ GetDeities id
+
+-- | Get the \"backend signature\". This can be used to uniquely
+-- identify a backend in the configuration (as long as, e.g., backend
+-- arrays aren't re-ordered).
+getBackendSig :: BackendM BackendSig
+getBackendSig = liftF $ GetBackendSig id
 
 -- | Check if the current user is deified.
 isDeified :: BackendM Bool

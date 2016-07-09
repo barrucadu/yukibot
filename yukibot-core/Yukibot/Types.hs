@@ -8,35 +8,7 @@
 -- License     : MIT
 -- Stability   : experimental
 -- Portability : DeriveFunctor, GADTs, GeneralizedNewtypeDeriving
-module Yukibot.Types
-  ( -- * Events
-    ChannelName(..)
-  , UserName(..)
-  , Event(..)
-  -- * Actions
-  , Action(..)
-  -- * Backends
-  , BackendF(..)
-  , BackendM
-  , BackendName(..)
-  , Backend(..)
-  , InstantiatedBackend(..)
-  , BackendHandle(..)
-  , BackendTerminatedException(..)
-  -- * Logging
-  , Logger(..)
-  , RawLogger(..)
-  , Tag(..)
-  -- * Plugins
-  , PluginName(..)
-  , Plugin(..)
-  , MonitorName(..)
-  , Monitor(..)
-  , CommandName(..)
-  , Command(..)
-  -- * Errors
-  , CoreError(..)
-  ) where
+module Yukibot.Types where
 
 import Control.Concurrent.STM (TQueue, TVar)
 import Control.Monad.Catch (Exception)
@@ -50,7 +22,7 @@ import Data.Text (Text)
 import qualified Database.MongoDB as M
 
 -------------------------------------------------------------------------------
--- Events
+-- * Events
 
 newtype ChannelName = ChannelName { getChannelName :: Text }
   deriving (Eq, Ord, Read, Show, Hashable, IsString, Val)
@@ -67,7 +39,7 @@ data Event = Event
   }
 
 -------------------------------------------------------------------------------
--- Actions
+-- * Actions
 
 data Action
   = Join ChannelName
@@ -83,7 +55,7 @@ data Action
   deriving (Eq, Read, Show)
 
 -------------------------------------------------------------------------------
--- Backends
+-- * Backends
 
 -- | Functor used to construct the 'BackendM' monad.
 -- 'BackendF'/'BackendM' actions operate in the context of a single
@@ -112,20 +84,36 @@ data BackendF a
   -- ^ Get the current event.
   | GetDeities ([UserName] -> a)
   -- ^ Get the deities of this backend.
+  | GetBackendSig (BackendSig -> a)
+  -- ^ Get the \"backend signature\". This can be used to uniquely
+  -- identify a backend in the configuration (as long as, e.g.,
+  -- backend arrays aren't re-ordered).
   | QueryMongo M.Selector M.Order ([M.Document] -> a)
   -- ^ Query the MongoDB collection for this plugin. Each plugin has
   -- its own collection.
+  --
+  -- This automatically namespaces by backend signature.
   | InsertMongo [M.Document] a
   -- ^ Insert into the MongoDB collection.
+  --
+  -- This automatically namespaces by backend signature.
   | UpsertMongo M.Selector M.Document a
   -- ^ Upsert a value in the MongoDB collection: replace the first
   -- document in the selection if there is one; otherwise insert a new
   -- document.
+  --
+  -- This automatically namespaces by backend signature.
   | DeleteMongo M.Selector a
   -- ^ Delete from the MongoDB collection.
+  --
+  -- This automatically namespaces by backend signature.
   | DoMongo (M.Collection -> M.Action IO ()) a
   -- ^ Perform an arbitrary sequence of operations against the MongoDB
   -- collection.
+  --
+  -- This does NOT automatically namespace things by the backend
+  -- signature! Make sure to appropriately manage the \"_backendsig\"
+  -- field of any documents if you want this scoping!
   deriving Functor
 
 -- | The monad in commands and monitors operate.
@@ -156,6 +144,14 @@ data InstantiatedBackend = InstantiatedBackend
 instance Hashable InstantiatedBackend where
   hashWithSalt salt ib = hashWithSalt salt (instBackendName ib, instSpecificName ib, instIndex ib)
 
+-- | The \"signature\" of a backend. This can be used to uniquely
+-- identify a backend in the config, as long as (e.g.) backend arrays
+-- are not re-ordered. The three components are the backend name, the
+-- name of the specific instance, and its position in the array. If
+-- the instance is not in an array, the position is 0 (as if it were
+-- at the start of an array).
+type BackendSig = (BackendName, Text, Int)
+
 -- | A handle to a backend, which can be used to interact with it.
 data BackendHandle = BackendHandle
   { msgQueue     :: TQueue Action
@@ -177,7 +173,7 @@ data BackendTerminatedException = BackendTerminatedException
 instance Exception BackendTerminatedException
 
 -------------------------------------------------------------------------------
--- Logging
+-- * Logging
 
 -- | A logger of events and actions received from and sent to the
 -- backend by the bot.
@@ -204,7 +200,7 @@ newtype Tag = Tag { getTag :: Text }
   deriving (Eq, Ord, Read, Show, Hashable, IsString, Val)
 
 -------------------------------------------------------------------------------
--- Plugins
+-- * Plugins
 
 newtype PluginName = PluginName { getPluginName :: Text }
   deriving (Eq, Ord, Read, Show, Hashable, IsString, Val)
@@ -239,7 +235,7 @@ data Command = Command
   }
 
 -------------------------------------------------------------------------------
--- Errors
+-- * Errors
 
 -- | An error in the core.
 data CoreError
