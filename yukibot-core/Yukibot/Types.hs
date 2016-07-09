@@ -84,22 +84,43 @@ data Action
 -------------------------------------------------------------------------------
 -- Backends
 
+-- | Functor used to construct the 'BackendM' monad.
+-- 'BackendF'/'BackendM' actions operate in the context of a single
+-- command or monitor responding to a single event: there are no
+-- long-lived actions.
 data BackendF a
   = SendAction Action a
+  -- ^ Send an 'Action' to the backend.
   | Reply Text a
+  -- ^ Reply (@Say@ or @Whisper@) to the originator of the event.
   | QuickReply Text a
+  -- ^ Send a message to the channel in which the event originated,
+  -- but without addressing the specific user.
   | GetCommandPrefixIn (Maybe ChannelName) (Text -> a)
+  -- ^ Get the command prefix in a channel. @Nothing@ indicates
+  -- whispers.
   | GetDisabledPluginsIn (Maybe ChannelName) ([PluginName] -> a)
+  -- ^ Get the disabled plugins in a channel.
   | GetEnabledCommandsIn (Maybe ChannelName) ([(PluginName, CommandName, Text)] -> a)
+  -- ^ Get the enabled commands and verbs in a channel.
   | GetEnabledMonitorsIn (Maybe ChannelName) ([(PluginName, MonitorName)] -> a)
+  -- ^ Get the enabled monitors in a channel.
   | GetInstance (InstantiatedBackend -> a)
+  -- ^ Get the instantiated backend.
   | GetEvent (Event -> a)
+  -- ^ Get the current event.
   | GetDeities ([UserName] -> a)
+  -- ^ Get the deities of this backend.
   | QueryMongo M.Selector M.Order ([M.Document] -> a)
+  -- ^ Query the MongoDB collection for this plugin. Each plugin has
+  -- its own collection.
   | InsertMongo [M.Document] a
+  -- ^ Insert into the MongoDB collection.
   | DeleteMongo M.Selector a
+  -- ^ Delete from the MongoDB collection.
   deriving Functor
 
+-- | The monad in commands and monitors operate.
 type BackendM = FreeT BackendF IO
 
 newtype BackendName = BackendName { getBackendName :: Text }
