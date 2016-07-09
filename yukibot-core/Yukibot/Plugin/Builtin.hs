@@ -1,12 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 -- |
 -- Module      : Yukibot.Plugin.Builtin
 -- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Stability   : experimental
--- Portability : OverloadedStrings, TemplateHaskell
+-- Portability : OverloadedStrings
 --
 -- Special functionality that regular plugins cannot provide. This is
 -- mostly a normal plugin, but provides some extra functions used in
@@ -74,8 +73,7 @@ module Yukibot.Plugin.Builtin
 
 import Control.Arrow (second)
 import Control.Concurrent.STM (STM, TVar, atomically, newTVar, modifyTVar, readTVar)
-import Control.Lens ((&), (.~), (%~), at)
-import Control.Lens.TH (makeLenses)
+import Control.Lens (Lens', (&), (.~), (%~), at, lens)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Free (liftF)
 import Data.Foldable (toList)
@@ -119,7 +117,23 @@ data BackendState = BackendState
   -- ^ Users who can execute commands from this plugin.
   }
 
-makeLenses ''BackendState
+defaultPrefix :: Lens' BackendState Text
+defaultPrefix = lens _defaultPrefix $ \a b -> a { _defaultPrefix = b }
+
+channelPrefixes :: Lens' BackendState (HashMap ChannelName Text)
+channelPrefixes = lens _channelPrefixes $ \a b -> a { _channelPrefixes = b }
+
+disabledPlugins :: Lens' BackendState (HashMap (Maybe ChannelName) [PluginName])
+disabledPlugins = lens _disabledPlugins $ \a b -> a { _disabledPlugins = b }
+
+enabledMonitors :: Lens' BackendState (HashMap (Maybe ChannelName) [(PluginName, MonitorName)])
+enabledMonitors = lens _enabledMonitors $ \a b -> a { _enabledMonitors = b }
+
+enabledCommands :: Lens' BackendState (HashMap (Maybe ChannelName) [(PluginName, CommandName, Text)])
+enabledCommands = lens _enabledCommands $ \a b -> a { _enabledCommands = b }
+
+deifiedUsers :: Lens' BackendState [UserName]
+deifiedUsers = lens _deifiedUsers $ \a b -> a { _deifiedUsers = b }
 
 -- | Create the initial state.
 initialState :: Table -> IO BuiltinState
