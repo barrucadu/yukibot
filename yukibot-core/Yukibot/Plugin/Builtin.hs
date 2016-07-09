@@ -207,22 +207,29 @@ plugin :: BuiltinState -> config -> Either error Plugin
 plugin state _ = Right Plugin
   { pluginHelp = "special built-in functionality"
   , pluginMonitors = H.empty
-  , pluginCommands = H.fromList $ map (\(cn, cf) -> (cn, wrapCommand cf state))
-    [ ("set-default-prefix",   setDefaultPrefix)
-    , ("set-channel-prefix",   setChannelPrefix)
-    , ("unset-channel-prefix", unsetChannelPrefix)
-    , ("enable-plugin",  onOffPlugin  On)
-    , ("disable-plugin", onOffPlugin  Off)
-    , ("start-monitor",  onOffMonitor On)
-    , ("stop-monitor",   onOffMonitor Off)
-    , ("bind",       bindCommand)
-    , ("unbind",     unbindCommand)
-    , ("unbind-all", unbindAllCommand)
-    , ("deify",      deify)
-    , ("degrade",    degrade)
-    , ("help", help)
-    ]
+  , pluginCommands = H.fromList $
+      map (\(cn, cf) -> (cn, wrapCommand cf state)) privileged ++
+      map (\(cn, cf) -> (cn, cf state)) unprivileged
   }
+  where
+    privileged =
+      [ ("set-default-prefix",   setDefaultPrefix)
+      , ("set-channel-prefix",   setChannelPrefix)
+      , ("unset-channel-prefix", unsetChannelPrefix)
+      , ("enable-plugin",  onOffPlugin  On)
+      , ("disable-plugin", onOffPlugin  Off)
+      , ("start-monitor",  onOffMonitor On)
+      , ("stop-monitor",   onOffMonitor Off)
+      , ("bind",       bindCommand)
+      , ("unbind",     unbindCommand)
+      , ("unbind-all", unbindAllCommand)
+      , ("deify",      deify)
+      , ("degrade",    degrade)
+      ]
+
+    unprivileged =
+      [ ("help", help)
+      ]
 
 -- | Set the default prefix for a backend.
 setDefaultPrefix :: BuiltinState -> Command
