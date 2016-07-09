@@ -22,6 +22,7 @@ import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 
 import Yukibot.Core
+import Yukibot.Extra
 
 channelPlugin :: config -> Either error Plugin
 channelPlugin _ = Right Plugin

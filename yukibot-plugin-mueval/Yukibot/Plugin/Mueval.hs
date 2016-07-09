@@ -40,25 +40,22 @@ module Yukibot.Plugin.Mueval where
 import Control.Arrow (second)
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (newEmptyMVar, takeMVar, putMVar)
-import Control.Exception (SomeException, catch, evaluate)
+import Control.Exception (evaluate)
 import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
-import Data.ByteString.Lazy (toStrict)
 import qualified Data.HashMap.Strict as H
 import Data.List (intercalate, isInfixOf, isPrefixOf)
 import Data.Maybe (catMaybes, fromMaybe, isNothing)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Encoding (decodeUtf8, encodeUtf8)
-import qualified Network.HTTP.Client.MultipartFormData as WM
-import qualified Network.HTTP.Simple as W
 import System.Environment (getEnvironment)
 import System.IO (hGetContents, hPutStr, hClose)
 import System.Process (CreateProcess(..), StdStream(CreatePipe), createProcess, proc, waitForProcess)
 import System.Random (randomIO)
 
 import Yukibot.Core
+import Yukibot.Extra
 
 muevalPlugin :: Table -> Either error Plugin
 muevalPlugin cfg = Right Plugin
@@ -215,7 +212,7 @@ runProcess cmd args env input = do
   hClose errh
 
   -- Wait for termination
-  ex <- waitForProcess pid
+  _ <- waitForProcess pid
 
   pure (out, err)
 
@@ -282,17 +279,3 @@ formatErrors errs0
     sep = "\n-------------------------------------------------\n\n"
 
     isEmpty = (=="") . T.strip . T.pack
-
--- | Upload some text to sprunge and return the response body (the
--- URL).
-paste :: String -> IO (Maybe String)
-paste txt = upload `catch` handler where
-  upload = do
-    req <- W.parseRequest "http://sprunge.us"
-    resp <- W.httpLbs =<< WM.formDataBody [WM.partBS "sprunge" (encodeUtf8 (T.pack txt))] req
-    pure $ if W.getResponseStatusCode resp == 200
-      then Just . filter (/='\n') . T.unpack . decodeUtf8 . toStrict $ W.getResponseBody resp
-      else Nothing
-
-  handler :: SomeException -> IO (Maybe a)
-  handler = const $ pure Nothing

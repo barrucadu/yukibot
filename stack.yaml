@@ -8,10 +8,12 @@ packages:
 - yukibot/
 - yukibot-backend-irc/
 - yukibot-core/
+- yukibot-extra/
 - yukibot-plugin-channel//
 - yukibot-plugin-hello/
 - yukibot-plugin-linkinfo/
 - yukibot-plugin-mueval/
+- yukibot-plugin-trigger/
 
 # Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
 extra-deps: []

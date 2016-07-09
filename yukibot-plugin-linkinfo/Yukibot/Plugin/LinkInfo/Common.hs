@@ -8,16 +8,13 @@
 -- Portability : DeriveFunctor
 module Yukibot.Plugin.LinkInfo.Common where
 
-import Control.Monad.Catch (SomeException, catch)
-import Data.Aeson (Object, decode')
-import Data.ByteString.Lazy (ByteString, toStrict)
 import Data.Functor.Contravariant (Contravariant(..))
 import Data.Text (Text, pack, strip, unpack)
-import Data.Text.Encoding (decodeUtf8')
 import Text.XML.HXT.Core ((//>), readString, hasName, getText, runX, withParseHTML, withWarnings, yes, no)
 import Text.XML.HXT.TagSoup (withTagSoup)
-import qualified Network.HTTP.Simple as W
 import Network.URI (URI)
+
+import Yukibot.Extra (downloadText)
 
 data LinkHandler a = LinkHandler
   { lhPredicate :: a -> Bool
@@ -70,28 +67,6 @@ fetchTitle uri = do
 
     dequote ('\"':xs) | last xs == '\"' = (init . tail) xs
     dequote xs = xs
-
--- |Download some JSON over HTTP.
-downloadJson :: URI -> IO (Maybe Object)
-downloadJson uri = maybe Nothing decode' <$> download uri
-
--- | Download a file. Assume UTF-8 encoding.
-downloadText :: URI -> IO (Maybe Text)
-downloadText uri = maybe Nothing decodeUtf8 <$> download uri where
-  decodeUtf8 = either (const Nothing) Just . decodeUtf8' . toStrict
-
--- | Download a file.
-download :: URI -> IO (Maybe ByteString)
-download uri = fetch `catch` handler where
-  fetch = do
-    req  <- W.parseRequest (show uri)
-    resp <- W.httpLbs req
-    pure $ if W.getResponseStatusCode resp == 200
-      then Just (W.getResponseBody resp)
-      else Nothing
-
-  handler :: SomeException -> IO (Maybe a)
-  handler = const $ pure Nothing
 
 -- | Split a string by a character.
 wordsWhen :: (Char -> Bool) -> String -> [String]

@@ -23,6 +23,7 @@ import Network.URI (URI(..), URIAuth(..))
 import Text.Read (readMaybe)
 
 import Yukibot.Configuration
+import Yukibot.Extra
 
 import Yukibot.Plugin.LinkInfo.Common
 
@@ -63,7 +64,7 @@ getVid uri = case uriAuthority uri of
 getLinkInfo :: Text -> Text -> IO (LinkInfo Text)
 getLinkInfo apikey vid = do
   -- Query the API
-  res <- downloadJson apiuri
+  res <- downloadJSON apiuri
 
   -- Extract the information
   let ytinfo = res >>= getLinkInfoFromJson
