@@ -181,7 +181,6 @@ initialDefaultMonitors = buildBackendMap $ \cfg -> Just
   [ (PluginName pname, MonitorName mname)
   | monitor <- getStrings "monitors" cfg
   , let (pname, mname) = second (T.drop 1) (T.breakOn ":" monitor)
-  , not (T.null mname)
   ]
 
 -- | Get the default commands.
@@ -190,8 +189,6 @@ initialDefaultCommands = buildBackendMap $ \cfg -> Just
   [ (PluginName pname, CommandName cname, verb)
   | (verb, VString cmd) <- maybe [] H.toList $ getTable "commands" cfg
   , let (pname, cname) = second (T.drop 1) (T.breakOn ":" cmd)
-  , not (T.null cname)
-  , not (null $ T.words verb)
   ]
 
 -- | Get the deities.

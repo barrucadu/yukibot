@@ -248,8 +248,20 @@ data CoreError
   -- ^ A plugin was requested but it is unknown.
   | PluginBadConfig !BackendName !Text !PluginName !Text
   -- ^ The configuration for a plugin is invalid.
+  | MonitorNoSuchPlugin !BackendName !Text !PluginName !MonitorName
+  -- ^ A monitor was requested from a plugin which doesn't exist.
+  | MonitorMissingName !BackendName !Text !PluginName
+  -- ^ A monitor was requested but no name given.
   | MonitorUnknown !BackendName !Text !PluginName !MonitorName
   -- ^ A monitor was requested but it is unknown.
-  | CommandUnknown !BackendName !Text !PluginName !CommandName
+  | CommandNoSuchPlugin !BackendName !Text !PluginName !CommandName !Text
+  -- ^ A command was requested from a plugin which doesn't exist.
+  | CommandMissingName !BackendName !Text !PluginName !Text
+  -- ^ A command definition is missing the name of the command.
+  | CommandBadFormat !BackendName !Text !Text
+  -- ^ A command definition is something other than "<string> = <string>".
+  | CommandMissingVerb !BackendName !Text !PluginName !CommandName
+  -- ^ A command definition but has an empty verb.
+  | CommandUnknown !BackendName !Text !PluginName !CommandName !Text
   -- ^ A command was requested but it is unknown.
   deriving (Eq, Ord, Read, Show)

@@ -19,6 +19,7 @@ module Yukibot.Main
     , instantiateBackends
     , instantiateBackend
     , instantiatePlugins
+    , checkCommandsAndMonitors
 
       -- * State
     , BotState
@@ -32,15 +33,15 @@ module Yukibot.Main
     , CoreError(..)
     ) where
 
-import Control.Arrow ((&&&))
+import Control.Arrow ((&&&), (***))
 import Control.Monad (void)
 import Control.Monad.Catch (SomeException, catch)
 import Data.Either (lefts, rights)
 import Data.Foldable (toList)
 import qualified Data.HashMap.Strict as H
 import Data.List (isPrefixOf, nub)
-import Data.List.NonEmpty (NonEmpty(..), fromList)
-import Data.Maybe (isNothing, fromMaybe)
+import Data.List.NonEmpty (NonEmpty(..), fromList, nonEmpty)
+import Data.Maybe (isNothing, fromMaybe, mapMaybe)
 import Data.Monoid ((<>), mconcat)
 import Data.Semigroup (Semigroup, sconcat)
 import Data.Text (Text, unpack)
@@ -239,7 +240,11 @@ instantiateBackend allPlugins bf bname sname index cfg = case bf sname cfg of
         b' = b { unrawLogFile = maybe (unrawLogFile b) unpack $ getString "logfile"    cfg
                , rawLogFile   = maybe (rawLogFile   b) unpack $ getString "rawlogfile" cfg
                }
-    in InstantiatedBackend bname sname index b' <$> mangle id (:[]) enabledPlugins
+    in case mangle id (:[]) enabledPlugins of
+         Right plugins -> case checkCommandsAndMonitors plugins bname sname cfg of
+           Just errs -> Left errs
+           Nothing -> Right (InstantiatedBackend bname sname index b' plugins)
+         Left errs -> Left errs
   Left err -> Left (BackendBadConfig bname sname err:|[])
 
 -- | Configure and instantiate all plugins of a backend.
@@ -272,6 +277,49 @@ instantiatePlugins allPlugins bname name cfg =
     -- Get the configuration of a plugin
     pcfg :: PluginName -> Table
     pcfg n = fromMaybe H.empty $ getNestedTable ["plugin", getPluginName n] cfg
+
+-- | Check that all monitors and commands specified in the
+-- configuration do actually exist.
+checkCommandsAndMonitors :: [(PluginName, Plugin)]
+  -- ^ The instantiated plugins.
+  -> BackendName
+  -- ^ The name of the backend
+  -> Text
+  -- ^ The name of this particular instance of the backend.
+  -> Table
+  -- ^ The configuration.
+  -> Maybe (NonEmpty CoreError)
+checkCommandsAndMonitors plugins bname sname cfg = nonEmpty (badMonitors ++ badCommands) where
+  badCommands = mapMaybe checkCommand . maybe [] H.toList $ getTable "commands" cfg
+  badMonitors = mapMaybe checkMonitor $ getStrings "monitors" cfg
+
+  -- Check a command definition for correctness.
+  checkCommand (verb, VString cmd) =
+    let (pname, cname) = (PluginName *** CommandName . T.drop 1) (T.breakOn ":" cmd)
+    in case lookup pname plugins of
+         Just plugin
+           | T.null (getCommandName cname) ->
+               Just (CommandMissingName bname sname pname verb)
+           | null (T.words verb) ->
+               Just (CommandMissingVerb bname sname pname cname)
+           | cname `notElem` H.keys (pluginCommands plugin) ->
+               Just (CommandUnknown bname sname pname cname verb)
+           | otherwise -> Nothing
+         Nothing -> Just (CommandNoSuchPlugin bname sname pname cname verb)
+  checkCommand (verb, _) = Just (CommandBadFormat bname sname verb)
+
+  -- Check a monitor definition for correctness.
+  checkMonitor monitor =
+    let (pname, mname) = (PluginName *** MonitorName . T.drop 1) (T.breakOn ":" monitor)
+    in case lookup pname plugins of
+          Just plugin
+            | T.null (getMonitorName mname) ->
+                Just (MonitorMissingName bname sname pname)
+            | mname `notElem` H.keys (pluginMonitors plugin) ->
+                Just (MonitorUnknown bname sname pname mname)
+            | otherwise -> Nothing
+          Nothing -> Just (MonitorNoSuchPlugin bname sname pname mname)
+
 
 -------------------------------------------------------------------------------
 -- State
