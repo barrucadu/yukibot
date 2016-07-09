@@ -53,6 +53,7 @@ import Yukibot.Backend
 import Yukibot.Configuration
 import Yukibot.Monad
 import qualified Yukibot.Plugin.Builtin as Builtin
+import Yukibot.Mongo (mongoConfig)
 import Yukibot.Types
 
 -- | A default @main@ function: parse the config file and either
@@ -117,25 +118,29 @@ makeBot st0 builtinst cfg = do
       -- deterministic when multiple plugins fire on the same event,
       -- and in practice most events are only handled by one plugin,
       -- so this saves needless forking as well.
-      handle ev = runBackendM builtinst ib ev $ do
+      handle ev = do
+        -- Helpers to run a backend action
+        let runP pn = runBackendM builtinst (mongoConfig cfg) ib (Just pn) ev
+        let runNP   = runBackendM builtinst (mongoConfig cfg) ib Nothing ev
+
         -- First run the monitors
-        monitors <- getChannelMonitors builtinst
-        mapM_ (\(Monitor _ m) -> m ev) monitors
+        monitors <- runNP (getChannelMonitors builtinst)
+        mapM_ (\(pn, Monitor _ m) -> runP pn (m ev)) monitors
 
         -- Then the commands
-        commands <- getChannelCommands builtinst
-        mapM_ (\(Command _ c, args) -> c ev args) commands
+        commands <- runNP (getChannelCommands builtinst)
+        mapM_ (\(pn, Command _ c, args) -> runP pn (c ev args)) commands
 
     -- Kill a backend
     killBackend h = stopBackend h `catch` (\(_ :: SomeException) -> pure ())
 
 -- | Return all monitors enabled in this channel.
-getChannelMonitors :: Builtin.BuiltinState -> BackendM [Monitor]
+getChannelMonitors :: Builtin.BuiltinState -> BackendM [(PluginName, Monitor)]
 getChannelMonitors st = do
   ib      <- getInstance
   enabled <- Builtin.getEnabledMonitors st
 
-  pure [ mon
+  pure [ (pname, mon)
        | (pname, plugin) <- instPlugins ib
        , (mn, mon) <- H.toList $ pluginMonitors plugin
        , (pname, mn) `elem` enabled
@@ -143,7 +148,7 @@ getChannelMonitors st = do
 
 -- | Return all commands enabled in this channel which match the given
 -- message.
-getChannelCommands :: Builtin.BuiltinState -> BackendM [(Command, [Text])]
+getChannelCommands :: Builtin.BuiltinState -> BackendM [(PluginName, Command, [Text])]
 getChannelCommands st = do
   ib      <- getInstance
   ev      <- getEvent
@@ -155,7 +160,7 @@ getChannelCommands st = do
 
   pure $ case checkPrefixes ev prefixes of
     Just rest ->
-      [ (cmd, args)
+      [ (pname, cmd, args)
       | (pname, plugin) <- instPlugins ib
       , (cn, cmd) <- H.toList $ pluginCommands plugin
       , args <- checkVerb pname cn (T.words rest) enabled

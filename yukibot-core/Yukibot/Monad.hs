@@ -9,9 +9,11 @@ module Yukibot.Monad where
 import Control.Applicative ((<*))
 import Control.Monad.Trans.Free (liftF, iterT)
 import Data.Text (Text)
+import qualified Database.MongoDB as M
 
 import qualified Yukibot.Backend as Backend
 import qualified Yukibot.Plugin.Builtin as Builtin
+import qualified Yukibot.Mongo as Mongo
 import Yukibot.Types
 
 -------------------------------------------------------------------------------
@@ -20,28 +22,41 @@ import Yukibot.Types
 -- | Run a 'BackendM' computation.
 runBackendM :: Builtin.BuiltinState
   -- ^ The state of the \"builtin\" plugin.
+  -> Mongo.MongoConfig
+  -- ^ Connection info for the MongoDB database.
   -> InstantiatedBackend
   -- ^ The instantiated backend.
+  -> Maybe PluginName
+  -- ^ The currently-executing plugin. If @Nothing@, actions which
+  -- need this (such as MongoDB queries) fail with 'error'.
   -> Event
   -- ^ The current event.
   -> BackendM a
   -- ^ The effectful computation to perform.
   -> IO a
-runBackendM st ib ev = iterT go where
+runBackendM st mc ib pn ev = iterT go where
   go (Reply msg k) = k <* Backend.sendAction (eventHandle ev) (case eventChannel ev of
     Just cname -> Say cname [eventUser ev] msg
     Nothing    -> Whisper (eventUser ev) msg)
   go (QuickReply msg k) = k <* Backend.sendAction (eventHandle ev) (case eventChannel ev of
     Just cname -> Say cname [] msg
     Nothing    -> Whisper (eventUser ev) msg)
-  go (GetCommandPrefixIn   mcname k) = k =<< runBackendM st ib ev (Builtin.getCommandPrefixIn   st mcname)
-  go (GetDisabledPluginsIn mcname k) = k =<< runBackendM st ib ev (Builtin.getDisabledPluginsIn st mcname)
-  go (GetEnabledCommandsIn mcname k) = k =<< runBackendM st ib ev (Builtin.getEnabledCommandsIn st mcname)
-  go (GetEnabledMonitorsIn mcname k) = k =<< runBackendM st ib ev (Builtin.getEnabledMonitorsIn st mcname)
+  go (GetCommandPrefixIn   mcname k) = k =<< runBackendM st mc ib pn ev (Builtin.getCommandPrefixIn   st mcname)
+  go (GetDisabledPluginsIn mcname k) = k =<< runBackendM st mc ib pn ev (Builtin.getDisabledPluginsIn st mcname)
+  go (GetEnabledCommandsIn mcname k) = k =<< runBackendM st mc ib pn ev (Builtin.getEnabledCommandsIn st mcname)
+  go (GetEnabledMonitorsIn mcname k) = k =<< runBackendM st mc ib pn ev (Builtin.getEnabledMonitorsIn st mcname)
   go (SendAction act k) = k <* Backend.sendAction (eventHandle ev) act
   go (GetInstance k) = k ib
   go (GetEvent    k) = k ev
-  go (GetDeities  k) = k =<< runBackendM st ib ev (Builtin.getDeities st)
+  go (GetDeities  k) = k =<< runBackendM st mc ib pn ev (Builtin.getDeities st)
+  go (QueryMongo selBy sortBy k) = requirePlugin $ \pname ->
+    k =<< Mongo.queryMongo mc pname selBy sortBy
+  go (InsertMongo ds k) = requirePlugin $ \pname ->
+    k <* Mongo.insertMongo mc pname ds
+  go (DeleteMongo selBy k) = requirePlugin $ \pname ->
+    k <* Mongo.deleteMongo mc pname selBy
+
+  requirePlugin f = maybe (error "Expected PluginName in action executing outside of a plugin context.") f pn
 
 -------------------------------------------------------------------------------
 -- * Actions
@@ -128,3 +143,16 @@ isDeified = do
 -- | Send a backend action.
 sendAction :: Action -> BackendM ()
 sendAction act = liftF $ SendAction act ()
+
+-- | Query the MongoDB collection for this plugin. Each plugin has its
+-- own collection.
+queryMongo :: M.Selector -> M.Order -> BackendM [M.Document]
+queryMongo selBy sortBy = liftF $ QueryMongo selBy sortBy id
+
+-- | Insert into the MongoDB collection.
+insertMongo :: [M.Document] -> BackendM ()
+insertMongo ds = liftF $ InsertMongo ds ()
+
+-- | Delete from the MongoDB collection.
+deleteMongo :: M.Selector -> BackendM ()
+deleteMongo selBy = liftF $ DeleteMongo selBy ()

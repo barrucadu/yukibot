@@ -46,6 +46,7 @@ import Data.Hashable (Hashable(..))
 import Data.HashMap.Strict (HashMap)
 import Data.String (IsString)
 import Data.Text (Text)
+import qualified Database.MongoDB as M
 
 -------------------------------------------------------------------------------
 -- Events
@@ -94,6 +95,9 @@ data BackendF a
   | GetInstance (InstantiatedBackend -> a)
   | GetEvent (Event -> a)
   | GetDeities ([UserName] -> a)
+  | QueryMongo M.Selector M.Order ([M.Document] -> a)
+  | InsertMongo [M.Document] a
+  | DeleteMongo M.Selector a
   deriving Functor
 
 type BackendM = FreeT BackendF IO
