@@ -267,4 +267,10 @@ data CoreError
   -- ^ A command definition but has an empty verb.
   | CommandUnknown !BackendName !Text !PluginName !CommandName !Text
   -- ^ A command was requested but it is unknown.
+  | DisabledMissingChannel !BackendName !Text
+  -- ^ A disabled monitor declaration is missing the name of the channel.
+  | DisabledBadFormat !BackendName !Text !ChannelName
+  -- ^ A disabled monitor declaration is something other than "<string> = [<string>]"
+  | DisabledError !BackendName !Text !ChannelName !CoreError
+  -- ^ A disabled monitor declaration has some other error in it.
   deriving (Eq, Ord, Read, Show)

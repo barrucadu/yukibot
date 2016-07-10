@@ -97,6 +97,11 @@
     # This is useful to avoid clashes with other bots.
     channel-prefixes = { "#cs-york" = "@" } ## default: {}
 
+    # Some channels might not want all the default monitors: these can
+    # be disabled!
+    [backend.irc."irc.freenode.net".disabled]
+      "#cs-york-dev" = [ "hello:hello" ]
+
     # Backend-specific plugin configuration.
     [backend.irc."irc.freenode.net".plugin.hello]
       message = "Salutations"

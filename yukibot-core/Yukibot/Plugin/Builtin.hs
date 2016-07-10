@@ -1,11 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- |
 -- Module      : Yukibot.Plugin.Builtin
 -- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Stability   : experimental
--- Portability : OverloadedStrings
+-- Portability : OverloadedStrings, RankNTypes
 --
 -- Special functionality that regular plugins cannot provide. This is
 -- mostly a normal plugin, but provides some extra functions used in
@@ -73,13 +74,14 @@ module Yukibot.Plugin.Builtin
 
 import Control.Arrow (second)
 import Control.Concurrent.STM (STM, TVar, atomically, newTVar, modifyTVar, readTVar)
-import Control.Lens (Lens', (&), (.~), (%~), at, lens)
+import Control.Lens (Lens', (&), (.~), (%~), at, lens, view)
+import Control.Monad (unless)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Free (liftF)
 import Data.Foldable (toList)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as H
-import Data.List (nub, sort)
+import Data.List ((\\), nub, sort)
 import Data.Maybe (fromMaybe, fromJust)
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -145,6 +147,7 @@ initialState cfg0 = atomically $ do
     defPrefixes = initialDefaultPrefixes cfg0
     chanPrefixes = initialChannelPrefixes cfg0
     defMonitors = initialDefaultMonitors cfg0
+    defDisabled = initialDefaultDisabled cfg0
     defCommands = initialDefaultCommands cfg0
     deities = initialDeities cfg0
     backends = nub $ H.keys defPrefixes ++
@@ -156,7 +159,8 @@ initialState cfg0 = atomically $ do
     state b = BackendState { _defaultPrefix   = H.lookupDefault "!" b defPrefixes
                            , _channelPrefixes = H.lookupDefault H.empty b chanPrefixes
                            , _disabledPlugins = H.empty
-                           , _enabledMonitors = H.empty
+                           , _enabledMonitors = initialEnabledMonitors (H.lookupDefault H.empty b defDisabled)
+                                                                       (H.lookupDefault [] b defMonitors)
                            , _defaultMonitors = H.lookupDefault [] b defMonitors
                            , _enabledCommands = H.empty
                            , _defaultCommands = H.lookupDefault [] b defCommands
@@ -183,6 +187,18 @@ initialDefaultMonitors = buildBackendMap $ \cfg -> Just
   , let (pname, mname) = second (T.drop 1) (T.breakOn ":" monitor)
   ]
 
+-- | Get the monitors disabled by default.
+initialDefaultDisabled :: Table -> BackendMap (H.HashMap ChannelName [(PluginName, MonitorName)])
+initialDefaultDisabled = buildBackendMap $ \cfg -> Just . H.fromList $
+  [ (ChannelName cname, map toDisabled (toList mons))
+  | (cname, VArray mons) <- maybe [] H.toList $ getTable "disabled" cfg
+  ]
+  where
+    toDisabled (VString monitor) =
+      let (pname, mname) = second (T.drop 1) (T.breakOn ":" monitor)
+      in (PluginName pname, MonitorName mname)
+    toDisabled _ = error "Malformed 'disabled' table! This should have been caught earlier than here!"
+
 -- | Get the default commands.
 initialDefaultCommands :: Table -> BackendMap [(PluginName, CommandName, Text)]
 initialDefaultCommands = buildBackendMap $ \cfg -> Just
@@ -194,6 +210,19 @@ initialDefaultCommands = buildBackendMap $ \cfg -> Just
 -- | Get the deities.
 initialDeities :: Table -> BackendMap [UserName]
 initialDeities = buildBackendMap (Just . map UserName . getStrings "deities")
+
+-- | Get the initial enabled monitors: this just populates the channel
+-- entries where there are *disabled* monitors, as those are the ones
+-- which deviate from the backend-default.
+initialEnabledMonitors :: H.HashMap ChannelName [(PluginName, MonitorName)]
+  -- ^ The disabled monitors.
+  -> [(PluginName, MonitorName)]
+  -- ^ The default-enabled monitors.
+  -> H.HashMap (Maybe ChannelName) [(PluginName, MonitorName)]
+initialEnabledMonitors disabled enabled = H.fromList
+  [ (Just cname, enabled \\ disabledHere)
+  | (cname, disabledHere) <- H.toList disabled
+  ]
 
 -------------------------------------------------------------------------------
 -- Plugin
@@ -486,10 +515,17 @@ setupNewChannel :: BuiltinState
   -> Maybe ChannelName
   -> STM ()
 setupNewChannel (BuiltinState statesVar) ib cname = do
-  state <- bmLookup ib <$> readTVar statesVar
-  let state'  = state  & enabledMonitors . at cname .~ Just (_defaultMonitors state)
-  let state'' = state' & enabledCommands . at cname .~ Just (_defaultCommands state)
-  modifyTVar statesVar (bmInsert ib state'')
+  setupDefault enabledMonitors _defaultMonitors
+  setupDefault enabledCommands _defaultCommands
+
+  where
+    -- Set up default values, if unset.
+    setupDefault :: Lens' BackendState (HashMap (Maybe ChannelName) a) -> (BackendState -> a) -> STM ()
+    setupDefault l def = do
+      state <- bmLookup ib <$> readTVar statesVar
+      unless (H.member cname $ view l state) $ do
+        let state' = state & l . at cname .~ Just (def state)
+        modifyTVar statesVar (bmInsert ib state')
 
 -- | Look up a value in a 'BackendMap'.
 bmLookup :: InstantiatedBackend -> BackendMap v -> v

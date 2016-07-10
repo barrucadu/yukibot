@@ -282,8 +282,9 @@ checkCommandsAndMonitors :: [(PluginName, Plugin)]
   -> Table
   -- ^ The configuration.
   -> Maybe (NonEmpty CoreError)
-checkCommandsAndMonitors plugins bname sname cfg = nonEmpty (badMonitors ++ badCommands) where
+checkCommandsAndMonitors plugins bname sname cfg = nonEmpty (badMonitors ++ badCommands ++ badDisabled) where
   badCommands = mapMaybe checkCommand . maybe [] H.toList $ getTable "commands" cfg
+  badDisabled = concatMap checkDisabled . maybe [] H.toList $ getTable "disabled" cfg
   badMonitors = mapMaybe checkMonitor $ getStrings "monitors" cfg
 
   -- Check a command definition for correctness.
@@ -300,6 +301,17 @@ checkCommandsAndMonitors plugins bname sname cfg = nonEmpty (badMonitors ++ badC
            | otherwise -> Nothing
          Nothing -> Just (CommandNoSuchPlugin bname sname pname cname verb)
   checkCommand (verb, _) = Just (CommandBadFormat bname sname verb)
+
+  -- Check a default-disabled monitor for correctness.
+  checkDisabled (cname, VArray mons)
+    | not $ all (\case { VString _ -> True; _ -> False }) mons =
+        [DisabledBadFormat bname sname (ChannelName cname)]
+    | otherwise = flip mapMaybe (toList mons) $ \(VString mon) -> case checkMonitor mon of
+        Just err -> Just (DisabledError bname sname (ChannelName cname) err)
+        Nothing
+          | T.null cname -> Just (DisabledMissingChannel bname sname)
+          | otherwise -> Nothing
+  checkDisabled (cname, _) = [DisabledBadFormat bname sname (ChannelName cname)]
 
   -- Check a monitor definition for correctness.
   checkMonitor monitor =
@@ -402,6 +414,12 @@ formatCoreError = T.unpack . go where
     "Missing verb in the command " <> goC pname cname "" <> " in the backend " <> goB bname sname
   go (CommandUnknown bname sname pname cname verb) =
     "Unknown command " <> goC pname cname verb <> " in the backend " <> goB bname sname
+  go (DisabledMissingChannel bname sname) =
+    "Missing channel name in a disabled monitor declaration in the backend " <> goB bname sname
+  go (DisabledBadFormat bname sname cname) =
+    "Bad disabled monitor declaration for the channel " <> getChannelName cname <> " in the backend " <> goB bname sname
+  go (DisabledError bname sname cname err) =
+    "Bad monitor in disabled monitor declaration for the channel " <> getChannelName cname <> " in the backend " <> goB bname sname <> ": " <> go err
 
   goB bname sname = "'" <> getBackendName bname <> ".\"" <> sname <> "\"'"
   goM pname mname = "'" <> getPluginName pname <> ":" <> getMonitorName mname <> "'"
