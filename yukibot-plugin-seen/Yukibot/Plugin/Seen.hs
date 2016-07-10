@@ -54,14 +54,15 @@ seenMonitor = Monitor
 seenCommand :: Command
 seenCommand = Command
   { commandHelp = "get the last thing said by a user"
-  , commandAction = \ev args -> case (,) <$> eventChannel ev <*> listToMaybe args of
-      Just (cname, user) -> do
+  , commandAction = \ev args -> case (eventChannel ev, listToMaybe args) of
+      (Just cname, Just user) -> do
         let u = UserName user
         seen <- queryMongo [ "user" =: u, "channel" =: cname ] []
         quickReply $ case seen of
           (doc:_) -> formatDoc u (at "when" doc) (at "message" doc)
           [] -> "I haven't seen " <> user <> " say anything yet"
-      Nothing -> reply "The seen command only works inside a channel, silly."
+      (Nothing, _) -> reply "The seen command only works inside a channel, silly."
+      (_, Nothing) -> reply "You need to name a user, silly."
   }
   where
     -- Format a 'seen' record.
