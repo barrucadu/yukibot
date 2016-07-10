@@ -13,8 +13,7 @@ cache:
 # Build matrix configuration
 matrix:
   include:
-  - env: RESOLVER="nightly"
-    addons: {apt: {packages: [libgmp-dev]}}
+  - addons: {apt: {packages: [libgmp-dev]}}
 
 # Download and unpack the stack executable
 before_install:
@@ -24,4 +23,4 @@ before_install:
 
 # Test build
 script:
-- stack --no-terminal --install-ghc --resolver=$RESOLVER build
+- stack --no-terminal --install-ghc build
