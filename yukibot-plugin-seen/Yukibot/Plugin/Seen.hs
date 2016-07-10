@@ -70,5 +70,5 @@ seenCommand = Command
     formatDoc (UserName user) (Just when) (Just message) =
       user <> " was last seen at " <>
       T.pack (formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S" when) <>
-      " saying '" <> message <> "'."
+      " UTC saying '" <> message <> "'."
     formatDoc _ _ _ = "Something went wrong :("
