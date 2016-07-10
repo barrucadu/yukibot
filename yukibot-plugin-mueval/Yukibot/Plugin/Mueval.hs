@@ -139,7 +139,9 @@ mueval cfg expr = do
   (out, _) <- runProcess binary (opts ++ baseOpts expr) (Just env) ""
 
   -- mueval doesn't use stderr because it is special.
-  pure $ if "error:" `isPrefixOf` out then ("", out) else (out, "")
+  pure $ if "error:" `isPrefixOf` out || "<hint>:1:" `isPrefixOf` out
+         then ("", out)
+         else (out, "")
 
   where
     binary     = T.unpack (if useStack then stackPath else muevalPath)
