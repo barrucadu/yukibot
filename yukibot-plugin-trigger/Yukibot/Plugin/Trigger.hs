@@ -93,15 +93,12 @@ triggerMonitor = Monitor
 
   where
     -- Match a trigger against the event, and substitute in values.
-    match ev doc = join $
-      let direct      = at "direct" doc
-          probability = at "probability" doc
-          trigger     = at "trigger" doc
-          response    = at "response" doc
-      in match' ev <$> direct <*> probability <*> trigger <*> response
-
-    -- Helper for 'match'.
-    match' ev direct probability trigger response =
+    match ev doc
+      | Just direct      <- at "direct"      doc
+      , Just probability <- at "probability" doc
+      , Just trigger     <- at "trigger"     doc
+      , Just response    <- at "response"    doc
+      =
       let msg  = T.toLower (eventMessage ev)
           trig = T.toLower trigger
           resp = Response (substitute ev response) direct probability
@@ -110,6 +107,7 @@ triggerMonitor = Monitor
                    | otherwise   -> Nothing
            Nothing | trig == msg -> Just resp
                    | otherwise   -> Nothing
+    match _ _ = Nothing
 
     -- Substitute variables into a response.
     substitute ev = T.replace "%message" (eventMessage ev)
@@ -198,18 +196,17 @@ listCommand = Command
   }
   where
     -- Pretty-print a trigger
-    pprint doc = fmap T.unpack $
-      let trigger     = at "trigger" doc
-          response    = at "response" doc
-          direct      = at "direct" doc
-          probability = at "probability" doc
-      in pprint' <$> direct <*> probability <*> trigger <*> response
-
-    -- Helper for 'pprint'
-    pprint' True  1 trigger response = trigger <> " <!reply> " <> response
-    pprint' False 1 trigger response = trigger <> " <reply> "  <> response
-    pprint' True  p trigger response = trigger <> " <!reply "  <> showFloat p <> "> " <> response
-    pprint' False p trigger response = trigger <> " <reply "   <> showFloat p <> "> " <> response
+    pprint doc
+      | Just direct      <- at "direct"      doc
+      , Just probability <- at "probability" doc
+      , Just trigger     <- at "trigger"     doc
+      , Just response    <- at "response"    doc
+      = Just . T.unpack $ case (direct, probability) of
+          (True,  1) -> trigger <> " <!reply> " <> response
+          (False, 1) -> trigger <> " <reply> "  <> response
+          (True,  p) -> trigger <> " <!reply "  <> showFloat p <> "> " <> response
+          (False, p) -> trigger <> " <reply "   <> showFloat p <> "> " <> response
+    pprint _ = Nothing
 
     -- Show a 'Float' to two decimal places.
     showFloat :: Float -> Text
