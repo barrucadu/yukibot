@@ -55,7 +55,7 @@ plugin numLinks hs = Plugin
 
   where
     -- Respond with linkinfo for a collection of links.
-    linkinfo lim ev = mapM_ reply  =<< linkTitles lim (eventMessage ev)
+    linkinfo lim ev = mapM_ quickReply  =<< linkTitles lim (eventMessage ev)
 
     -- Get a title for every link in a message
     linkTitles :: MonadIO m => Bool -> Text -> m [Text]
