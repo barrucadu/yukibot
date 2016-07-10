@@ -1,0 +1,144 @@
+# Example yukibot configuration. The configuration is specified in
+# TOML: <https://github.com/toml-lang/toml>.
+
+# Backend configuration lives in the "backend.*" namespace.
+#
+# Any global configuration can be overridden in a backend by simply
+# replicating the appropriate hierarchy, like in the plugin.hello
+# example below.
+#
+# Similarly, the global configuration can provide defaults for any
+# value in the backend configuration. When a backend is instantiated,
+# the global and backend configurations are merged, with the backend
+# configuration taking priority. The backend-specific configuration is
+# then drawn from this merged configuration.
+
+[backend.irc]
+
+  # The IRC backend uses the namespace "backend.irc.NETWORK" for its
+  # top-level configuration. Multiple configurations for the same
+  # network can be specified, each one represents a distinct
+  # connection: for this the array syntax should be used.
+  [backend.irc."irc.freenode.net"]
+    # The "nick" and "port" fields are required, everything else is
+    # optional.
+    nick = "yukibot"
+    port = 7000
+    tls  = true                              ## default: false
+
+    # A backend had two log files: a "raw" log file, which consists of
+    # the messages sent between the backend and the server, and
+    # another log which consists of events and actions in the bot
+    # received from and sent to that backend.
+    #
+    # The "logfile" and "rawlogfile" fields are common to all backends
+    # and, if not present, are filled in to a default value
+    # (determined by the backend). For the IRC backend, the names
+    # "irc-<host>-<nick>.raw.log" and "irc-<host>-<nick>.log" are
+    # used.
+    logfile    = "freenode.log"
+    rawlogfile = "freenode.raw.log"
+
+    # List of channels to join after welcome.
+    channels = [ "##compsoc-uk-anime" ]      ## default: []
+
+    # If the "server-password" is present and nonempty, it is sent on
+    # connection to the server via the "PASS" command.
+    server-password = ""                     ## default: ""
+
+    # If the "nickserv-password" key is present and nonempty, the
+    # "nickserv" user is authed with. The username of nickserv can be
+    # changed with the "nickserv" key.
+    nickserv          = "nickserv"           ## default: "nickserv"
+    nickserv-password = ""                   ## default: ""
+
+    # List of plugins to enable. The "builtin" plugin is always
+    # enabled, even if this is an empty list.
+    plugins = [ "hello" ]                    ## default: []
+
+    # List of monitors to enable.
+    #
+    # Monitor names are in the format "plugin:monitor". Monitors
+    # belonging to plugins which aren't enabled are silently ignored.
+    monitors = [ "hello:hello" ]             ## default: []
+
+    # List of users who are able to use privileged commands. Most of
+    # the commands from the builtin plugin are privileged.
+    deities = [ "barrucadu" ]                ## default: []
+
+    # Table of commands to enable, with keys being verbs and values
+    # being names.
+    #
+    # Verbs can contain spaces. Command names are in the format
+    # "plugin:command". As with monitors, commands belonging to
+    # plugins which aren't enabled are silently ignored.
+    [backend.irc."irc.freenode.net".commands] ## default: {}
+      "set default prefix"   = "builtin:set-default-prefix"
+      "set channel prefix"   = "builtin:set-channel-prefix"
+      "unset channel prefix" = "builtin:unset-channel-prefix"
+      "enable plugin"  = "builtin:enable-plugin"
+      "disable plugin" = "builtin:disable-plugin"
+      "start monitor"  = "builtin:start-monitor"
+      "stop monitor"   = "builtin:stop-monitor"
+      "bind"    = "builtin:bind"
+      "unbind"  = "builtin:unbind"
+      "unbind!" = "builtin:unbind-all"
+      "deify"   = "builtin:deify"
+      "degrade" = "builtin:degrade"
+      "help"  = "builtin:help"
+      "greet" = "hello:hello"
+
+    # Commands in a channel must be prefixed with the following string
+    # in order to be activated. It is optional for whispered commands.
+    # The nick followed by ", " or ": " is also accepted.
+    default-prefix = "!"                    ## default: "!"
+
+    # In addition, individual channels can have different prefixes.
+    # This is useful to avoid clashes with other bots.
+    channel-prefixes = { "#cs-york" = "@" } ## default: {}
+
+    # Some channels might not want all the default monitors: these can
+    # be disabled!
+    [backend.irc."irc.freenode.net".disabled]
+      "#cs-york-dev" = [ "hello:hello" ]
+
+    # Backend-specific plugin configuration.
+    [backend.irc."irc.freenode.net".plugin.hello]
+      message = "Salutations"
+
+# Plugin configuration lives in the "plugin.*" namespace. Each plugin
+# defines its own configuration, there is nothing globally necessary.
+[plugin.hello]
+  message = "Hello!"
+
+[plugin.mueval]
+  # Use "stack exec ghci/mueval" rather than GHCi and mueval directly.
+  # This is useful for setting up the environment (eg, package paths).
+  use-stack = true ## default: false
+
+  # Path (relative or absolute) to GHCi. This can also be the name of
+  # a binary in $PATH. GHCi is used to get types and kinds, it is
+  # never used to evaluate expressions.
+  ghci-path = "ghci" ## default: "ghci"
+
+  # Path (relative or absolute) to mueval. This can also be the name
+  # of a binary in $PATH.
+  mueval-path = "mueval" ## default: "mueval"
+
+  # Path (relative or absolute) to stack. This can also be the name of
+  # a binary in $PATH. This is only used if "with-stack" is true.
+  stack-path = "stack" ## default: "stack"
+
+  # Path (relative or absolute) to the load file.
+  load-file = "L.hs" ## default: "L.hs"
+
+# MongoDB is used for plugin persistent state. Make sure you have a
+# server running!
+[mongodb]
+  host = "localhost" ## default: "localhost"
+  port = 27017       ## default: 27017
+
+  # All state is held in a collection named after the plugin with an
+  # optional namespace prepended. This is to avoid clashes with any
+  # other uses of the same database you might have.
+  namespace = "yukibot" ## default: "yukibot"
