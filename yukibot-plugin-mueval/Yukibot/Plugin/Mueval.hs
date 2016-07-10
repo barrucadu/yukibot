@@ -112,7 +112,6 @@ muevalOrGHCi seeded cfg mcmd expr = do
 
   (out, err) <- liftIO $ maybe (mueval cfg) (queryGHCi cfg) mcmd expr'
 
-  -- mueval doesn't use stderr, grr
   let isMueval = isNothing mcmd
 
   case formatErrors err of
@@ -136,12 +135,14 @@ muevalOrGHCi seeded cfg mcmd expr = do
 mueval :: Table -> String -> IO (String, String)
 mueval cfg expr = do
   env <- (("LC_ALL", "C"):) <$> getEnvironment
-  (out, _) <- runProcess binary (opts ++ baseOpts expr) (Just env) ""
+  (out, err) <- runProcess binary (opts ++ baseOpts expr) (Just env) ""
 
-  -- mueval doesn't use stderr because it is special.
-  pure $ if "error:" `isPrefixOf` out || "<hint>:1:" `isPrefixOf` out
-         then ("", out)
-         else (out, "")
+  -- mueval MOSTLY doesn't use stderr because it is special.
+  pure $ case () of
+    _ | "error:"    `isPrefixOf` out -> ("", out)
+      | "<hint>:1:" `isPrefixOf` out -> ("", out)
+      | not (null err) -> (out, "error: " <> err)
+      | otherwise -> (out, "")
 
   where
     binary     = T.unpack (if useStack then stackPath else muevalPath)
