@@ -43,7 +43,7 @@ import Data.Either (lefts, rights)
 import Data.Foldable (toList)
 import qualified Data.HashMap.Strict as H
 import Data.List (isPrefixOf, nub)
-import Data.List.NonEmpty (NonEmpty(..), fromList, nonEmpty)
+import Data.List.NonEmpty (NonEmpty(..), nonEmpty)
 import Data.Maybe (isNothing, fromMaybe, mapMaybe)
 import Data.Monoid ((<>), mconcat)
 import Data.Semigroup (Semigroup, sconcat)
@@ -437,6 +437,6 @@ formatParseError (Message     str) = str
 
 -- | Gather values.
 mangle :: (Semigroup s, Monoid m) => (a -> s) -> (b -> m) -> [Either a b] -> Either s m
-mangle toS toM xs = case (lefts &&& rights) xs of
-  ([], bs) -> let ms = map toM bs in Right (mconcat ms)
-  (as, _)  -> let ss = map toS as in Left  (sconcat $ fromList ss)
+mangle toS toM xs = case (nonEmpty . lefts &&& rights) xs of
+  (Just as, _)  -> let ss = toS <$> as in Left  (sconcat ss)
+  (Nothing, bs) -> let ms = toM <$> bs in Right (mconcat ms)
