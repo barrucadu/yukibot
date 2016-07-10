@@ -82,7 +82,7 @@ import Data.Foldable (toList)
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as H
 import Data.List ((\\), nub, sort)
-import Data.Maybe (fromMaybe, fromJust)
+import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -429,10 +429,15 @@ help st = Command
       pure $ map toMHelp allMonitors
 
     helpFor plugins pn key =
-      let plugin = fromJust (lookup pn plugins)
+      let onError = fromMaybe . error . T.unpack
+          plugin  = onError ("Help references missing plugin: " <> getPluginName pn) (lookup pn plugins)
       in case key of
-           Right cn -> commandHelp . fromJust $ H.lookup cn (pluginCommands plugin)
-           Left  mn -> monitorHelp . fromJust $ H.lookup mn (pluginMonitors plugin)
+           Right cn ->
+             commandHelp . onError ("Help references missing command: " <> getPluginName pn <> ":" <> getCommandName cn) $
+             H.lookup cn (pluginCommands plugin)
+           Left  mn ->
+             monitorHelp . onError ("Help references missing monitor: " <> getPluginName pn <> ":" <> getMonitorName mn) $
+             H.lookup mn (pluginMonitors plugin)
 
     showAll thing things = thing <> "s: " <> showListOf things <> " (see also '" <> thing <> " <name>')"
     showOne key things = case lookup key things of
