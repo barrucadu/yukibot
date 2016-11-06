@@ -34,21 +34,24 @@ runBackendM :: Builtin.BuiltinState
   -> BackendM a
   -- ^ The effectful computation to perform.
   -> IO a
-runBackendM st mc ib pn ev = iterT go where
+runBackendM st mc ib pn ev = runB where
+  runB :: BackendM a -> IO a
+  runB = iterT go
+
   go (Reply msg k) = k <* Backend.sendAction (eventHandle ev) (case eventChannel ev of
     Just cname -> Say cname [eventUser ev] msg
     Nothing    -> Whisper (eventUser ev) msg)
   go (QuickReply msg k) = k <* Backend.sendAction (eventHandle ev) (case eventChannel ev of
     Just cname -> Say cname [] msg
     Nothing    -> Whisper (eventUser ev) msg)
-  go (GetCommandPrefixIn   mcname k) = k =<< runBackendM st mc ib pn ev (Builtin.getCommandPrefixIn   st mcname)
-  go (GetDisabledPluginsIn mcname k) = k =<< runBackendM st mc ib pn ev (Builtin.getDisabledPluginsIn st mcname)
-  go (GetEnabledCommandsIn mcname k) = k =<< runBackendM st mc ib pn ev (Builtin.getEnabledCommandsIn st mcname)
-  go (GetEnabledMonitorsIn mcname k) = k =<< runBackendM st mc ib pn ev (Builtin.getEnabledMonitorsIn st mcname)
+  go (GetCommandPrefixIn   mcname k) = k =<< runB (Builtin.getCommandPrefixIn   st mcname)
+  go (GetDisabledPluginsIn mcname k) = k =<< runB (Builtin.getDisabledPluginsIn st mcname)
+  go (GetEnabledCommandsIn mcname k) = k =<< runB (Builtin.getEnabledCommandsIn st mcname)
+  go (GetEnabledMonitorsIn mcname k) = k =<< runB (Builtin.getEnabledMonitorsIn st mcname)
   go (SendAction act k) = k <* Backend.sendAction (eventHandle ev) act
   go (GetInstance k) = k ib
   go (GetEvent    k) = k ev
-  go (GetDeities  k) = k =<< runBackendM st mc ib pn ev (Builtin.getDeities st)
+  go (GetDeities  k) = k =<< runB (Builtin.getDeities st)
   go (GetBackendSig k) = k bsig
   go (QueryMongo selBy sortBy k) = requirePlugin $ \pname ->
     k =<< Mongo.queryMongo mc pname bsig selBy sortBy
