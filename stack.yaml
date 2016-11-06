@@ -8,7 +8,6 @@ packages:
 - yukibot/
 - yukibot-backend-irc/
 - yukibot-core/
-- yukibot-extra/
 - yukibot-plugin-channel//
 - yukibot-plugin-hello/
 - yukibot-plugin-linkinfo/

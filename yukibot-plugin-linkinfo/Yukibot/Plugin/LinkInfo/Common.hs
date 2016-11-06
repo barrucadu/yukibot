@@ -14,7 +14,7 @@ import Text.XML.HXT.Core ((//>), readString, hasName, getText, runX, withParseHT
 import Text.XML.HXT.TagSoup (withTagSoup)
 import Network.URI (URI)
 
-import Yukibot.Extra (downloadText)
+import Yukibot.Utils (downloadText)
 
 data LinkHandler a = LinkHandler
   { lhPredicate :: a -> Bool

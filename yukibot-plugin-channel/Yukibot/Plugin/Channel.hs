@@ -18,11 +18,9 @@
 module Yukibot.Plugin.Channel where
 
 import qualified Data.HashMap.Strict as H
-import Data.Maybe (fromMaybe)
-import qualified Data.Text as T
 
 import Yukibot.Core
-import Yukibot.Extra
+import Yukibot.Utils
 
 channelPlugin :: config -> Either error Plugin
 channelPlugin _ = Right Plugin

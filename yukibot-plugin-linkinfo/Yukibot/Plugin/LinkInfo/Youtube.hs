@@ -23,7 +23,7 @@ import Network.URI (URI(..), URIAuth(..))
 import Text.Read (readMaybe)
 
 import Yukibot.Configuration
-import Yukibot.Extra
+import Yukibot.Utils
 
 import Yukibot.Plugin.LinkInfo.Common
 

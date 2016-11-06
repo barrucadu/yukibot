@@ -55,7 +55,7 @@ import System.Process (CreateProcess(..), StdStream(CreatePipe), createProcess, 
 import System.Random (randomIO)
 
 import Yukibot.Core
-import Yukibot.Extra
+import Yukibot.Utils
 
 muevalPlugin :: Table -> Either error Plugin
 muevalPlugin cfg = Right Plugin

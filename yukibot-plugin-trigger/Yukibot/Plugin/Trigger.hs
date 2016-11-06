@@ -43,7 +43,7 @@ import Text.Regex.TDFA (CompOption(..), defaultCompOpt, defaultExecOpt)
 import Text.Regex.TDFA.String (Regex, compile, execute)
 
 import Yukibot.Core
-import Yukibot.Extra
+import Yukibot.Utils
 
 data Response = Response
   { responseText   :: Text

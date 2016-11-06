@@ -26,7 +26,7 @@ import Data.Time.Format (defaultTimeLocale, formatTime)
 import Database.MongoDB (Selector, (=:), at)
 
 import Yukibot.Core
-import Yukibot.Extra
+import Yukibot.Utils
 
 seenPlugin :: config -> Either error Plugin
 seenPlugin _ = Right Plugin
@@ -162,7 +162,3 @@ qfilter cname args =
              , ["quote"  =: ("$regex" =: T.intercalate ".*" args)]
              ]
   ]
-
--- | Format a timestamp.
-showTime :: UTCTime -> Text
-showTime = T.pack . formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S"

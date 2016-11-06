@@ -1,14 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |
--- Module      : Yukibot.Extra
+-- Module      : Yukibot.Utils
 -- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Stability   : experimental
 -- Portability : OverloadedStrings
 --
--- Extra utilities for writing yukibot-core plugins.
-module Yukibot.Extra where
+-- Extra utilities for writing yukibot plugins.
+module Yukibot.Utils where
 
 import Control.Monad.Catch (SomeException, catch)
 import Data.Aeson (Object, decode')
@@ -17,6 +17,7 @@ import Data.ByteString.Lazy (ByteString, toStrict)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8', encodeUtf8)
+import Data.Time (UTCTime, defaultTimeLocale, formatTime)
 import qualified Network.HTTP.Client.MultipartFormData as WM
 import qualified Network.HTTP.Simple as W
 import Network.URI (URI)
@@ -80,3 +81,14 @@ paste txt = upload `catch` handler where
 -- | Like 'Data.Text.Encoding.decodeUtf8' but doesn't throw an exception.
 decodeUtf8 :: BS.ByteString -> Maybe Text
 decodeUtf8 = either (const Nothing) Just . decodeUtf8'
+
+-------------------------------------------------------------------------------
+-- | Timestamps
+
+-- | Format a timestamp.
+showTime :: UTCTime -> Text
+showTime = T.pack . formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S"
+
+-- | Format a date.
+showDate :: UTCTime -> Text
+showDate = T.pack . formatTime defaultTimeLocale "%Y-%m-%d"
