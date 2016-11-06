@@ -23,7 +23,7 @@ main = do
     (configFile:_) -> case initialState of
       Right st -> defaultMain st configFile
       Left err -> die ("Error constructing initial state: " ++ show err)
-    [] -> die ("Specify a configuration file.")
+    [] -> die "Specify a configuration file."
 
 initialState :: Either CoreError BotState
 initialState = addBackend "irc"     ircBackend     =<<
