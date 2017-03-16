@@ -40,11 +40,13 @@ import Data.List hiding ( concat, concatMap
                         , maximum, maximumBy, minimum, minimumBy
                         , elem, notElem, find -- clash with Data.Foldable
                         , mapAccumL, mapAccumR) -- clash with Data.Traversable
+import qualified Data.Map
 import Data.Maybe
 import Data.Monoid
 import Data.Ord
 import Data.Ratio
 import Data.Sequence (Seq, ViewL(..), ViewR(..), viewl, viewr)
+import qualified Data.Set
 import Data.String
 import Data.Time
 import Data.Traversable
