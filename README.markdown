@@ -9,23 +9,54 @@ Haskell.
 [build-log]:    https://travis-ci.org/barrucadu/yukibot
 
 
-Building
---------
+Usage
+-----
 
-Build with stack. Only GHC 8 has been tested, it's possible other
-versions might work, but you're on your own. The stackage snapshot in
-the `stack.yaml` file is the supported set of package versions.
+There are cabal files, so you can build this with cabal if you want,
+but I use [NixOS][].
 
-```bash
-stack build
+```
+$ nix-shell shell.nix --indirect --add-root .gcroots/gc
 ```
 
-If you are using [NixOS][], `zlib` is required. The provided
-`shell.nix` supplies this; if you are also using [direnv][], allow the
-`.envrc` file to set up your environment.
+This will build everything and drop you in a shell with it all
+available. It will also create garbage collector roots in `.gcroots`,
+so `nix-collect-garbage` will leave your environment alone (good to
+avoid accidentally nuking things).
+
+Firstly you'll want to set the `NIX_GHC_LIBDIR` environment variable
+so that `mueval` can find the GHC package database (if you are using
+the mueval plugin):
+
+```
+$ cat `which ghc`
+#! /nix/store/gabjbkwga2dhhp2wzyaxl83r8hjjfc37-bash-4.3-p48/bin/bash -e
+export NIX_GHC="/nix/store/g12fa7vc5icmsqj4habg9d2apcpdrfip-ghc-8.0.1-with-packages/bin/ghc"
+export NIX_GHCPKG="/nix/store/g12fa7vc5icmsqj4habg9d2apcpdrfip-ghc-8.0.1-with-packages/bin/ghc-pkg"
+export NIX_GHC_DOCDIR="/nix/store/g12fa7vc5icmsqj4habg9d2apcpdrfip-ghc-8.0.1-with-packages/share/doc/ghc/html"
+export NIX_GHC_LIBDIR="/nix/store/g12fa7vc5icmsqj4habg9d2apcpdrfip-ghc-8.0.1-with-packages/lib/ghc-8.0.1"
+exec /nix/store/b0749p1rjpyvq2wyw58x6vgwpkwxcmnn-ghc-8.0.1/bin/ghc "-B$NIX_GHC_LIBDIR" "${extraFlagsArray[@]}" "$@"
+```
+
+You'll get different paths. Copy and paste the `NIX_GHC_LIBDIR`
+variable into your shell. You can check it worked by evaluating a
+simple expression:
+
+```
+$ mueval --load-file L.hs --expression=42
+... some error messages about missing stuff ...
+$ export NIX_GHC_LIBDIR="/nix/store/g12fa7vc5icmsqj4habg9d2apcpdrfip-ghc-8.0.1-with-packages/lib/ghc-8.0.1"
+$ mueval --load-file L.hs --expression=42
+42
+```
+
+Now you're good to go:
+
+```
+$ yukibot configuration.toml
+```
 
 [NixOS]:  https://nixos.org/
-[direnv]: https://github.com/direnv/direnv
 
 
 Configuration

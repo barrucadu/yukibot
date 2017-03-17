@@ -7,7 +7,6 @@ synopsis:            A mueval plugin for yukibot-core.
 -- description:         
 homepage:            https://github.com/barrucadu/yukibot
 license:             MIT
-license-file:        ../LICENSE
 author:              Michael Walker
 maintainer:          mike@barrucadu.co.uk
 -- copyright:           

@@ -7,7 +7,6 @@ synopsis:            An IRC bot for the ##compsoc-uk-anime channel on Freenode.
 -- description:         
 homepage:            https://github.com/barrucadu/yukibot
 license:             MIT
-license-file:        ../LICENSE
 author:              Michael Walker
 maintainer:          mike@barrucadu.co.uk
 -- copyright:           
