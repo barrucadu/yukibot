@@ -46,8 +46,7 @@ ircBackend host cfg = case checkConfig host cfg of
        , Y.describe = desc
        -- The log file names are overridden by the core if specified
        -- in the config, so these are just defaults.
-       , Y.rawLogFile   = logFileName <.> "raw.log"
-       , Y.unrawLogFile = logFileName <.> "log"
+       , Y.logFile = logFileName <.> "log"
        }
 
 -------------------------------------------------------------------------------
@@ -58,7 +57,7 @@ type BackendState = (IRC.IRC Bool -> IO Bool, IO (), TVar Bool)
 -- | Set up the IRC connection.
 connectToIrc :: Text
   -> Table
-  -> Y.RawLogger
+  -> Y.Logger
   -> ((Y.BackendHandle -> Y.Event) -> IO ())
   -> IO BackendState
 connectToIrc host cfg logger receiveEvent = do
@@ -135,9 +134,9 @@ newFlag = do
   pure (flagvar, writeTVar flagvar True)
 
 -- | Log raw messages.
-botLogger :: Y.RawLogger -> IRC.Origin -> ByteString -> IO ()
-botLogger logger IRC.FromClient = Y.rawToServer   logger
-botLogger logger IRC.FromServer = Y.rawFromServer logger
+botLogger :: Y.Logger -> IRC.Origin -> ByteString -> IO ()
+botLogger logger IRC.FromClient = Y.toServer   logger
+botLogger logger IRC.FromServer = Y.fromServer logger
 
 -- | Event handler for message reception.
 receiveHandler :: ((Y.BackendHandle -> Y.Event) -> IO ()) -> IRC.EventHandler s

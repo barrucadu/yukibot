@@ -5,7 +5,7 @@
 }:
 mkDerivation {
   pname = "yukibot-core";
-  version = "2.0.1.0";
+  version = "2.1.0.0";
   src = ./.;
   libraryHaskellDepends = [
     aeson base bson bytestring exceptions filepath free hashable htoml

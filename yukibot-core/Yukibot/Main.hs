@@ -228,10 +228,9 @@ instantiateBackend :: H.HashMap PluginName (Table -> Either Text Plugin)
 instantiateBackend allPlugins bf bname sname index cfg = case bf sname cfg of
   Right b  ->
     let enabledPlugins = instantiatePlugins allPlugins bname sname cfg
-        -- Override the log files of the backend with values from the
+        -- Override the log file of the backend with values from the
         -- configuration, if present.
-        b' = b { unrawLogFile = maybe (unrawLogFile b) unpack $ getString "logfile"    cfg
-               , rawLogFile   = maybe (rawLogFile   b) unpack $ getString "rawlogfile" cfg
+        b' = b { logFile = maybe (logFile b) unpack $ getString "logfile" cfg
                }
     in case mangle id (:[]) enabledPlugins of
          Right plugins -> case checkCommandsAndMonitors plugins bname sname cfg of

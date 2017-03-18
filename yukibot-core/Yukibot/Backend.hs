@@ -34,7 +34,7 @@ import Control.Monad (void, when)
 import Control.Monad.Catch (throwM)
 import Data.Text (Text)
 
-import Yukibot.Log (loggerFromBackend, rawLoggerFromBackend)
+import Yukibot.Log (loggerFromBackend)
 import Yukibot.Types
 
 -------------------------------------------------------------------------------
@@ -54,13 +54,13 @@ startBackend :: (Event -> IO ())
   -- ^ The index of this particular instance in the table array (0 if
   -- there is no array).
   -> Backend -> IO BackendHandle
-startBackend onReceive bname sname index b@(Backend setup exec _ _ _) = do
-  (h, eventLogger) <- createHandle bname sname index b
+startBackend onReceive bname sname index b@(Backend setup exec _ _) = do
+  h <- createHandle bname sname index b
 
-  let rawlogger = rawLoggerFromBackend b
-  let receive ef = let e = ef h in eventLogger e >> onReceive e
+  let logger     = loggerFromBackend b
+  let receive ef = onReceive (ef h)
 
-  forkAndRunBackend h (setup rawlogger receive) (exec $ msgQueue h)
+  forkAndRunBackend h (setup logger receive) (exec $ msgQueue h)
   pure h
 
 -- | Start an instantiated backend.
@@ -115,9 +115,7 @@ hasStoppedSTM = readTVar . hasStopped
 --
 -- Note: @sendAction h Terminate@ is exactly the same as @stopBackend h@
 sendAction :: BackendHandle -> Action -> IO ()
-sendAction h a = do
-  atomically $ writeTQueue (msgQueue h) a
-  actionLogger h a
+sendAction h a = atomically $ writeTQueue (msgQueue h) a
 
 -------------------------------------------------------------------------------
 -- Miscellaneous
@@ -129,25 +127,21 @@ describeBackend = description
 -------------------------------------------------------------------------------
 -- Internal
 
--- | Create a new 'BackendHandle' and event logger.
-createHandle :: BackendName -> Text -> Int -> Backend -> IO (BackendHandle, Event -> IO ())
+-- | Create a new 'BackendHandle'.
+createHandle :: BackendName -> Text -> Int -> Backend -> IO BackendHandle
 createHandle bname sname index b = atomically $ do
   queue    <- newTQueue
   startvar <- newTVar False
   stopvar  <- newTVar False
 
-  let logger = loggerFromBackend b
-  let handle = BackendHandle { msgQueue = queue
-                             , hasStarted = startvar
-                             , hasStopped = stopvar
-                             , description = describe b
-                             , actionLogger = loggerAction logger
-                             , backendName = bname
-                             , specificName = sname
-                             , backendIndex = index
-                             }
-
-  pure (handle, loggerEvent logger)
+  pure BackendHandle { msgQueue = queue
+                     , hasStarted = startvar
+                     , hasStopped = stopvar
+                     , description = describe b
+                     , backendName = bname
+                     , specificName = sname
+                     , backendIndex = index
+                     }
 
 -- | Initialise and run a backend in a new thread.
 forkAndRunBackend :: BackendHandle

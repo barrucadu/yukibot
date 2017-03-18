@@ -124,11 +124,10 @@ newtype BackendName = BackendName { getBackendName :: Text }
 
 -- | A representation of a backend.
 data Backend where
-  Backend :: { initialise :: RawLogger -> ((BackendHandle -> Event) -> IO ()) -> IO a
+  Backend :: { initialise :: Logger -> ((BackendHandle -> Event) -> IO ()) -> IO a
              , run :: TQueue Action -> a -> IO ()
              , describe :: Text
-             , rawLogFile :: FilePath
-             , unrawLogFile :: FilePath
+             , logFile :: FilePath
              } -> Backend
 
 -- | An instantiated backend, corresponding to one entry in the
@@ -158,7 +157,6 @@ data BackendHandle = BackendHandle
   , hasStarted   :: TVar Bool
   , hasStopped   :: TVar Bool
   , description  :: Text
-  , actionLogger :: Action -> IO ()
   , backendName  :: BackendName
   , specificName :: Text
   , backendIndex :: Int
@@ -175,22 +173,12 @@ instance Exception BackendTerminatedException
 -------------------------------------------------------------------------------
 -- * Logging
 
--- | A logger of events and actions received from and sent to the
--- backend by the bot.
+-- | A logger of messages sent to and from the server by the backend.
 data Logger = Logger
-  { loggerEvent :: Event -> IO ()
-    -- ^ Log an event received from the backend.
-  , loggerAction :: Action -> IO ()
-    -- ^ Log an action sent to the backend.
-  }
-
--- | A logger of raw messages sent to and from the server by the
--- backend.
-data RawLogger = RawLogger
-  { rawToServer :: ByteString -> IO ()
-  -- ^ Log a raw message sent to the server.
-  , rawFromServer :: ByteString -> IO ()
-  -- ^ Log a raw message received from the server.
+  { toServer :: ByteString -> IO ()
+  -- ^ Log a message sent to the server.
+  , fromServer :: ByteString -> IO ()
+  -- ^ Log a message received from the server.
   }
 
 -- | A tag displayed in the stdout log to indicate which backend a
