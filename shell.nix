@@ -5,7 +5,7 @@ let
   callPackage = stdenv.lib.callPackageWith (pkgs // haskellPackages // yukibotPackages);
 
   # Make extra packages available to ghci and mueval
-  extraHaskellLibs = p: [ p.lens p.random ] ++
+  extraHaskellLibs = p: [ p.leancheck p.lens p.smallcheck p.random ] ++
     # mueval itself needs these packages
     [ p.QuickCheck p.show p.simple-reflect ];
   ghc'    = haskellPackages.ghcWithPackages extraHaskellLibs;

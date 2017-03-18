@@ -46,6 +46,7 @@ import Data.Monoid
 import Data.Ord
 import Data.Ratio
 import Data.Sequence (Seq, ViewL(..), ViewR(..), viewl, viewr)
+import qualified Data.Sequence as S
 import qualified Data.Set
 import Data.String
 import Data.Time
@@ -60,7 +61,9 @@ import Numeric
 
 import System.Random
 
-import qualified Data.Sequence as S
+import qualified Test.LeanCheck  as LeanCheck
+import qualified Test.QuickCheck as QuickCheck
+import qualified Test.SmallCheck as SmallCheck
 
 instance (Typeable a, Typeable b) => Show (a -> b) where
   show e = '<' : (show . typeOf) e ++ ">"
