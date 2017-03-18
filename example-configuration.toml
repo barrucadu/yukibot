@@ -110,7 +110,7 @@
 [plugin.mueval]
   # Use "stack exec ghci/mueval" rather than GHCi and mueval directly.
   # This is useful for setting up the environment (eg, package paths).
-  use-stack = true ## default: false
+  use-stack = false ## default: false
 
   # Path (relative or absolute) to GHCi. This can also be the name of
   # a binary in $PATH. GHCi is used to get types and kinds, it is
