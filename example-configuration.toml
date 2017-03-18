@@ -62,6 +62,15 @@
     # the commands from the builtin plugin are privileged.
     deities = [ "barrucadu" ]                ## default: []
 
+    # Commands in a channel must be prefixed with the following string
+    # in order to be activated. It is optional for whispered commands.
+    # The nick followed by ", " or ": " is also accepted.
+    default-prefix = "!"                    ## default: "!"
+
+    # In addition, individual channels can have different prefixes.
+    # This is useful to avoid clashes with other bots.
+    channel-prefixes = { "#cs-york" = "@" } ## default: {}
+
     # Table of commands to enable, with keys being verbs and values
     # being names.
     #
@@ -83,15 +92,6 @@
       "degrade" = "builtin:degrade"
       "help"  = "builtin:help"
       "greet" = "hello:hello"
-
-    # Commands in a channel must be prefixed with the following string
-    # in order to be activated. It is optional for whispered commands.
-    # The nick followed by ", " or ": " is also accepted.
-    default-prefix = "!"                    ## default: "!"
-
-    # In addition, individual channels can have different prefixes.
-    # This is useful to avoid clashes with other bots.
-    channel-prefixes = { "#cs-york" = "@" } ## default: {}
 
     # Some channels might not want all the default monitors: these can
     # be disabled!
