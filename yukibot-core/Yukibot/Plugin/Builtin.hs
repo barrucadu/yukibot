@@ -67,6 +67,9 @@ module Yukibot.Plugin.Builtin
   , getEnabledMonitors
   , getEnabledMonitorsIn
   , getDeities
+  , isPlugin
+  , isMonitor
+  , isCommand
 
   -- * Misc
   , notDeityMessage
@@ -75,7 +78,7 @@ module Yukibot.Plugin.Builtin
 import Control.Arrow (second)
 import Control.Concurrent.STM (STM, TVar, atomically, newTVar, modifyTVar, readTVar)
 import Control.Lens (Lens', (&), (.~), (%~), at, lens, view)
-import Control.Monad (unless)
+import Control.Monad (filterM, unless)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Free (liftF)
 import Data.Foldable (toList)
@@ -292,10 +295,11 @@ unsetChannelPrefix st = Command
 onOffPlugin :: OnOff -> BuiltinState -> Command
 onOffPlugin mode st = Command
   { commandHelp = (if mode == On then "enable" else "disable") <> " a plugin in this channel"
-  , commandAction = \ev args ->
-    let plugins = map PluginName args
-        go = if mode == On then filter (`notElem` plugins) else nub . (plugins++)
-    in modifyState st $ disabledPlugins . at (eventChannel ev) %~ (Just . go . fromMaybe [])
+  , commandAction = \ev args -> do
+    let plugins0 = map PluginName args
+    plugins <- filterM isPlugin plugins0
+    let go = if mode == On then filter (`notElem` plugins) else nub . (plugins++)
+    modifyState st $ disabledPlugins . at (eventChannel ev) %~ (Just . go . fromMaybe [])
   }
 
 -- | Enable or disable a monitor for a channel. If not in a channel,
@@ -303,14 +307,15 @@ onOffPlugin mode st = Command
 onOffMonitor :: OnOff -> BuiltinState -> Command
 onOffMonitor mode st = Command
   { commandHelp = (if mode == On then "start" else "stop") <> " a monitor in this channel"
-  , commandAction = \ev args ->
-    let monitors = [ (PluginName pn, MonitorName mn)
-                   | arg <- args
-                   , let (pn, mn) = second (T.drop 1) (T.breakOn ":" arg)
-                   , not (T.null mn)
-                   ]
-        go = if mode == On then nub . (monitors++) else filter (`notElem` monitors)
-    in modifyState st $ enabledMonitors . at (eventChannel ev) %~ (Just . go . fromMaybe [])
+  , commandAction = \ev args -> do
+    let monitors0 = [ (PluginName pn, MonitorName mn)
+                    | arg <- args
+                    , let (pn, mn) = second (T.drop 1) (T.breakOn ":" arg)
+                    , not (T.null mn)
+                    ]
+    monitors <- filterM isMonitor monitors0
+    let go = if mode == On then nub . (monitors++) else filter (`notElem` monitors)
+    modifyState st $ enabledMonitors . at (eventChannel ev) %~ (Just . go . fromMaybe [])
   }
 
 -- | Bind a command.
@@ -321,8 +326,9 @@ bindCommand st = Command
     (cmd:vs) ->
       let (pname, cname) = second (T.drop 1) (T.breakOn ":" cmd)
           newVerb = T.unwords vs
-          go = ((PluginName pname, CommandName cname, newVerb):) . filter (\(_,_,verb) -> verb /= newVerb)
-      in if T.null cname || null vs
+          pcn@(pn,cn) = (PluginName pname, CommandName cname)
+          go = ((pn, cn, newVerb):) . filter (\(_,_,verb) -> verb /= newVerb)
+      in isCommand pcn >>= \b -> if not b || null vs
          then pure ()
          else modifyState st $ enabledCommands . at (eventChannel ev) %~ (Just . go . fromMaybe [])
     _ -> pure ()
@@ -502,6 +508,28 @@ getDeities (BuiltinState statesVar) = do
   liftIO . atomically $ do
     state <- bmLookup ib <$> readTVar statesVar
     pure (_deifiedUsers state)
+
+-- | Check if a plugin exists.
+isPlugin :: PluginName -> BackendM Bool
+isPlugin pn = do
+  allPlugins <- liftF (GetInstance instPlugins)
+  pure $ any ((==pn) . fst) allPlugins
+
+-- | Check if a monitor exists.
+isMonitor :: (PluginName, MonitorName) -> BackendM Bool
+isMonitor (pn, mn) = do
+  allPlugins <- liftF (GetInstance instPlugins)
+  pure $ case lookup pn allPlugins of
+    Just p  -> H.member mn (pluginMonitors p)
+    Nothing -> False
+
+-- | Check if a command exists.
+isCommand :: (PluginName, CommandName) -> BackendM Bool
+isCommand (pn, cn) = do
+  allPlugins <- liftF (GetInstance instPlugins)
+  pure $ case lookup pn allPlugins of
+    Just p  -> H.member cn (pluginCommands p)
+    Nothing -> False
 
 -------------------------------------------------------------------------------
 -- 'BackendMap's
