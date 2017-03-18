@@ -64,9 +64,3 @@ import System.Random
 import qualified Test.LeanCheck  as LeanCheck
 import qualified Test.QuickCheck as QuickCheck
 import qualified Test.SmallCheck as SmallCheck
-
-instance (Typeable a, Typeable b) => Show (a -> b) where
-  show e = '<' : (show . typeOf) e ++ ">"
-
-instance Typeable a => Show (IO a) where
-  show e = '<' : (show . typeOf) e ++ ">"
