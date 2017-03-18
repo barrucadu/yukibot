@@ -22,7 +22,6 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time.Clock (UTCTime, getCurrentTime)
-import Data.Time.Format (defaultTimeLocale, formatTime)
 import Database.MongoDB (Selector, (=:), at)
 
 import Yukibot.Core

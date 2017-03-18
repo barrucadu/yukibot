@@ -28,14 +28,14 @@
 --       a link.
 module Yukibot.Plugin.Trigger where
 
-import Control.Monad (join, unless)
+import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.HashMap.Strict as H
 import Data.Maybe (fromJust, fromMaybe, mapMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
-import Database.MongoDB (Document, (=:), at)
+import Database.MongoDB ((=:), at)
 import Numeric (showFFloat)
 import System.Random (randomRIO)
 import Text.Read (readMaybe)
@@ -124,7 +124,7 @@ newCommand = privilegedCommand Command
   { commandHelp   = "define a new trigger"
   , commandAction = \ev args -> case eventChannel ev of
       Just cname -> case findTrigger args of
-        Just t@(direct, probability, trigger, response) ->
+        Just (direct, probability, trigger, response) ->
           insertMongo [[ "channel"     =: cname
                        , "direct"      =: direct
                        , "probability" =: probability
@@ -185,7 +185,7 @@ clearCommand = privilegedCommand Command
 listCommand :: Command
 listCommand = Command
   { commandHelp   = "list triggers"
-  , commandAction = \ev args -> case eventChannel ev of
+  , commandAction = \ev _ -> case eventChannel ev of
       Just cname -> do
         triggers <- queryMongo ["channel" =: cname] ["trigger" =: (1 :: Int)]
         muri <- liftIO . paste . unlines $ mapMaybe pprint triggers
