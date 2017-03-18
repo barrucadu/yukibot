@@ -19,10 +19,10 @@ library
   exposed-modules:     Yukibot.Plugin.Hello
   -- other-modules:       
   -- other-extensions:    
-  build-depends:       base                 >=4.9 && <4.10
-                     , text                 >=1.0 && <2
-                     , yukibot-core         >=2.0 && <2.1
-                     , unordered-containers >=0.2 && <0.3
+  build-depends:       base
+                     , text
+                     , unordered-containers
+                     , yukibot-core
   -- hs-source-dirs:      
   default-language:    Haskell2010
   ghc-options:         -Wall
