@@ -230,8 +230,7 @@ instantiateBackend allPlugins bf bname sname index cfg = case bf sname cfg of
     let enabledPlugins = instantiatePlugins allPlugins bname sname cfg
         -- Override the log file of the backend with values from the
         -- configuration, if present.
-        b' = b { logFile = maybe (logFile b) unpack $ getString "logfile" cfg
-               }
+        b' = b { logFile = maybe (logFile b) unpack $ getString "logfile" cfg }
     in case mangle id (:[]) enabledPlugins of
          Right plugins -> case checkCommandsAndMonitors plugins bname sname cfg of
            Just errs -> Left errs

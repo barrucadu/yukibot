@@ -179,6 +179,10 @@ data Logger = Logger
   -- ^ Log a message sent to the server.
   , fromServer :: ByteString -> IO ()
   -- ^ Log a message received from the server.
+  , flushLog :: IO ()
+  -- ^ Flush any buffered log entries to disk.
+  , closeLog :: IO ()
+  -- ^ Close the log, any further operations will fail.
   }
 
 -- | A tag displayed in the stdout log to indicate which backend a

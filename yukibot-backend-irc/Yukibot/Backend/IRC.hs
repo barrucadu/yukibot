@@ -85,7 +85,7 @@ connectToIrc host cfg logger receiveEvent = do
   atomically (readTVar welcomevar >>= check)
 
   -- Return the backend state
-  pure ((`runReaderT` state), killThread tid, stopvar)
+  pure ((`runReaderT` state), killThread tid >> Y.closeLog logger, stopvar)
 
 -- | Wait for commands.
 handleIrc :: TQueue Y.Action -> BackendState -> IO ()

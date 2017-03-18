@@ -57,7 +57,8 @@ startBackend :: (Event -> IO ())
 startBackend onReceive bname sname index b@(Backend setup exec _ _) = do
   h <- createHandle bname sname index b
 
-  let logger     = loggerFromBackend b
+  logger <- loggerFromBackend b
+
   let receive ef = onReceive (ef h)
 
   forkAndRunBackend h (setup logger receive) (exec $ msgQueue h)

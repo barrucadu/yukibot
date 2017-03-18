@@ -20,27 +20,33 @@ import Data.ByteString (ByteString)
 import Data.Text (unpack)
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
+import System.IO (BufferMode(..), Handle, IOMode(..), hClose, hFlush, hPutStrLn, hSetBuffering, openFile)
 
 import Yukibot.Types
 
 -- | Create a logger.
-logger :: Tag -> FilePath -> Logger
-logger tag fp = Logger
-  { toServer   = logInternal " ---> " tag fp
-  , fromServer = logInternal " <--- " tag fp
+logger :: Tag -> Handle -> Logger
+logger tag fh = Logger
+  { toServer   = logInternal " ---> " tag fh
+  , fromServer = logInternal " <--- " tag fh
+  , flushLog   = hFlush fh
+  , closeLog   = hClose fh
   }
 
--- | Create a logger from a backend.
-loggerFromBackend :: Backend -> Logger
-loggerFromBackend b = logger (Tag $ describe b) (logFile b)
+-- | Create a logger from a backend, opening the log file.
+loggerFromBackend :: Backend -> IO Logger
+loggerFromBackend b = do
+  fh <- openFile (logFile b) AppendMode
+  hSetBuffering fh LineBuffering
+  pure (logger (Tag $ describe b) fh)
 
 -------------------------------------------------------------------------------
 -- Helpers
 
 -- | Log a message.
-logInternal :: String -> Tag -> FilePath -> ByteString -> IO ()
-logInternal arrow (Tag tag) fp msg = do
+logInternal :: String -> Tag -> Handle -> ByteString -> IO ()
+logInternal arrow (Tag tag) fh msg = do
   now <- getCurrentTime
   let logEntry = unwords [formatTime defaultTimeLocale "%c" now, arrow, init . tail . show $ msg]
-  appendFile fp (logEntry ++ "\n")
+  hPutStrLn fh logEntry
   putStrLn $ unpack tag ++ " " ++ logEntry
