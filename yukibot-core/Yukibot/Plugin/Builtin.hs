@@ -263,7 +263,7 @@ plugin state _ = Right Plugin
 -- | Set the default prefix for a backend.
 setDefaultPrefix :: BuiltinState -> Command
 setDefaultPrefix st = Command
-  { commandHelp = "set the default command prefix"
+  { commandHelp = "\"word+\": set the default command prefix"
   , commandAction = \_ args ->
     modifyState st $ \state -> state & defaultPrefix .~ T.unwords args
   }
@@ -272,7 +272,7 @@ setDefaultPrefix st = Command
 -- channel, this command does nothing.
 setChannelPrefix :: BuiltinState -> Command
 setChannelPrefix st = Command
-  { commandHelp = "set the command prefix for this channel"
+  { commandHelp = "\"word+\": set the command prefix for this channel"
   , commandAction = \ev args ->
     modifyState st $ \state -> case eventChannel ev of
       Just c  -> state & channelPrefixes %~ H.insert c (T.unwords args)
@@ -294,7 +294,7 @@ unsetChannelPrefix st = Command
 -- this applies to whispers.
 onOffPlugin :: OnOff -> BuiltinState -> Command
 onOffPlugin mode st = Command
-  { commandHelp = (if mode == On then "enable" else "disable") <> " a plugin in this channel"
+  { commandHelp = "\"plugin\": " <> (if mode == On then "enable" else "disable") <> " a plugin in this channel"
   , commandAction = \ev args -> do
     let plugins0 = map PluginName args
     plugins <- filterM isPlugin plugins0
@@ -306,7 +306,7 @@ onOffPlugin mode st = Command
 -- this applies to whispers.
 onOffMonitor :: OnOff -> BuiltinState -> Command
 onOffMonitor mode st = Command
-  { commandHelp = (if mode == On then "start" else "stop") <> " a monitor in this channel"
+  { commandHelp = "\"(plugin:monitor)+\": " <> (if mode == On then "start" else "stop") <> " a monitor in this channel"
   , commandAction = \ev args -> do
     let monitors0 = [ (PluginName pn, MonitorName mn)
                     | arg <- args
@@ -321,7 +321,7 @@ onOffMonitor mode st = Command
 -- | Bind a command.
 bindCommand :: BuiltinState -> Command
 bindCommand st = Command
-  { commandHelp = "bind a verb to a command in this channel"
+  { commandHelp = "\"plugin:command word+\": bind a verb to a command in this channel"
   , commandAction = \ev args -> case args of
     (cmd:vs) ->
       let (pname, cname) = second (T.drop 1) (T.breakOn ":" cmd)
@@ -337,7 +337,7 @@ bindCommand st = Command
 -- | Unbind a command.
 unbindCommand :: BuiltinState -> Command
 unbindCommand st = Command
-  { commandHelp = "unbind a verb in this channel"
+  { commandHelp = "\"word+\": unbind a verb in this channel"
   , commandAction = \ev args ->
     let go = filter (\(_,_,vs) -> vs /= T.unwords args)
     in if null args
@@ -348,7 +348,7 @@ unbindCommand st = Command
 -- | Unbind all commands of the given type.
 unbindAllCommand :: BuiltinState -> Command
 unbindAllCommand st = Command
-  { commandHelp = "unbind all verbs for a command in this channel"
+  { commandHelp = "\"(plugin:command)+\": unbind all verbs for a command in this channel"
   , commandAction = \ev args ->
     let commands = [ (PluginName pn, CommandName cn)
                    | arg <- args
@@ -362,7 +362,7 @@ unbindAllCommand st = Command
 -- | Deify a list of users.
 deify :: BuiltinState -> Command
 deify st = Command
-  { commandHelp = "elevate a user to godhood"
+  { commandHelp = "\"name+\": elevate a user to godhood"
   , commandAction = \_ args ->
     let users = map UserName args
     in modifyState st $ deifiedUsers %~ (nub . (users++))
@@ -371,7 +371,7 @@ deify st = Command
 -- | Un-deify a list of users.
 degrade :: BuiltinState -> Command
 degrade st = Command
-  { commandHelp = "cast down a god"
+  { commandHelp = "\"name+\": cast down a god"
   , commandAction = \_ args ->
     let users = map UserName args
     in modifyState st $ deifiedUsers %~ filter (`notElem` users)

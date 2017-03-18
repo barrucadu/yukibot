@@ -121,7 +121,7 @@ triggerMonitor = Monitor
 -- | Define a new trigger.
 newCommand :: Command
 newCommand = privilegedCommand Command
-  { commandHelp   = "define a new trigger"
+  { commandHelp   = "\"regex or words <[!]reply[ prob]> words\": define a new trigger"
   , commandAction = \ev args -> case eventChannel ev of
       Just cname -> case findTrigger args of
         Just (direct, probability, trigger, response) ->
@@ -166,7 +166,7 @@ newCommand = privilegedCommand Command
 -- | Delete a trigger.
 deleteCommand :: Command
 deleteCommand = privilegedCommand Command
-  { commandHelp   = "delete a trigger"
+  { commandHelp   = "\"trigger text\": delete a trigger"
   , commandAction = \ev args -> case eventChannel ev of
       Just cname -> deleteMongo ["trigger" =: T.unwords args, "channel" =: cname]
       Nothing -> reply "Triggers only work in channels."

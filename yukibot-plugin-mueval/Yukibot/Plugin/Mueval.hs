@@ -82,21 +82,21 @@ inlineMonitor cfg = Monitor
 -- | Evaluate Haskell expressions.
 evalCommand :: Table -> Command
 evalCommand cfg = Command
-  { commandHelp = "evaluate Haskell expressions"
+  { commandHelp = "\"haskell\": evaluate Haskell expressions"
   , commandAction = const (muevalOrGHCi False cfg Nothing . T.unwords)
   }
 
 -- | Get the type of a Haskell expression.
 typeCommand :: Table -> Command
 typeCommand cfg = Command
-  { commandHelp = "get the type of a Haskell expression"
+  { commandHelp = "\"haskell\": get the type of a Haskell expression"
   , commandAction = const (muevalOrGHCi False cfg (Just ":t") . T.unwords)
   }
 
 -- | Get the kind of a Haskell type.
 kindCommand :: Table -> Command
 kindCommand cfg = Command
-  { commandHelp = "get the kind of a Haskell type"
+  { commandHelp = "\"haskell\": get the kind of a Haskell type"
   , commandAction = const (muevalOrGHCi False cfg (Just ":k") . T.unwords)
   }
 

@@ -57,7 +57,7 @@ seenMonitor = Monitor
 -- | Get the last thing said by a user.
 seenCommand :: Command
 seenCommand = Command
-  { commandHelp = "get the last thing said by a user"
+  { commandHelp = "\"name\": get the last thing said by a user"
   , commandAction = \ev args -> case (eventChannel ev, listToMaybe args) of
       (Just cname, Just user) -> do
         let u = UserName user
@@ -80,7 +80,7 @@ seenCommand = Command
 -- | Add a new quote.
 quoteAddCommand :: Command
 quoteAddCommand = Command
-  { commandHelp   = "add a new quote"
+  { commandHelp   = "\"name [word+]\": add a new quote, using the last message if not given"
   , commandAction = \ev args -> case eventChannel ev of
       Just cname -> case args of
         [who] -> do
@@ -107,7 +107,7 @@ quoteAddCommand = Command
 -- | List all quotes in the current channel.
 quoteListCommand :: Command
 quoteListCommand = Command
-  { commandHelp   = "list quotes"
+  { commandHelp   = "\"[word+]\": list quotes containing the given words in order"
   , commandAction = \ev args -> case eventChannel ev of
       Just cname -> do
         quotes <- findQuotes cname args
@@ -125,7 +125,7 @@ quoteListCommand = Command
 -- | Delete quotes in the current channel.
 quoteRemoveCommand :: Command
 quoteRemoveCommand = Command
-  { commandHelp   = "delete quotes"
+  { commandHelp   = "\"[word]+\": delete quotes containing the given words in order"
   , commandAction = \ev args -> case eventChannel ev of
       Just cname
         | null args -> reply "You need to give a query."

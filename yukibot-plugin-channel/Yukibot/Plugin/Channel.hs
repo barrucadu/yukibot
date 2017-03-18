@@ -34,7 +34,7 @@ channelPlugin _ = Right Plugin
 -- | Join a collection of channels.
 joinCommand :: Command
 joinCommand = privilegedCommand Command
-  { commandHelp = "join a channel"
+  { commandHelp = "\"channel+\": join a channel"
   , commandAction = \_ args -> mapM_ (joinChannel . ChannelName) args
   }
 
