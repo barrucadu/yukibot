@@ -128,6 +128,10 @@
   # Path (relative or absolute) to the load file.
   load-file = "L.hs" ## default: "L.hs"
 
+  # Langauge extensions to enable. Ones specified in the load file
+  # are, sadly, ignored.
+  extensions = [ "ExtendedDefaultRules" ] ## default: []
+
 # MongoDB is used for plugin persistent state. Make sure you have a
 # server running!
 [mongodb]

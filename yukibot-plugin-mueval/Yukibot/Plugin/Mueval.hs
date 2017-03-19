@@ -64,10 +64,10 @@ muevalPlugin cfg = Right Plugin
   { pluginHelp = "bringing Haskell evaluation to a channel near you"
   , pluginMonitors = H.fromList [("inline", inlineMonitor cfg)]
   , pluginCommands = H.fromList
-    [ ("eval",  evalCommand cfg)
+    [ ("eval",  evalCommand  cfg)
     , ("check", checkCommand cfg)
-    , ("type",  typeCommand cfg)
-    , ("kind",  kindCommand cfg)
+    , ("type",  typeCommand  cfg)
+    , ("kind",  kindCommand  cfg)
     ]
   }
 
@@ -160,13 +160,15 @@ mueval cfg expr = do
     useStack   = getBool "use-stack" cfg == Just True
     muevalPath = fromMaybe "mueval" (getString "mueval-path" cfg)
     stackPath  = fromMaybe "stack"  (getString "stack-path"  cfg)
-    baseOpts e = catMaybes
+    baseOpts e = extensions ++ catMaybes
       [ Just "--no-imports"
       , (("-l"++) . T.unpack) <$> getString "load-file" cfg
       , Just "--time-limit=10"
       , Just ("--expression=" ++ e)
       , Just "+RTS", Just "-N2", Just "-RTS"
       ]
+    extensions =
+      map (("-X"++) . T.unpack) (getStrings "extensions" cfg)
 
 -- | Query GHCi.
 queryGHCi :: Table -> String -> String -> IO (String, String)
@@ -177,7 +179,7 @@ queryGHCi cfg cmd expr = do
   where
     input = case getString "load-file" cfg of
       Just loadFile | not (T.null loadFile) ->
-        ":load " <> T.unpack loadFile <> "\n:m *L\n" <> cmd <> " " <> expr
+        extensions <> ":load " <> T.unpack loadFile <> "\n:m *L\n" <> cmd <> " " <> expr
       _ -> cmd <> " " <> expr
 
     binary    = T.unpack (if useStack then stackPath else ghciPath)
@@ -186,6 +188,9 @@ queryGHCi cfg cmd expr = do
     ghciPath  = fromMaybe "ghci"  (getString "ghci-path"  cfg)
     stackPath = fromMaybe "stack" (getString "stack-path" cfg)
     baseOpts  = ["-fforce-recomp", "-ignore-dot-ghci"]
+    extensions = case getStrings "extensions" cfg of
+      [] -> ""
+      es -> ":set -X" <> intercalate " -X" (map T.unpack es) <> "\n"
 
 -------------------------------------------------------------------------------
 -- Processes
