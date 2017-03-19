@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+# Kill any existing session
+function is_yukibot_running {
+  tmux ls | grep "^yukibot:" &>/dev/null
+}
+if is_yukibot_running; then
+  echo "found existing session, killing"
+  tmux send-keys -tyukibot C-c
+  sleep 1
+  while is_yukibot_running; do
+    echo "... waiting"
+    sleep 1
+  done
+else
+  echo "no yukibot session found"
+  exit 1
+fi

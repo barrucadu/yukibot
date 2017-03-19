@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+config=$1
+if [[ -z "$config" ]]; then
+  echo "usage: $0 <configuration file>"
+  exit 1
+fi
+if [[ ! -f "$config" ]]; then
+  echo "cannot read configuration file '$config'"
+  exit 1
+fi
+
+# Build
+randstr=`cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1`
+nix-shell --indirect --add-root ".gcroots/gc_$randstr" --command "" || exit 1
+
+# Prepare new session
+script=`mktemp`
+cat <<EOF > $script
+#!/usr/bin/env bash
+libdir=\`cat \$(which ghc) | grep 'export NIX_GHC_LIBDIR' | sed 's/.*"\\(.*\\)"/\\1/'\`
+export NIX_GHC_LIBDIR=\$libdir
+yukibot $config
+rm $script
+EOF
+chmod +x $script
+
+# Kill any existing session
+function is_yukibot_running {
+  tmux ls | grep "^yukibot:" &>/dev/null
+}
+if is_yukibot_running; then
+  echo "found existing session, killing"
+  tmux send-keys -tyukibot C-c
+  sleep 1
+  while is_yukibot_running; do
+    echo "... waiting"
+    sleep 1
+  done
+fi
+
+# Start new session
+tmux new-session -syukibot -d "nix-shell --command $script"

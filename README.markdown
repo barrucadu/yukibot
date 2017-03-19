@@ -13,10 +13,36 @@ Usage
 -----
 
 There are cabal files, so you can build this with cabal if you want,
-but I use [NixOS][].
+but I use [nix][].
+
+### The Simple Way
 
 ```
-$ nix-shell shell.nix --indirect --add-root .gcroots/gc
+$ run-yukibot /path/to/configuration/file
+```
+
+This will build everything with nix and start a `tmux` session called
+"yukibot", running yukibot with the given configuration file.
+
+Garbage collector roots are created by the build process, so
+`nix-collect-garbage` won't delete anything in the bot's
+environment. The roots live in the `.gcroots` directory, so delete
+that if you want everything gone.
+
+Calling the script a second time will build the new yukibot, kill the
+old one, and start the new one. As the build is done first, there
+should be minimal downtime during the switch.
+
+```
+$ kill-yukibot
+```
+
+This will send a C-c to a `tmux` session called "yukibot".
+
+### The Involved Way
+
+```
+$ nix-shell --indirect --add-root .gcroots/gc
 ```
 
 This will build everything and drop you in a shell with it all
@@ -56,7 +82,7 @@ Now you're good to go:
 $ yukibot configuration.toml
 ```
 
-[NixOS]:  https://nixos.org/
+[nix]: http://nixos.org/nix/
 
 
 Configuration
