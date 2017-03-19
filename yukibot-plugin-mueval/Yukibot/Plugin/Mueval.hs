@@ -19,6 +19,8 @@
 --
 --     * "eval", evaluate an expression.
 --
+--     * "check", checks a property.
+--
 --     * "type", get the type of an expression.
 --
 --     * "kind", get the kind of a type.
@@ -62,9 +64,10 @@ muevalPlugin cfg = Right Plugin
   { pluginHelp = "bringing Haskell evaluation to a channel near you"
   , pluginMonitors = H.fromList [("inline", inlineMonitor cfg)]
   , pluginCommands = H.fromList
-    [ ("eval", evalCommand cfg)
-    , ("type", typeCommand cfg)
-    , ("kind", kindCommand cfg)
+    [ ("eval",  evalCommand cfg)
+    , ("check", checkCommand cfg)
+    , ("type",  typeCommand cfg)
+    , ("kind",  kindCommand cfg)
     ]
   }
 
@@ -84,6 +87,13 @@ evalCommand :: Table -> Command
 evalCommand cfg = Command
   { commandHelp = "\"haskell\": evaluate Haskell expressions"
   , commandAction = const (muevalOrGHCi False cfg Nothing . T.unwords)
+  }
+
+-- | Check Haskell properties.
+checkCommand :: Table -> Command
+checkCommand cfg = Command
+  { commandHelp = "\"property\": check Haskell properties"
+  , commandAction = const (muevalOrGHCi False cfg Nothing . T.unwords . (["check", "$"]++))
   }
 
 -- | Get the type of a Haskell expression.

@@ -64,3 +64,21 @@ import System.Random
 import qualified Test.LeanCheck  as LeanCheck
 import qualified Test.QuickCheck as QuickCheck
 import qualified Test.SmallCheck as SmallCheck
+
+newtype NQString = NQString String
+
+instance Show NQString where
+  show (NQString str) = str
+
+-- this is necessary for the mueval plugin's "check" command.
+check :: LeanCheck.Testable prop => prop -> NQString
+check = checkFor 100
+
+checkFor :: LeanCheck.Testable prop => Int -> prop -> NQString
+checkFor lim prop = NQString $
+  let results  = zip [1..] . take lim $ LeanCheck.results prop
+      failures = filter (\(_, (_, b)) -> not b) results
+  in case listToMaybe failures of
+    Just (1, (vs, _)) -> "*** Failed! Falsifiable (after 1 test): "                 ++ show vs
+    Just (i, (vs, _)) -> "*** Failed! Falsifiable (after " ++ show i ++ " tests): " ++ show vs
+    Nothing -> "+++ OK, passed " ++ show lim ++ " tests."
