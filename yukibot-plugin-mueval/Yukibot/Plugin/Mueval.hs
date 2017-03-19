@@ -163,6 +163,7 @@ mueval cfg expr = do
     baseOpts e = catMaybes
       [ Just "--no-imports"
       , (("-l"++) . T.unpack) <$> getString "load-file" cfg
+      , Just "--time-limit=10"
       , Just ("--expression=" ++ e)
       , Just "+RTS", Just "-N2", Just "-RTS"
       ]
