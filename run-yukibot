@@ -10,6 +10,11 @@ if [[ ! -f "$config" ]]; then
   exit 1
 fi
 
+# Generate yukibot-packages.nix
+if [[ ! -f yukibot-packages.nix ]]; then
+  ./gen-package-list.sh
+fi
+
 # Build
 randstr=`cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1`
 nix-shell --indirect --add-root ".gcroots/gc_$randstr" --command "" || exit 1
