@@ -31,5 +31,6 @@ in {
       mueval'
       yukibotPackages.yukibot
     ];
+    shellHook = "eval $(grep export ${ghc'}/bin/ghc)";
   };
 }

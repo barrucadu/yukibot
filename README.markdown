@@ -50,32 +50,6 @@ available. It will also create garbage collector roots in `.gcroots`,
 so `nix-collect-garbage` will leave your environment alone (good to
 avoid accidentally nuking things).
 
-Firstly you'll want to set the `NIX_GHC_LIBDIR` environment variable
-so that `mueval` can find the GHC package database (if you are using
-the mueval plugin):
-
-```
-$ cat `which ghc`
-#! /nix/store/gabjbkwga2dhhp2wzyaxl83r8hjjfc37-bash-4.3-p48/bin/bash -e
-export NIX_GHC="/nix/store/g12fa7vc5icmsqj4habg9d2apcpdrfip-ghc-8.0.1-with-packages/bin/ghc"
-export NIX_GHCPKG="/nix/store/g12fa7vc5icmsqj4habg9d2apcpdrfip-ghc-8.0.1-with-packages/bin/ghc-pkg"
-export NIX_GHC_DOCDIR="/nix/store/g12fa7vc5icmsqj4habg9d2apcpdrfip-ghc-8.0.1-with-packages/share/doc/ghc/html"
-export NIX_GHC_LIBDIR="/nix/store/g12fa7vc5icmsqj4habg9d2apcpdrfip-ghc-8.0.1-with-packages/lib/ghc-8.0.1"
-exec /nix/store/b0749p1rjpyvq2wyw58x6vgwpkwxcmnn-ghc-8.0.1/bin/ghc "-B$NIX_GHC_LIBDIR" "${extraFlagsArray[@]}" "$@"
-```
-
-You'll get different paths. Copy and paste the `NIX_GHC_LIBDIR`
-variable into your shell. You can check it worked by evaluating a
-simple expression:
-
-```
-$ mueval --load-file L.hs --expression=42
-... some error messages about missing stuff ...
-$ export NIX_GHC_LIBDIR="/nix/store/g12fa7vc5icmsqj4habg9d2apcpdrfip-ghc-8.0.1-with-packages/lib/ghc-8.0.1"
-$ mueval --load-file L.hs --expression=42
-42
-```
-
 Now you're good to go:
 
 ```
