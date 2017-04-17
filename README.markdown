@@ -37,6 +37,7 @@ This will send a C-c to a `tmux` session called "yukibot".
 ### The Manual Way
 
 ```
+$ ./gen-package-list.sh
 $ nix-shell
 ```
 
