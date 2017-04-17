@@ -15,7 +15,7 @@ Usage
 There are cabal files, so you can build this with cabal if you want,
 but I use [nix][].
 
-### The Simple Way
+### The Scripted Way
 
 ```
 $ run-yukibot /path/to/configuration/file
@@ -34,7 +34,7 @@ $ kill-yukibot
 
 This will send a C-c to a `tmux` session called "yukibot".
 
-### The Involved Way
+### The Manual Way
 
 ```
 $ nix-shell
