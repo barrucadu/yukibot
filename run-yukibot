@@ -16,8 +16,7 @@ if [[ ! -f yukibot-packages.nix ]]; then
 fi
 
 # Build
-randstr=`cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1`
-nix-shell --indirect --add-root ".gcroots/gc_$randstr" --command "" || exit 1
+nix-shell --command "" || exit 1
 
 # Kill any existing session
 function is_yukibot_running {

@@ -24,11 +24,6 @@ $ run-yukibot /path/to/configuration/file
 This will build everything with nix and start a `tmux` session called
 "yukibot", running yukibot with the given configuration file.
 
-Garbage collector roots are created by the build process, so
-`nix-collect-garbage` won't delete anything in the bot's
-environment. The roots live in the `.gcroots` directory, so delete
-that if you want everything gone.
-
 Calling the script a second time will build the new yukibot, kill the
 old one, and start the new one. As the build is done first, there
 should be minimal downtime during the switch.
@@ -42,15 +37,11 @@ This will send a C-c to a `tmux` session called "yukibot".
 ### The Involved Way
 
 ```
-$ nix-shell --indirect --add-root .gcroots/gc
+$ nix-shell
 ```
 
 This will build everything and drop you in a shell with it all
-available. It will also create garbage collector roots in `.gcroots`,
-so `nix-collect-garbage` will leave your environment alone (good to
-avoid accidentally nuking things).
-
-Now you're good to go:
+available. Now you're good to go:
 
 ```
 $ yukibot configuration.toml

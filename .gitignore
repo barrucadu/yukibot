@@ -1,4 +1,3 @@
 configuration.toml
 *.log
-.gcroots
 yukibot-packages.nix
