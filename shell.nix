@@ -1,6 +1,6 @@
 { pkgs ? (import <nixpkgs> {}) }:
 let
-  inherit (pkgs) haskellPackages stdenv;
+  inherit (pkgs) haskellPackages lib stdenv;
 
   # Override the standard callPackage function with one that knows
   # about the yukibot packages.
@@ -18,14 +18,14 @@ let
   ghc'    = haskellPackages.ghcWithPackages extraHaskellLibs;
   hint'   = haskellPackages.hint.override { ghc = ghc'; };
   mueval' = haskellPackages.mueval.override { hint = hint'; };
-in {
-  yukibotEnv = stdenv.mkDerivation {
-    name = "yukibot-env";
-    buildInputs = [
-      ghc'
-      mueval'
-      yukibotPackages.yukibot
-    ];
-    shellHook = "eval $(grep export ${ghc'}/bin/ghc)";
-  };
-}
+
+  # The shell environment
+  env = stdenv.mkDerivation
+    { name = "yukibot-env"
+    ; buildInputs = [ ghc' mueval' yukibotPackages.yukibot ]
+    ; shellHook = "eval $(grep export ${ghc'}/bin/ghc)"
+    ; };
+in
+  # If in a nix-shell construct yukibot's execution environment.
+  # Otherwise just build the binaries.
+  if lib.inNixShell then { inherit env; } else env.nativeBuildInputs

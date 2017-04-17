@@ -16,7 +16,7 @@ if [[ ! -f yukibot-packages.nix ]]; then
 fi
 
 # Build
-nix-shell --command "" || exit 1
+nix-build --no-out-link || exit 1
 
 # Kill any existing session
 function is_yukibot_running {
