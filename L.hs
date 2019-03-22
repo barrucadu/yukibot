@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+
 -- |Default load file for the Mueval plugin. Imports and definitions
 -- can be added to this file to make them available to evaluated
 -- expressions.
@@ -15,6 +17,7 @@ import Prelude hiding ( (.), id -- Control.Category
 import Control.Applicative
 import Control.Arrow
 import Control.Category
+import Control.Exception
 import Control.Lens
 import Control.Monad hiding (mapM, sequence, forM) -- clash with Data.Traversable
 import Control.Monad.Fix hiding (fix)
@@ -25,6 +28,7 @@ import Data.Bool
 import Data.Char
 import Data.Complex
 import Data.Data
+import Data.Data.Lens
 import Data.Dynamic
 import Data.Either
 import Data.Eq
@@ -69,6 +73,9 @@ newtype NQString = NQString String
 
 instance Show NQString where
   show (NQString str) = str
+
+instance Show (IO ()) where
+  show _ = "<IO ()>"
 
 -- this is necessary for the mueval plugin's "check" command.
 check :: LeanCheck.Testable prop => prop -> NQString
