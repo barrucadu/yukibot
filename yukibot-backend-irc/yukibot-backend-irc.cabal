@@ -24,6 +24,7 @@ library
                      , bytestring
                      , filepath
                      , irc-client
+                     , lens
                      , stm
                      , text
                      , transformers

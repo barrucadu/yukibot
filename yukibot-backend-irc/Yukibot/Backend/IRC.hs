@@ -11,17 +11,18 @@
 -- An IRC backend for yukibot-core.
 module Yukibot.Backend.IRC (ircBackend) where
 
+import Control.Concurrent.STM (atomically, readTVar)
+import Control.Lens ((&), (.~), (%~), view)
 import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.STM
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Reader (runReaderT)
 import Data.ByteString (ByteString)
 import Data.Semigroup ((<>))
 import Data.Text (Text, intercalate, unpack)
 import Data.Text.Encoding (encodeUtf8)
-import Network.IRC.Client (connect', connectWithTLS', defaultIRCConf)
 import qualified Network.IRC.Client as IRC
+import qualified Network.IRC.Client.Internal.Types as IRC
 import System.FilePath ((<.>))
 
 import qualified Yukibot.Core as Y
@@ -52,7 +53,7 @@ ircBackend host cfg = case checkConfig host cfg of
 -------------------------------------------------------------------------------
 -- Backend main
 
-type BackendState = (IRC.IRC Bool -> IO Bool, IO (), TVar Bool)
+type BackendState = (IRC.IRC () Bool -> IO Bool, IO (), TVar Bool)
 
 -- | Set up the IRC connection.
 connectToIrc :: Text
@@ -61,31 +62,31 @@ connectToIrc :: Text
   -> ((Y.BackendHandle -> Y.Event) -> IO ())
   -> IO BackendState
 connectToIrc host cfg logger receiveEvent = do
-  cconf <- (if getTLS cfg then connectWithTLS' else connect')
-             (botLogger logger)
-             (encodeUtf8 host)
-             (getPort cfg)
-             1
-  let iconf = (defaultIRCConf $ getNick cfg)
-                { IRC._channels = getChannels cfg
-                , IRC._password = getServerPassword cfg
-                }
-
-  -- Fork off the client in its own thread
   (stopvar, stopper) <- atomically newFlag
-  let cconf' = cconf { IRC._ondisconnect = IRC._ondisconnect cconf >> liftIO (atomically stopper) }
 
   (welcomevar, welcomer) <- atomically (newWelcomeHandler (getNickserv cfg) (getNickservPassword cfg))
   let receiver = receiveHandler receiveEvent
-  let iconf' = iconf { IRC._eventHandlers = receiver : welcomer : IRC._eventHandlers iconf }
-  state <- IRC.newIRCState cconf' iconf' ()
-  tid <- forkIO (IRC.start' state)
+
+  let cconf :: IRC.ConnectionConfig ()
+      cconf = ((if getTLS cfg
+               then \h p -> IRC.tlsConnection (IRC.WithDefaultConfig h p)
+               else IRC.plainConnection) (encodeUtf8 host) (getPort cfg))
+              & IRC.logfunc      .~ botLogger logger
+              & IRC.ondisconnect .~ (\e -> IRC.defaultOnDisconnect e >> liftIO (atomically stopper))
+              & IRC.password .~ getServerPassword cfg
+  let iconf :: IRC.InstanceConfig ()
+      iconf = IRC.defaultInstanceConfig (getNick cfg)
+              & IRC.channels .~ getChannels cfg
+              & IRC.handlers %~ ([receiver, welcomer] ++)
+
+  state <- IRC.newIRCState cconf iconf ()
+  tid <- forkIO (IRC.runClientWith state)
 
   -- Block until 001 (numeric welcome)
   atomically (readTVar welcomevar >>= check)
 
   -- Return the backend state
-  pure ((`runReaderT` state), killThread tid >> Y.closeLog logger, stopvar)
+  pure ((`IRC.runIRCAction` state), killThread tid >> Y.closeLog logger, stopvar)
 
 -- | Wait for commands.
 handleIrc :: TQueue Y.Action -> BackendState -> IO ()
@@ -140,38 +141,28 @@ botLogger logger IRC.FromServer = Y.fromServer logger
 
 -- | Event handler for message reception.
 receiveHandler :: ((Y.BackendHandle -> Y.Event) -> IO ()) -> IRC.EventHandler s
-receiveHandler receiveEvent = IRC.EventHandler
-  { IRC._description = "Receive PRIVMSGs and forward them to yukibot-core."
-  , IRC._matchType = IRC.EPrivmsg
-  , IRC._eventFunc = \ev -> do
-    user <- Y.UserName . IRC._nick <$> IRC.instanceConfig
-    liftIO $ dispatchEvent user ev
-  }
+receiveHandler receiveEvent = IRC.EventHandler (IRC.matchType IRC._Privmsg) $ \src (_, txt) -> do
+    state <- IRC.getIRCState
+    iconf <- liftIO . atomically . readTVar $ IRC._instanceConfig state
+    liftIO $ dispatchEvent (Y.UserName (view IRC.nick iconf)) src txt
    where
     -- Decode and send off an event.
-    dispatchEvent user (IRC.Event _ (IRC.User nick) (IRC.Privmsg _ (Right msg))) =
+    dispatchEvent user (IRC.User nick) (Right msg) =
       receiveEvent (\h -> Y.Event h user Nothing (Y.UserName nick) msg)
-    dispatchEvent user (IRC.Event _ (IRC.Channel chan nick) (IRC.Privmsg _ (Right msg))) =
+    dispatchEvent user (IRC.Channel chan nick) (Right msg) =
       receiveEvent (\h -> Y.Event h user (Just $ Y.ChannelName chan) (Y.UserName nick) msg)
-    dispatchEvent _ _ = pure ()
+    dispatchEvent _ _ _ = pure ()
 
 -- | Flag and handler for 001 (numeric welcome). Flag is set to 'True'
 -- on receipt.
 newWelcomeHandler :: Text -> Maybe Text -> STM (TVar Bool, IRC.EventHandler s)
 newWelcomeHandler nickserv nickservPassword = do
     (flag, setFlag) <- newFlag
-    let handler = IRC.EventHandler
-          { IRC._description = "Set a flag on 001 (numeric welcome)"
-          , IRC._matchType = IRC.ENumeric
-          , IRC._eventFunc = \case
-              { IRC.Event _ _ (IRC.Numeric num _) | num == 001 -> do
-                -- Auth with nickserv
-                case nickservPassword of
-                  Just p -> IRC.send . IRC.Privmsg nickserv . Right $ "IDENTIFY " <> p
-                  Nothing -> pure ()
-                -- Set the flag
-                liftIO (atomically setFlag)
-              ; _ -> pure ()
-              }
-          }
+    let handler = IRC.EventHandler (IRC.matchNumeric 1) $ \_ _ -> do
+          -- Auth with nickserv
+          case nickservPassword of
+            Just p -> IRC.send . IRC.Privmsg nickserv . Right $ "IDENTIFY " <> p
+            Nothing -> pure ()
+          -- Set the flag
+          liftIO (atomically setFlag)
     pure (flag, handler)
